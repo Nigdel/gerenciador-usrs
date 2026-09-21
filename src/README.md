@@ -1,58 +1,127 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Gestor de Usuarios (Laravel)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistema de gestión de usuarios que centraliza el alta y la suspensión de
+accesos en múltiples subsistemas (Adagio, GLPI, Chatwoot, Email, Slack,
+EntraId, SambaAd, ...) a través de un contrato universal.
 
-## About Laravel
+## Instalación
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+1. Copia estas carpetas dentro de un proyecto Laravel existente (11.x o
+   superior recomendado, requiere PHP 8.1+ por los enums):
+   - `app/Models`, `app/Enums`, `app/Contracts`, `app/DTO`,
+     `app/Services`, `app/Http/Controllers/Api`, `app/Http/Requests`,
+     `app/Http/Resources`
+   - `database/migrations`, `database/seeders`
+   - `config/subsystems.php`
+   - Agrega el contenido de `routes/api.php` a tu propio `routes/api.php`.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+2. Registra el seeder en `database/seeders/DatabaseSeeder.php`:
+   ```php
+   $this->call(SubsystemSeeder::class);
+   ```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+3. Ejecuta:
+   ```bash
+   php artisan migrate
+   php artisan db:seed --class=SubsystemSeeder
+   ```
 
-## Learning Laravel
+4. Configura en `.env` las credenciales de cada subsistema
+   (`ADAGIO_API_URL`, `ADAGIO_API_TOKEN`, `GLPI_API_URL`, etc. — ver
+   `SubsystemSeeder`).
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Arquitectura
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **`SubsystemServiceInterface`** (`app/Contracts`): contrato universal que
+  implementa cada subsistema — `createUser`, `suspendUser`,
+  `reactivateUser`, `disableUser`, `getUserStatus`.
+- **`IdentityProviderInterface`**: contrato adicional que solo implementa
+  el subsistema marcado como proveedor de identidad (Adagio) —
+  `findByCpf`, `existsByEmail`.
+- **`BaseSubsystemService`** (`app/Services/Subsystems`): clase base con el
+  cliente HTTP ya configurado a partir de `api_url`/`api_config` del
+  registro en BD. Cada subsistema (`AdagioService`, `GlpiService`,
+  `ChatwootService`, `EmailService`, `SlackService`, `EntraIdService`,
+  `SambaAdService`) extiende esta base e implementa su propia lógica —
+  igual que el patrón `BaseService`/`run(payload)` que ya usas en Gestor,
+  aquí con un método por operación en vez de un único `run`.
+- **`SubsystemServiceRegistry`**: traduce el `slug` guardado en la tabla
+  `subsystems` a la clase concreta, según `config/subsystems.php`. Es el
+  único punto que conoce el mapeo slug → clase; para agregar un
+  subsistema nuevo solo hay que crear su clase, registrarla aquí y crear
+  la fila en `subsystems`.
+- **`UsernameGeneratorService`**: cuando el CPF no existe en Adagio,
+  propone `usuario` = `nombre.primerApellido`, validando contra Adagio
+  (`existsByEmail`) con el dominio `empresa.com.br`; si ya está en uso
+  prueba con `nombre.segundoApellido`.
+- **`UserProvisioningService`**: orquesta todo el flujo de alta —
+  consulta Adagio por CPF, reutiliza o genera datos, guarda el
+  `GestorUser` local, y crea la cuenta en cada subsistema solicitado (o
+  en todos los activos si el JSON no trae `subsistemas`).
+- **`UserSuspensionService`**: orquesta la suspensión — localiza al
+  usuario por `cpf` o `usuario`, resuelve las cuentas a suspender (las
+  indicadas o todas las que tenga), llama a `suspendUser` en cada
+  subsistema y actualiza `inicio_suspension`/`fin_suspension`/
+  `motivo_suspension` localmente.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Endpoints
 
-## Agentic Development
+### `POST /api/usuarios/provisionar`
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```json
+{
+  "cpf": "123.456.789-00",
+  "nombre_completo": "Juan Carlos Perez Gomez",
+  "email_personal": "juan.perez@gmail.com",
+  "telefono_personal": "+55 62 90000-0000",
+  "telefono_trabajo": "+55 62 90000-1111",
+  "direccion_particular": "Rua Exemplo, 123",
+  "empresa": "Acme",
+  "password_general": "una-clave-segura",
+  "subsistemas": ["adagio", "glpi", "entraid"]
+}
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+- Si `subsistemas` se omite, se crea en **todos** los subsistemas activos.
+- Si el `cpf` ya existe en Adagio, se reutilizan `nombre_completo`,
+  `email_personal`, `cpf` y `usuario` ya cadastrados ahí, ignorando lo que
+  venga en el resto del payload para esos campos.
 
-## Contributing
+### `POST /api/usuarios/suspender`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```json
+{
+  "cpf": "123.456.789-00",
+  "subsistemas": ["glpi"],
+  "motivo_suspension": "Licencia médica",
+  "inicio_suspension": "2026-09-21",
+  "fin_suspension": "2026-10-05"
+}
+```
 
-## Code of Conduct
+- Si `subsistemas` se omite, se suspende en **todos** los subsistemas
+  donde el usuario tenga cuenta.
+- Si ya estaba suspendido en un subsistema, esta llamada solo actualiza
+  `inicio_suspension`, `fin_suspension` y `motivo_suspension`.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Agregar un subsistema nuevo
 
-## Security Vulnerabilities
+1. Crear `app/Services/Subsystems/NuevoService.php` implementando
+   `SubsystemServiceInterface` (extender `BaseSubsystemService`).
+2. Agregarlo a `config/subsystems.php` → `drivers`.
+3. Insertar la fila correspondiente en la tabla `subsystems`
+   (`nombre`, `slug`, `api_url`, `api_config`, ...).
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+No se requiere tocar `UserProvisioningService` ni
+`UserSuspensionService`: ambos operan solo contra el contrato universal.
 
-## License
+## Notas / puntos a ajustar según tus APIs reales
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- Las rutas/campos exactos de cada llamada HTTP dentro de cada
+  `*Service` son un patrón de referencia; ajústalos a la API real de
+  cada subsistema (Adagio, GLPI, Chatwoot, etc.).
+- `password_general` se hashea automáticamente al guardar el
+  `GestorUser` (ver `GestorUser::booted()`).
+- El dominio usado para proponer usuario/email (`empresa.com.br`) se
+  resuelve en `UsernameGeneratorService::resolverDominio()`; puedes
+  reemplazarlo por una tabla de empresas si manejas varios dominios.
