@@ -25,10 +25,12 @@ RUN apt-get update && apt-get install -y \
         intl \
         zip \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /tmp/laravel-views \
+    && chown www-data:www-data /tmp/laravel-views
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 EXPOSE 9000
 
-CMD ["php-fpm"]
+CMD ["sh", "-c", "chown -R www-data:www-data /tmp/laravel-views && exec php-fpm"]

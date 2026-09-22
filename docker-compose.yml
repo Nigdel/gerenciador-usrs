@@ -6,6 +6,7 @@ services:
       dockerfile: docker/php/Dockerfile
     container_name: gerenciador-usrs-app
     working_dir: /var/www
+    command: sh -c "mkdir -p /tmp/laravel-views && chown -R www-data:www-data /tmp/laravel-views && exec php-fpm"
     volumes:
       - ./src:/var/www
     networks:

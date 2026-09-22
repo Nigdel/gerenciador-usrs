@@ -27,7 +27,7 @@
             </div>
         @else
             <div class="table-wrapper">
-                <table class="data-table">
+                <table class="table table-striped">
                     <thead>
                         <tr>
                             <th>Nombre</th>
@@ -52,12 +52,12 @@
                                 <td>{{ $subsystem->es_proveedor_identidad ? 'Sí' : 'No' }}</td>
                                 <td>{{ $subsystem->accounts_count }}</td>
                                 <td class="row-actions">
-                                    <a class="text-button" href="{{ route('subsystems.show', $subsystem) }}">Ver</a>
-                                    <a class="text-button" href="{{ route('subsystems.edit', $subsystem) }}">Editar</a>
+                                    <a class="action-button action-view" href="{{ route('subsystems.show', $subsystem) }}">Ver</a>
+                                    <a class="action-button action-edit" href="{{ route('subsystems.edit', $subsystem) }}">Editar</a>
                                     <form action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
                                         @csrf
                                         @method('DELETE')
-                                        <button class="text-button text-button-danger" type="submit">Eliminar</button>
+                                        <button class="action-button action-delete" type="submit">Eliminar</button>
                                     </form>
                                 </td>
                             </tr>
