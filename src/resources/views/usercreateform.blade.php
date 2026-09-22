@@ -1,16 +1,8 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cadastrar usuário</title>
-    <link rel="stylesheet" href="{{ asset('user-form.css') }}">
-    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @endif
-</head>
-<body>
-    <main class="page-shell">
+@extends('layouts.app')
+
+@section('title', 'Cadastrar usuário')
+
+@section('content')
         <section class="form-panel" aria-labelledby="page-title">
             <div class="form-heading">
                 <p class="eyebrow">Gestão de acessos</p>
@@ -86,9 +78,11 @@
                 </div>
             </form>
         </section>
-    </main>
+        </section>
+    @endsection
 
-    <script>
+    @push('scripts')
+        <script>
         const form = document.getElementById('user-form');
         const feedback = document.getElementById('feedback');
         const submitButton = document.getElementById('submit-button');
@@ -147,5 +141,4 @@
             }
         });
     </script>
-</body>
-</html>
+@endpush
