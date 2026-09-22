@@ -145,7 +145,7 @@ class UserTest extends TestCase
             ->assertJsonValidationErrors(['name']);
     }
 
-    public function test_email_is_required(): void
+    public function test_email_is_optional(): void
     {
         $response = $this->postJson('/users', [
             'name' => 'Carlos Rodríguez',
@@ -155,8 +155,8 @@ class UserTest extends TestCase
         ]);
 
         $response
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['email']);
+            ->assertStatus(201)
+            ->assertJsonPath('email', null);
     }
 
     public function test_email_must_be_valid(): void

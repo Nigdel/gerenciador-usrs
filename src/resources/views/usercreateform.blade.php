@@ -31,12 +31,6 @@
                     </div>
 
                     <div class="field">
-                        <label for="email">E-mail <span aria-hidden="true">*</span></label>
-                        <input id="email" name="email" type="email" autocomplete="email" maxlength="255" required>
-                        <small class="error-message" data-error-for="email"></small>
-                    </div>
-
-                    <div class="field">
                         <label for="cpf">CPF</label>
                         <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="11" placeholder="Somente números">
                         <small class="error-message" data-error-for="cpf"></small>
