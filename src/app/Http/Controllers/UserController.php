@@ -54,4 +54,9 @@ class UserController extends Controller
            201
        );
    }
+
+   public function create()
+   {
+       return view('usercreateform');
+   }
 }
