@@ -257,4 +257,12 @@ class UserTest extends TestCase
         $this->assertTrue(Hash::check($password, $user->password));
         $this->assertNotSame($password, $user->password);
     }
+
+    public function test_route_for_create_user_returns_expected_message(): void
+    {
+        $response = $this->get('/users/create');
+        $response
+            ->assertStatus(200)
+            ->assertSeeHtml('<title>Cadastrar usuário</title>');
+    }
 }
