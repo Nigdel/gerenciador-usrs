@@ -53,12 +53,12 @@
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $subsystem->accounts_count }}</td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-3 whitespace-nowrap sm:justify-end">
-                                    <a class="font-bold text-emerald-700 no-underline hover:text-emerald-900" href="{{ route('subsystems.show', $subsystem) }}">Ver</a>
-                                    <a class="font-bold text-emerald-700 no-underline hover:text-emerald-900" href="{{ route('subsystems.edit', $subsystem) }}">Editar</a>
-                                    <form action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
+                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('subsystems.show', $subsystem) }}">Ver</a>
+                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}">Editar</a>
+                                    <form class="inline-flex" action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
                                         @csrf
                                         @method('DELETE')
-                                        <button class="font-bold text-red-700 hover:text-red-900" type="submit">Eliminar</button>
+                                        <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit">Eliminar</button>
                                     </form>
                                     </div>
                                 </td>
