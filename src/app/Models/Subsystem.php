@@ -40,4 +40,9 @@ class Subsystem extends Model
     {
         return $query->where('activo', true);
     }
+     
+    public function scopeProveedorIdentidad($query)
+    {
+        return $query->where('es_proveedor_identidad', true);
+    }
 }
