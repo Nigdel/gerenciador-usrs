@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'name',
@@ -42,5 +43,10 @@ class User extends Authenticatable
     public function subordinados()
     {
         return $this->hasMany(User::class, 'encarregado_id');
+    }
+
+    public function subsystemAccounts(): HasMany
+    {
+        return $this->hasMany(UserSubsystemAccount::class, 'gestor_user_id');
     }
 }

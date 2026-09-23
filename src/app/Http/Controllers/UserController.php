@@ -24,6 +24,8 @@ class UserController extends Controller
 
    public function show(Request $request, User $user)
    {
+       $user->load('encarregado', 'subsystemAccounts.subsystem');
+
        if (!$this->isJsonRequest($request)) {
            return view('users.show', compact('user'));
        }

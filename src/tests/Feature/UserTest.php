@@ -22,7 +22,7 @@ class UserTest extends TestCase
             'email' => 'maria.glz@example.com',
         ]);
 
-        $response = $this->get('/users');
+        $response = $this->getJson('/users');
 
         $response
             ->assertStatus(200)
@@ -41,6 +41,25 @@ class UserTest extends TestCase
                 'name' => 'María González',
                 'email' => 'maria.glz@example.com',
             ]);
+    }
+
+    public function test_users_index_returns_html_when_requested(): void
+    {
+        User::factory()->create([
+            'name' => 'Usuário HTML',
+            'email' => 'html@example.com',
+        ]);
+
+        $response = $this->get('/users', [
+            'Accept' => 'text/html',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertViewIs('users.index')
+            ->assertSee('Usuário HTML')
+            ->assertSee('html@example.com');
     }
 
     public function test_a_user_can_be_created(): void
