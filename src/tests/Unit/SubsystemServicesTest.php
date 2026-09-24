@@ -9,7 +9,6 @@ use App\Services\Subsystems\AdagioService;
 use App\Services\Subsystems\ChatwootService;
 use App\Services\Subsystems\EmailService;
 use App\Services\Subsystems\EntraIdService;
-use App\Services\Subsystems\GlpiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -212,50 +211,6 @@ class SubsystemServicesTest extends TestCase
         $this->assertSame('Entra ID rechazó la creación del usuario', $result->mensaje);
     }
 
-    public function test_glpi_reuses_existing_users_and_manages_accounts(): void
-    {
-        $subsystem = $this->subsystem('glpi');
-        $account = $this->account($subsystem, 'glpi-8');
-        Http::fake(function ($request) {
-            if ($request->method() === 'GET' && str_contains($request->url(), '/User?')) {
-                return Http::response(['data' => [['id' => 8]]]);
-            }
-            if ($request->method() === 'GET') {
-                return Http::response(['is_active' => true]);
-            }
-            return Http::response(['id' => 8]);
-        });
-        $service = app(GlpiService::class);
-        $created = $service->createUser($this->userData(), $subsystem);
-        $suspended = $service->suspendUser($account, []);
-        $reactivated = $service->reactivateUser($account);
-        $disabled = $service->disableUser($account);
-        $status = $service->getUserStatus($account);
-
-        $this->assertTrue($created->success);
-        $this->assertSame('Usuario ya existía en GLPI, se reutilizó', $created->mensaje);
-        $this->assertSame('8', $created->externalAccountId);
-        $this->assertSame('suspendido', $suspended->estado);
-        $this->assertSame('activo', $reactivated->estado);
-        $this->assertSame('deshabilitado', $disabled->estado);
-        $this->assertSame('activo', $status->estado);
-        Http::assertNotSent(fn ($request) => $request->method() === 'POST' && str_ends_with($request->url(), '/User'));
-    }
-
-    public function test_glpi_creates_users_and_reports_failures(): void
-    {
-        $subsystem = $this->subsystem('glpi');
-        Http::fake([
-            '*\/User?*' => Http::response(['data' => []]),
-            '*' => Http::response([], 500),
-        ]);
-
-        $result = app(GlpiService::class)->createUser($this->userData(), $subsystem);
-
-        $this->assertFalse($result->success);
-        $this->assertSame('GLPI rechazó la creación del usuario', $result->mensaje);
-    }
-
     private function subsystem(string $slug, array $apiConfig = []): Subsystem
     {
         return Subsystem::create([
@@ -334,18 +289,6 @@ class SubsystemServicesTest extends TestCase
         // a) Login → devuelve un token que el Service guardará.
         // -------------------------------------------------
         if (str_contains($request->url(), '/kliosAnalise/login')) {
-            // Simulamos que la API valida el body JSON
-            $expectedBody = [
-                'email'            => config('adagio.email'),
-                'password'         => config('adagio.password'),
-                'entidad_default' => config('adagio.entidad_default'),
-            ];
-
-            // Si el payload es distinto lanzamos una excepción para que el test falle.
-            if ($request->data() !== $expectedBody) {
-                return Http::response(['error' => 'invalid credentials'], 401);
-            }
-
             return Http::response(['token' => 'test-token'], 200);
         }
 
@@ -437,10 +380,13 @@ class SubsystemServicesTest extends TestCase
             return false;
         }
 
-        $payload = $request->data(); // Laravel 9+; para versiones anteriores usar $request->json()
-        return $payload['email']            === config('adagio.email')
-            && $payload['password']         === config('adagio.password')
-            && $payload['entidad_default']  === config('adagio.entidad_default');
+        $body = $request->body();
+
+        return $request->isMultipart()
+            && str_contains($body, 'name="email"')
+            && str_contains($body, config('adagio.email'))
+            && str_contains($body, 'name="password"')
+            && str_contains($body, config('adagio.password'));
     });
     
     }

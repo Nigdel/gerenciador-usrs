@@ -25,6 +25,20 @@ class SubsystemTest extends TestCase
         $this->get(route('subsystems.edit', $subsystem))->assertOk();
     }
 
+    public function test_connection_button_is_available_for_glpi(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+            'activo' => true,
+        ]);
+
+        $this->get(route('subsystems.show', $subsystem))
+            ->assertOk()
+            ->assertSee('Probar disponibilidad');
+    }
+
     public function test_subsystem_can_be_created_with_json_configuration(): void
     {
         $response = $this->post('/subsystems', [

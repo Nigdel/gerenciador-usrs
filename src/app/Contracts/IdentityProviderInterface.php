@@ -2,7 +2,6 @@
 
 namespace App\Contracts;
 
-use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 
 /**
@@ -11,10 +10,8 @@ use App\Models\Subsystem;
  * buscar por CPF y por email al proponer un nuevo usuario, sin acoplar
  * UsernameGeneratorService a una implementación concreta.
  */
-interface IdentityProviderInterface
+interface IdentityProviderInterface extends SubsystemConnectionInterface
 {
-    public function testConnection(Subsystem $subsystem): SubsystemOperationResult;
-
     /**
      * @return array|null Datos del usuario en el proveedor (nombre_completo,
      *                     email, cpf, ...) o null si no existe.

@@ -28,8 +28,13 @@ class SubsystemSeeder extends Seeder
                 'nombre' => 'Glpi',
                 'slug' => 'glpi',
                 'descripcion' => 'Mesa de ayuda / inventario TI',
-                'api_url' => env('GLPI_API_URL'),
-                'api_config' => ['token' => env('GLPI_API_TOKEN')],
+                'api_url' => env('GLPI_API_URL', env('GLPI_BASE_URL')),
+                'api_config' => [
+                    'token' => env('GLPI_API_TOKEN', env('GLPI_USER_TOKEN')),
+                    'headers' => array_filter([
+                        'App-Token' => env('GLPI_APP_TOKEN'),
+                    ]),
+                ],
                 'external_subsystem_id' => 'glpi-01',
             ],
             [

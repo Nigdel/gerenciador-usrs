@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Contracts\IdentityProviderInterface;
+use App\Contracts\SubsystemConnectionInterface;
 use App\Models\Subsystem;
 use App\Services\SubsystemServiceRegistry;
 use Illuminate\Http\RedirectResponse;
@@ -32,24 +32,27 @@ class SubsystemController extends Controller
 
     public function show(Subsystem $subsystem): View
     {
+        $connectionTestable = false;
+
+        try {
+            $connectionTestable = $this->registry->resolve($subsystem->slug) instanceof SubsystemConnectionInterface;
+        } catch (Throwable) {
+            // El detalle del subsistema sigue siendo accesible aunque no exista driver.
+        }
+
         return view('subsystems.show', [
             'subsystem' => $subsystem->loadCount('accounts'),
+            'connectionTestable' => $connectionTestable,
         ]);
     }
 
     public function testConnection(Subsystem $subsystem): RedirectResponse
     {
-        if (! $subsystem->es_proveedor_identidad) {
-            return redirect()
-                ->route('subsystems.show', $subsystem)
-                ->with('error', 'Solo se puede probar la conexión del proveedor de identidad.');
-        }
-
         try {
             $service = $this->registry->resolve($subsystem->slug);
 
-            if (! $service instanceof IdentityProviderInterface) {
-                throw new \InvalidArgumentException('El proveedor de identidad no admite pruebas de conexión.');
+            if (! $service instanceof SubsystemConnectionInterface) {
+                throw new \InvalidArgumentException('Este subsistema no admite pruebas de conexión.');
             }
 
             $result = $service->testConnection($subsystem);
