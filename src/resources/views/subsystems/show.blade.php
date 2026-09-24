@@ -23,6 +23,17 @@
             <div class="detail-wide"><dt>Descripción</dt><dd>{{ $subsystem->descripcion ?: 'Sin descripción' }}</dd></div>
         </dl>
 
+        @if ($subsystem->es_proveedor_identidad)
+            <div class="mt-8 border-t border-[#d9e2dc] pt-6">
+                <h2 class="mb-2 text-xl font-bold text-[#17211b]">Disponibilidad del proveedor</h2>
+                <p class="mb-4 text-sm text-[#68756d]">Fuerza una autenticación contra la API y verifica que las credenciales sean válidas.</p>
+                <form action="{{ route('subsystems.test-connection', $subsystem) }}" method="POST">
+                    @csrf
+                    <button class="button button-primary" type="submit">Probar autenticación</button>
+                </form>
+            </div>
+        @endif
+
         <div class="form-actions">
             <a class="button button-secondary" href="{{ route('subsystems.index') }}">Volver a subsistemas</a>
         </div>

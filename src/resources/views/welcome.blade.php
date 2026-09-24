@@ -12,6 +12,7 @@
 
         <div class="form-actions">
             <a class="button button-primary" href="{{ url('/users/create') }}">Cadastrar usuário</a>
+            <a class="button button-secondary" href="{{ route('gestor-users.index') }}">Usuarios gestionados</a>
         </div>
     </section>
 @endsection

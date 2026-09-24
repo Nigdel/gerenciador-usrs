@@ -43,6 +43,19 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         'federal' => '72',
     ];
 
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult
+    {
+        Cache::forget($this->tokenCacheKey($subsystem));
+
+        try {
+            $this->token($subsystem);
+        } catch (RuntimeException $exception) {
+            return SubsystemOperationResult::fail($exception->getMessage());
+        }
+        dd($this->token($subsystem));
+        return SubsystemOperationResult::ok(mensaje: 'Autenticación contra Adagio exitosa');
+    }
+
     public function findByCpf(string $cpf): ?array
     {
         $subsystem = $this->resolveSubsystem();

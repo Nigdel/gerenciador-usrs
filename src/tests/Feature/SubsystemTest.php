@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Subsystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class SubsystemTest extends TestCase
@@ -82,5 +83,43 @@ class SubsystemTest extends TestCase
             ->assertRedirect('/subsystems');
 
         $this->assertDatabaseMissing('subsystems', ['id' => $subsystem->id]);
+    }
+
+    public function test_identity_provider_connection_can_be_tested(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'api_url' => 'https://adagio.test/api',
+            'api_config' => [
+                'email' => 'api@example.com',
+                'password' => 'secret',
+            ],
+            'activo' => true,
+            'es_proveedor_identidad' => true,
+        ]);
+        Http::fake(fn () => Http::response(['token' => 'test-token']));
+
+        $this->post(route('subsystems.test-connection', $subsystem))
+            ->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success', 'Autenticación contra Adagio exitosa');
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/kliosAnalise/login'));
+    }
+
+    public function test_identity_provider_connection_reports_missing_credentials(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'api_url' => 'https://adagio.test/api',
+            'activo' => true,
+            'es_proveedor_identidad' => true,
+        ]);
+
+        $this->post(route('subsystems.test-connection', $subsystem))
+            ->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('error', 'Falta api_config.email / api_config.password del subsistema Adagio');
     }
 }

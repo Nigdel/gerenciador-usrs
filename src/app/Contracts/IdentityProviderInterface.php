@@ -2,6 +2,9 @@
 
 namespace App\Contracts;
 
+use App\DTO\SubsystemOperationResult;
+use App\Models\Subsystem;
+
 /**
  * Contrato adicional, solo para el subsistema marcado como "proveedor de
  * identidad" (es_proveedor_identidad = true), típicamente Adagio. Permite
@@ -10,6 +13,8 @@ namespace App\Contracts;
  */
 interface IdentityProviderInterface
 {
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult;
+
     /**
      * @return array|null Datos del usuario en el proveedor (nombre_completo,
      *                     email, cpf, ...) o null si no existe.

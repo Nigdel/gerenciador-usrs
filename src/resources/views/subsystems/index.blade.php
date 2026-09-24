@@ -13,13 +13,6 @@
             <a class="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 py-2.5 font-bold text-white no-underline transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-700/20" href="{{ route('subsystems.create') }}">Nuevo subsistema</a>
         </div>
 
-        @if (session('success'))
-            <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800" role="status">{{ session('success') }}</div>
-        @endif
-        @if (session('error'))
-            <div class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{{ session('error') }}</div>
-        @endif
-
         @if ($subsystems->isEmpty())
             <div class="grid gap-2 border border-dashed border-[#d9e2dc] px-6 py-11 text-center text-[#68756d]">
                 <strong class="text-[#17211b]">No hay subsistemas registrados.</strong>

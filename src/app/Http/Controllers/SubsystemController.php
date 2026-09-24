@@ -2,14 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\IdentityProviderInterface;
 use App\Models\Subsystem;
+use App\Services\SubsystemServiceRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class SubsystemController extends Controller
 {
+    public function __construct(
+        private readonly SubsystemServiceRegistry $registry,
+    ) {
+    }
+
     public function index(): View
     {
         return view('subsystems.index', [
@@ -27,6 +35,35 @@ class SubsystemController extends Controller
         return view('subsystems.show', [
             'subsystem' => $subsystem->loadCount('accounts'),
         ]);
+    }
+
+    public function testConnection(Subsystem $subsystem): RedirectResponse
+    {
+        if (! $subsystem->es_proveedor_identidad) {
+            return redirect()
+                ->route('subsystems.show', $subsystem)
+                ->with('error', 'Solo se puede probar la conexión del proveedor de identidad.');
+        }
+
+        try {
+            $service = $this->registry->resolve($subsystem->slug);
+
+            if (! $service instanceof IdentityProviderInterface) {
+                throw new \InvalidArgumentException('El proveedor de identidad no admite pruebas de conexión.');
+            }
+
+            $result = $service->testConnection($subsystem);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('subsystems.show', $subsystem)
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('subsystems.show', $subsystem)
+            ->with($result->success ? 'success' : 'error', $result->mensaje);
     }
 
     public function store(Request $request): RedirectResponse

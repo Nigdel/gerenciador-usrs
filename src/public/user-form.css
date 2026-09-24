@@ -205,6 +205,107 @@ input.input-error {
     background: var(--success-bg);
 }
 
+.feedback-warning {
+    border: 1px solid #f3d08a;
+    color: #7a4b00;
+    background: #fff8e6;
+}
+
+.toast-container {
+    position: fixed;
+    z-index: 1000;
+    top: 20px;
+    right: 20px;
+    display: grid;
+    width: min(390px, calc(100vw - 40px));
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 15px 16px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--primary);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--surface);
+    box-shadow: 0 16px 34px rgba(23, 52, 37, .18);
+    pointer-events: auto;
+    animation: toast-in .24s ease-out both;
+}
+
+.toast-success {
+    border-color: #a6e2bf;
+    border-left-color: var(--success);
+    background: var(--success-bg);
+}
+
+.toast-warning {
+    border-color: #f3d08a;
+    border-left-color: #b7791f;
+    background: #fff8e6;
+}
+
+.toast-error {
+    border-color: #f5c2c0;
+    border-left-color: var(--danger);
+    background: var(--danger-bg);
+}
+
+.toast-message {
+    flex: 1;
+    font-size: .9rem;
+    line-height: 1.45;
+}
+
+.toast-dismiss {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    color: currentColor;
+    background: transparent;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: .65;
+}
+
+.toast-dismiss:hover,
+.toast-dismiss:focus-visible {
+    opacity: 1;
+}
+
+.toast-hiding {
+    animation: toast-out .18s ease-in forwards;
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toast-out {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+}
+
 .table-wrapper {
     overflow-x: auto;
     border: 1px solid #dee2e6;
@@ -342,6 +443,12 @@ input.input-error {
 @media (max-width: 600px) {
     .page-shell {
         padding: 18px 12px;
+    }
+
+    .toast-container {
+        top: 12px;
+        right: 12px;
+        width: calc(100vw - 24px);
     }
 
     .field-grid {
