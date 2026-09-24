@@ -52,7 +52,6 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         } catch (RuntimeException $exception) {
             return SubsystemOperationResult::fail($exception->getMessage());
         }
-        dd($this->token($subsystem));
         return SubsystemOperationResult::ok(mensaje: 'Autenticación contra Adagio exitosa');
     }
 
