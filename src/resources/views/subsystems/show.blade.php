@@ -48,26 +48,26 @@
                                     <td class="px-4 py-3.5 font-bold">{{ $account->user?->nombre_completo ?? 'No disponible' }}</td>
                                     <td class="px-4 py-3.5">{{ $account->credencial_usuario }}</td>
                                     <td class="px-4 py-3.5">{{ $account->external_account_id ?: 'No informado' }}</td>
-                                    <td class="px-4 py-3.5">{{ $status }}</td>
+                                    <td class="px-4 py-3.5">@include('components.account-status', ['status' => $status])</td>
                                     <td class="px-4 py-3.5">
                                         <div class="flex flex-wrap gap-3">
                                             @if ($status === 'activo')
                                                 <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
                                                     @csrf
                                                     <input type="hidden" name="operation" value="disable">
-                                                    <button class="font-semibold text-amber-700" type="submit">Deshabilitar</button>
+                                                    <button class="inline-flex items-center justify-center text-amber-700" type="submit" aria-label="Deshabilitar cuenta {{ $account->credencial_usuario }}" title="Deshabilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Deshabilitar</span></button>
                                                 </form>
                                             @else
                                                 <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
                                                     @csrf
                                                     <input type="hidden" name="operation" value="enable">
-                                                    <button class="font-semibold text-[#1f5d49]" type="submit">Habilitar</button>
+                                                    <button class="inline-flex items-center justify-center text-[#1f5d49]" type="submit" aria-label="Habilitar cuenta {{ $account->credencial_usuario }}" title="Habilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Habilitar</span></button>
                                                 </form>
                                             @endif
                                             <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
                                                 @csrf
                                                 <input type="hidden" name="operation" value="delete">
-                                                <button class="font-semibold text-red-700" type="submit">Eliminar</button>
+                                                <button class="inline-flex items-center justify-center text-red-700" type="submit" aria-label="Eliminar cuenta {{ $account->credencial_usuario }}" title="Eliminar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
                                             </form>
                                         </div>
                                     </td>

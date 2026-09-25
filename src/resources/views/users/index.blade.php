@@ -43,12 +43,12 @@
                                 <td class="px-4 py-3.5"><span class="inline-flex rounded-full px-2 py-1 text-xs font-bold {{ $user->externo ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800' }}">{{ $user->externo ? 'Externo' : 'Interno' }}</span></td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-2 whitespace-nowrap sm:justify-end">
-                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('users.show', $user) }}">Ver</a>
-                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('users.edit', $user) }}">Editar</a>
+                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('users.show', $user) }}" aria-label="Ver {{ $user->name }}" title="Ver"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-eye"></use></svg><span class="sr-only">Ver</span></a>
+                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('users.edit', $user) }}" aria-label="Editar {{ $user->name }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
                                         <form class="inline-flex" action="{{ route('users.destroy', $user) }}" method="POST" onsubmit="return confirm('¿Eliminar este usuario?');">
                                             @csrf
                                             @method('DELETE')
-                                            <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit">Eliminar</button>
+                                            <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit" aria-label="Eliminar {{ $user->name }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
                                         </form>
                                     </div>
                                 </td>

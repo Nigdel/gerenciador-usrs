@@ -64,23 +64,20 @@ class SubsystemController extends Controller
                     $result = $service->deleteUser($userSubsystemAccount);
 
                     if (! $result->success) {
-                        return redirect()
-                            ->route('subsystems.show', $subsystem)
+                        return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
                             ->with('error', $result->mensaje ?? 'No se pudo eliminar la cuenta en el subsistema.');
                     }
                 }
             } catch (Throwable $exception) {
                 report($exception);
 
-                return redirect()
-                    ->route('subsystems.show', $subsystem)
+                return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
                     ->with('error', $exception->getMessage());
             }
 
             $userSubsystemAccount->delete();
 
-            return redirect()
-                ->route('subsystems.show', $subsystem)
+            return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
                 ->with('success', 'Cuenta eliminada correctamente.');
         }
 
@@ -92,20 +89,18 @@ class SubsystemController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return redirect()
-                ->route('subsystems.show', $subsystem)
+            return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
                 ->with('error', $exception->getMessage());
         }
 
-            $confirmation = null;
+        $confirmation = null;
         $expectedState = $operation === 'enable' ? 'activo' : 'deshabilitado';
 
         if ($result->success) {
             $confirmation = $service->getUserStatus($userSubsystemAccount);
 
             if (! $confirmation->success || $confirmation->estado !== $expectedState) {
-                return redirect()
-                    ->route('subsystems.show', $subsystem)
+                return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
                     ->with('error', 'El subsistema no confirmó el cambio de estado de la cuenta.');
             }
         }
@@ -117,9 +112,17 @@ class SubsystemController extends Controller
             ]);
         }
 
-        return redirect()
-            ->route('subsystems.show', $subsystem)
+        return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
             ->with($result->success ? 'success' : 'error', $result->mensaje ?? ($result->success ? 'Operación completada.' : 'No se pudo completar la operación.'));
+    }
+
+    private function accountActionRedirect(Request $request, Subsystem $subsystem, UserSubsystemAccount $account): RedirectResponse
+    {
+        if ($request->input('return_to') === 'gestor-user') {
+            return redirect()->route('gestor-users.show', $account->gestor_user_id);
+        }
+
+        return redirect()->route('subsystems.show', $subsystem);
     }
 
     public function testConnection(Subsystem $subsystem): RedirectResponse

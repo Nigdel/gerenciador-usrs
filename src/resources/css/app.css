@@ -176,6 +176,19 @@ input.input-error {
     cursor: pointer;
 }
 
+.button-icon {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+}
+
+.button-icon > svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
 .button-primary {
     color: #fff;
     background: var(--primary);
@@ -194,6 +207,43 @@ input.input-error {
     border-color: var(--line);
     color: var(--ink);
     background: #fff;
+}
+
+.account-status-active {
+    color: #15803d;
+}
+
+.account-status-disabled {
+    color: #b45309;
+}
+
+.account-status-suspended {
+    color: #c2410c;
+}
+
+.account-status-deleted {
+    color: #b91c1c;
+}
+
+.account-status-unknown {
+    color: #4b5563;
+}
+
+a:not(.button)[aria-label^="Editar"] > svg {
+    color: #b45309;
+}
+
+a:not(.button)[aria-label^="Eliminar"] > svg,
+button:not(.button)[aria-label^="Eliminar"] > svg {
+    color: #b91c1c;
+}
+
+button:not(.button)[aria-label^="Deshabilitar"] > svg {
+    color: #b45309;
+}
+
+button:not(.button)[aria-label^="Habilitar"] > svg {
+    color: #15803d;
 }
 
 .feedback {

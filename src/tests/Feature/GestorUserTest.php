@@ -7,6 +7,7 @@ use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use App\Services\UserProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -123,6 +124,72 @@ class GestorUserTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertDatabaseHas('gestor_users', ['id' => $gestorUser->id]);
+    }
+
+    public function test_gestor_user_show_uses_subsystem_account_actions(): void
+    {
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678901',
+            'password_general' => 'Password123!',
+            'usuario' => 'ana.silva',
+            'empresa' => 'Empresa Teste',
+        ]);
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'activo' => true,
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $gestorUser->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.glpi',
+            'external_account_id' => 'glpi-42',
+            'estado' => 'activo',
+        ]);
+
+        $this->get(route('gestor-users.show', $gestorUser))
+            ->assertOk()
+            ->assertSee(route('subsystems.accounts.action', [$subsystem, $account]), false)
+            ->assertSee('value="disable"', false)
+            ->assertSee('value="delete"', false);
+    }
+
+    public function test_gestor_user_account_action_returns_to_gestor_user_show(): void
+    {
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678903',
+            'password_general' => 'Password123!',
+            'usuario' => 'ana.silva.return',
+            'empresa' => 'Empresa Teste',
+        ]);
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+            'activo' => true,
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $gestorUser->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.glpi',
+            'external_account_id' => 'glpi-42',
+            'estado' => 'activo',
+        ]);
+        Http::fake(fn ($request) => $request->method() === 'PUT'
+            ? Http::response([])
+            : Http::response(['is_active' => false]));
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'disable',
+            'return_to' => 'gestor-user',
+        ])->assertRedirect(route('gestor-users.show', $gestorUser));
+
+        $this->assertDatabaseHas('user_subsystem_accounts', [
+            'id' => $account->id,
+            'estado' => 'deshabilitado',
+        ]);
     }
 
     public function test_gestor_user_account_can_be_created_updated_and_deleted(): void

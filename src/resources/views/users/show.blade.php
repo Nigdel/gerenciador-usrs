@@ -10,7 +10,7 @@
                 <h1 id="page-title">{{ $user->name }}</h1>
                 <p>Detalhes do usuário cadastrado.</p>
             </div>
-            <a class="button button-primary" href="{{ route('users.edit', $user) }}">Editar usuário</a>
+            <a class="button button-primary" href="{{ route('users.edit', $user) }}" aria-label="Editar {{ $user->name }}" title="Editar usuário"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar usuário</span></a>
         </div>
 
         <dl class="detail-grid">
@@ -47,7 +47,7 @@
                                     <td class="px-4 py-3.5 font-bold text-[#17211b]">{{ $account->subsystem?->nombre ?: 'Subsistema no disponible' }}</td>
                                     <td class="px-4 py-3.5 text-[#17211b]">{{ $account->credencial_usuario }}</td>
                                     <td class="px-4 py-3.5 text-[#17211b]">{{ $account->external_account_id ?: 'No informado' }}</td>
-                                    <td class="px-4 py-3.5"><span class="inline-flex rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-800">{{ $account->estado?->value ?? $account->estado }}</span></td>
+                                    <td class="px-4 py-3.5">@include('components.account-status', ['status' => $account->estado])</td>
                                 </tr>
                             @endforeach
                         </tbody>

@@ -46,12 +46,12 @@
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $subsystem->accounts_count }}</td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-3 whitespace-nowrap sm:justify-end">
-                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('subsystems.show', $subsystem) }}">Ver</a>
-                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}">Editar</a>
+                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('subsystems.show', $subsystem) }}" aria-label="Ver {{ $subsystem->nombre }}" title="Ver"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-eye"></use></svg><span class="sr-only">Ver</span></a>
+                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}" aria-label="Editar {{ $subsystem->nombre }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
                                     <form class="inline-flex" action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
                                         @csrf
                                         @method('DELETE')
-                                        <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit">Eliminar</button>
+                                        <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit" aria-label="Eliminar {{ $subsystem->nombre }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
                                     </form>
                                     </div>
                                 </td>

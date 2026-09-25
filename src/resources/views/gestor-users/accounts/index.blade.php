@@ -33,14 +33,14 @@
                                 <td class="px-4 py-3.5 font-bold">{{ $account->subsystem?->nombre ?? 'No disponible' }}</td>
                                 <td class="px-4 py-3.5">{{ $account->credencial_usuario }}</td>
                                 <td class="px-4 py-3.5">{{ $account->external_account_id ?: 'No informado' }}</td>
-                                <td class="px-4 py-3.5">{{ $account->estado?->value ?? $account->estado }}</td>
+                                <td class="px-4 py-3.5">@include('components.account-status', ['status' => $account->estado])</td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex gap-3">
-                                        <a class="font-semibold text-[#1f5d49]" href="{{ route('gestor-users.accounts.edit', [$gestorUser, $account]) }}">Editar</a>
+                                        <a class="inline-flex items-center justify-center text-[#1f5d49]" href="{{ route('gestor-users.accounts.edit', [$gestorUser, $account]) }}" aria-label="Editar cuenta {{ $account->credencial_usuario }}" title="Editar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
                                         <form action="{{ route('gestor-users.accounts.destroy', [$gestorUser, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
                                             @csrf
                                             @method('DELETE')
-                                            <button class="font-semibold text-red-700" type="submit">Eliminar</button>
+                                            <button class="inline-flex items-center justify-center text-red-700" type="submit" aria-label="Eliminar cuenta {{ $account->credencial_usuario }}" title="Eliminar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
                                         </form>
                                     </div>
                                 </td>

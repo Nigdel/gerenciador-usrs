@@ -34,6 +34,39 @@ class SubsystemServicesTest extends TestCase
             && ($request->data()['input']['is_active'] ?? null) === false);
     }
 
+    public function test_glpi_marks_an_existing_deleted_user_as_deleted(): void
+    {
+        $subsystem = $this->subsystem('glpi');
+        Http::fake(function ($request) {
+            return str_contains($request->url(), '/search/User')
+                ? Http::response(['data' => [['', '', 'glpi-42']]])
+                : Http::response(['id' => 42, 'is_deleted' => 1, 'is_active' => false]);
+        });
+
+        $result = app(GlpiService::class)->createUser($this->userData(), $subsystem);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('glpi-42', $result->externalAccountId);
+        $this->assertSame('borrado', $result->estado);
+        $this->assertSame('Usuario ya existía en GLPI, pero está borrado', $result->mensaje);
+    }
+
+    public function test_glpi_verifies_an_existing_user_before_reusing_it(): void
+    {
+        $subsystem = $this->subsystem('glpi');
+        Http::fake(function ($request) {
+            return str_contains($request->url(), '/search/User')
+                ? Http::response(['data' => [['', '', 'glpi-42']]])
+                : Http::response(['id' => 42, 'is_deleted' => 0, 'is_active' => true]);
+        });
+
+        $result = app(GlpiService::class)->createUser($this->userData(), $subsystem);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('activo', $result->estado);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/User/glpi-42'));
+    }
+
     public function test_glpi_deletes_a_user_remotely_when_requested(): void
     {
         $subsystem = $this->subsystem('glpi');

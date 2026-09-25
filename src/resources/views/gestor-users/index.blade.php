@@ -39,12 +39,12 @@
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->subsystem_accounts_count }}</td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-2 whitespace-nowrap sm:justify-end">
-                                        <a class="button button-secondary" href="{{ route('gestor-users.show', $gestorUser) }}">Ver</a>
-                                        <a class="button button-primary" href="{{ route('gestor-users.edit', $gestorUser) }}">Editar</a>
+                                        <a class="button button-secondary" href="{{ route('gestor-users.show', $gestorUser) }}" aria-label="Ver {{ $gestorUser->nombre_completo }}" title="Ver"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-eye"></use></svg><span class="sr-only">Ver</span></a>
+                                        <a class="button button-primary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar {{ $gestorUser->nombre_completo }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
                                         <form action="{{ route('gestor-users.destroy', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Eliminar este usuario? Solo se puede eliminar si no tiene cuentas asociadas.');">
                                             @csrf
                                             @method('DELETE')
-                                            <button class="button button-danger" type="submit">Eliminar</button>
+                                            <button class="button button-danger" type="submit" aria-label="Eliminar {{ $gestorUser->nombre_completo }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
                                         </form>
                                     </div>
                                 </td>

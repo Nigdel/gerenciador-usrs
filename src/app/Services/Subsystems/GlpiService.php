@@ -97,12 +97,28 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
         ]);
 
         if ($existente->successful() && ! empty($existente->json('data.0.2'))) {
+            $externalAccountId = (string) $existente->json('data.0.2');
+            $detalle = $this->http($subsystem)->get('/User/'.$externalAccountId);
+
+            if ($detalle->failed()) {
+                return SubsystemOperationResult::fail(
+                    'No se pudo verificar el estado del usuario existente en GLPI',
+                    $detalle->json() ?? [],
+                );
+            }
+
+            $estado = (int) $detalle->json('is_deleted') === 1
+                ? 'borrado'
+                : 'activo';
+
             return SubsystemOperationResult::ok(
                 credencialUsuario: $userData['usuario'],
-                externalAccountId: (string) $existente->json('data.0.2'),
-                estado: 'activo',
-                mensaje: 'Usuario ya existía en GLPI, se reutilizó',
-                raw: $existente->json() ?? [],
+                externalAccountId: $externalAccountId,
+                estado: $estado,
+                mensaje: $estado === 'borrado'
+                    ? 'Usuario ya existía en GLPI, pero está borrado'
+                    : 'Usuario ya existía en GLPI, se reutilizó',
+                raw: array_merge($existente->json() ?? [], ['detalle' => $detalle->json() ?? []]),
             );
         }
 
@@ -192,6 +208,10 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('No se pudo consultar el estado en GLPI', $response->json() ?? []);
+        }
+
+        if ((int) $response->json('is_deleted') === 1) {
+            return SubsystemOperationResult::ok(estado: 'borrado', raw: $response->json() ?? []);
         }
 
         $activo = (bool) $response->json('is_active');
