@@ -90,13 +90,15 @@ class UsernameGeneratorService
 
     private function resolverProveedorIdentidad(): IdentityProviderInterface
     {
-        $slug = config('subsystems.proveedor_identidad_slug', 'adagio');
+      
+        return $this->registry->resolveIdentityProvider();
+    /*  $slug = config('subsystems.proveedor_identidad_slug', 'adagio');
         $servicio = $this->registry->resolve($slug);
 
         if (! $servicio instanceof IdentityProviderInterface) {
             throw new RuntimeException("El subsistema proveedor de identidad [{$slug}] debe implementar IdentityProviderInterface");
         }
 
-        return $servicio;
+        return $servicio; */
     }
 }

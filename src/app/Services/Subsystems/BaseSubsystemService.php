@@ -25,7 +25,13 @@ abstract class BaseSubsystemService implements SubsystemServiceInterface
             ->timeout($config['timeout'] ?? 15);
 
         if (! empty($config['token'])) {
-            $request = $request->withToken($config['token']);
+            if (! empty($config['auth_header'])) {
+                // Algunas APIs (ej. Chatwoot) no usan "Authorization: Bearer",
+                // sino un header propio con el token tal cual.
+                $request = $request->withHeaders([$config['auth_header'] => $config['token']]);
+            } else {
+                $request = $request->withToken($config['token']);
+            }
         }
 
         if (! empty($config['headers']) && is_array($config['headers'])) {

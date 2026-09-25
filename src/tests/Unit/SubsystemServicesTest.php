@@ -168,7 +168,7 @@ class SubsystemServicesTest extends TestCase
 
     public function test_chatwoot_creates_and_manages_an_agent(): void
     {
-        $subsystem = $this->subsystem('chatwoot', ['account_id' => 77]);
+        $subsystem = $this->subsystem('chatwoot', ['accounts' => ['empresa teste' => 77]]);
         $account = $this->account($subsystem, 'chat-9');
         Http::fake(function ($request) {
             if ($request->method() === 'GET') {
@@ -193,7 +193,7 @@ class SubsystemServicesTest extends TestCase
 
     public function test_chatwoot_reports_creation_failures(): void
     {
-        $subsystem = $this->subsystem('chatwoot', ['account_id' => 77]);
+        $subsystem = $this->subsystem('chatwoot', ['accounts' => ['empresa teste' => 77]]);
         Http::fake(fn () => Http::response(['error' => 'invalid'], 422));
 
         $result = app(ChatwootService::class)->createUser($this->userData(), $subsystem);

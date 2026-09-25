@@ -47,7 +47,7 @@ class SubsystemTest extends TestCase
             'nombre' => 'Chatwoot',
             'slug' => 'chatwoot',
             'api_url' => 'https://chatwoot.test',
-            'api_config' => ['account_id' => 77],
+            'api_config' => ['accounts' => ['klios' => 1]],
             'activo' => true,
         ]);
 
@@ -62,17 +62,23 @@ class SubsystemTest extends TestCase
             'nombre' => 'Chatwoot',
             'slug' => 'chatwoot',
             'api_url' => 'https://chatwoot.test',
-            'api_config' => ['account_id' => 77, 'token' => 'test-token'],
+            'api_config' => [
+                'accounts' => ['klios' => 1, 'federal' => 2],
+                'token' => 'test-token',
+            ],
             'activo' => true,
         ]);
-        Http::fake(fn () => Http::response(['id' => 77, 'name' => 'Soporte']));
+        Http::fake(fn () => Http::response(['id' => 1, 'name' => 'Soporte']));
 
         $this->post(route('subsystems.test-connection', $subsystem))
             ->assertRedirect(route('subsystems.show', $subsystem))
-            ->assertSessionHas('success', 'Conexión y autenticación con Chatwoot exitosas');
+            ->assertSessionHas('success', 'Conexión y autenticación con Chatwoot exitosas (todas las cuentas)');
 
+        Http::assertSentCount(2);
         Http::assertSent(fn ($request) => $request->method() === 'GET'
-            && str_ends_with($request->url(), '/api/v1/accounts/77'));
+            && str_ends_with($request->url(), '/api/v1/accounts/1'));
+        Http::assertSent(fn ($request) => $request->method() === 'GET'
+            && str_ends_with($request->url(), '/api/v1/accounts/2'));
     }
 
     public function test_subsystem_show_lists_associated_accounts(): void

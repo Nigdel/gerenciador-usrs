@@ -37,13 +37,14 @@ class SubsystemSeeder extends Seeder
                 ],
                 'external_subsystem_id' => 'glpi-01',
             ],
-            [
+           [
                 'nombre' => 'Chatwoot',
                 'slug' => 'chatwoot',
-                'descripcion' => 'Atención al cliente / Atención al cliente / chat (una instancia, 2 cuentas: Klios y Federal)',
+                'descripcion' => 'Atención al cliente / chat (una instancia, 2 cuentas: Klios y Federal)',
                 'api_url' => env('CHATWOOT_API_URL'),
                 'api_config' => [
                     'token' => env('CHATWOOT_API_TOKEN'),
+                    'auth_header' => 'api_access_token', // Chatwoot no usa Authorization: Bearer
                     'accounts' => [
                         'klios' => (int) env('CHATWOOT_ACCOUNT_ID_KLIOS', 1),
                         'federal' => (int) env('CHATWOOT_ACCOUNT_ID_FEDERAL', 2),
