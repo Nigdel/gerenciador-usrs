@@ -156,9 +156,8 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
 
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->http($account->subsystem)->delete('/User/'.$account->external_account_id, [
-            'input' => ['id' => $account->external_account_id],
-            'force_purge' => false,
+        $response = $this->http($account->subsystem)->put('/User/'.$account->external_account_id, [
+            'input' => ['is_active' => false],
         ]);
 
         if ($response->failed()) {
@@ -166,6 +165,25 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
         }
 
         return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
+    }
+
+    public function supportsDeleteUser(): bool
+    {
+        return true;
+    }
+
+    public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        $response = $this->http($account->subsystem)->delete('/User/'.$account->external_account_id, [
+            'input' => ['id' => $account->external_account_id],
+            'force_purge' => false,
+        ]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo eliminar el usuario en GLPI', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'eliminado', raw: $response->json() ?? []);
     }
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult

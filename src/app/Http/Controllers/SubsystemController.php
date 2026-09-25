@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Contracts\SubsystemConnectionInterface;
 use App\Models\Subsystem;
+use App\Models\UserSubsystemAccount;
 use App\Services\SubsystemServiceRegistry;
+use App\Services\Subsystems\BaseSubsystemService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -41,9 +43,83 @@ class SubsystemController extends Controller
         }
 
         return view('subsystems.show', [
-            'subsystem' => $subsystem->loadCount('accounts'),
+            'subsystem' => $subsystem->load(['accounts.user'])->loadCount('accounts'),
             'connectionTestable' => $connectionTestable,
         ]);
+    }
+
+    public function accountAction(Request $request, Subsystem $subsystem, UserSubsystemAccount $userSubsystemAccount): RedirectResponse
+    {
+        abort_if($userSubsystemAccount->subsystem_id !== $subsystem->id, 404);
+
+        $operation = $request->validate([
+            'operation' => ['required', Rule::in(['disable', 'enable', 'delete'])],
+        ])['operation'];
+
+        if ($operation === 'delete') {
+            try {
+                $service = $this->registry->resolve($subsystem->slug);
+
+                if ($service instanceof BaseSubsystemService && $service->supportsDeleteUser()) {
+                    $result = $service->deleteUser($userSubsystemAccount);
+
+                    if (! $result->success) {
+                        return redirect()
+                            ->route('subsystems.show', $subsystem)
+                            ->with('error', $result->mensaje ?? 'No se pudo eliminar la cuenta en el subsistema.');
+                    }
+                }
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return redirect()
+                    ->route('subsystems.show', $subsystem)
+                    ->with('error', $exception->getMessage());
+            }
+
+            $userSubsystemAccount->delete();
+
+            return redirect()
+                ->route('subsystems.show', $subsystem)
+                ->with('success', 'Cuenta eliminada correctamente.');
+        }
+
+        try {
+            $service = $this->registry->resolve($subsystem->slug);
+            $result = $operation === 'enable'
+                ? $service->reactivateUser($userSubsystemAccount)
+                : $service->disableUser($userSubsystemAccount);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('subsystems.show', $subsystem)
+                ->with('error', $exception->getMessage());
+        }
+
+            $confirmation = null;
+        $expectedState = $operation === 'enable' ? 'activo' : 'deshabilitado';
+
+        if ($result->success) {
+            $confirmation = $service->getUserStatus($userSubsystemAccount);
+
+            if (! $confirmation->success || $confirmation->estado !== $expectedState) {
+                return redirect()
+                    ->route('subsystems.show', $subsystem)
+                    ->with('error', 'El subsistema no confirmó el cambio de estado de la cuenta.');
+            }
+        }
+
+        if ($result->success) {
+            $userSubsystemAccount->update([
+                'estado' => $confirmation->estado,
+                'meta' => $result->raw,
+            ]);
+        }
+
+        return redirect()
+            ->route('subsystems.show', $subsystem)
+            ->with($result->success ? 'success' : 'error', $result->mensaje ?? ($result->success ? 'Operación completada.' : 'No se pudo completar la operación.'));
     }
 
     public function testConnection(Subsystem $subsystem): RedirectResponse

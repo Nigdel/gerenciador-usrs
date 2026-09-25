@@ -23,6 +23,62 @@
             <div class="detail-wide"><dt>Descripción</dt><dd>{{ $subsystem->descripcion ?: 'Sin descripción' }}</dd></div>
         </dl>
 
+        <div class="mt-8 border-t border-[#d9e2dc] pt-6">
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h2 class="text-xl font-bold text-[#17211b]">Cuentas asociadas</h2>
+            </div>
+            @if ($subsystem->accounts->isEmpty())
+                <div class="border border-dashed border-[#d9e2dc] px-5 py-6 text-[#68756d]">Este subsistema no tiene cuentas vinculadas.</div>
+            @else
+                <div class="overflow-x-auto rounded-lg border border-[#d9e2dc]">
+                    <table class="min-w-full border-collapse text-left">
+                        <thead class="bg-[#f7faf8] text-xs uppercase tracking-[0.04em] text-[#68756d]">
+                            <tr>
+                                <th class="px-4 py-3.5 font-bold">Usuario</th>
+                                <th class="px-4 py-3.5 font-bold">Credencial</th>
+                                <th class="px-4 py-3.5 font-bold">ID externo</th>
+                                <th class="px-4 py-3.5 font-bold">Estado</th>
+                                <th class="px-4 py-3.5 font-bold">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($subsystem->accounts as $account)
+                                @php($status = $account->estado?->value ?? $account->estado)
+                                <tr class="border-t border-[#e8eee9]">
+                                    <td class="px-4 py-3.5 font-bold">{{ $account->user?->nombre_completo ?? 'No disponible' }}</td>
+                                    <td class="px-4 py-3.5">{{ $account->credencial_usuario }}</td>
+                                    <td class="px-4 py-3.5">{{ $account->external_account_id ?: 'No informado' }}</td>
+                                    <td class="px-4 py-3.5">{{ $status }}</td>
+                                    <td class="px-4 py-3.5">
+                                        <div class="flex flex-wrap gap-3">
+                                            @if ($status === 'activo')
+                                                <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
+                                                    @csrf
+                                                    <input type="hidden" name="operation" value="disable">
+                                                    <button class="font-semibold text-amber-700" type="submit">Deshabilitar</button>
+                                                </form>
+                                            @else
+                                                <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
+                                                    @csrf
+                                                    <input type="hidden" name="operation" value="enable">
+                                                    <button class="font-semibold text-[#1f5d49]" type="submit">Habilitar</button>
+                                                </form>
+                                            @endif
+                                            <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
+                                                @csrf
+                                                <input type="hidden" name="operation" value="delete">
+                                                <button class="font-semibold text-red-700" type="submit">Eliminar</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+
         @if ($connectionTestable)
             <div class="mt-8 border-t border-[#d9e2dc] pt-6">
                 <h2 class="mb-2 text-xl font-bold text-[#17211b]">Disponibilidad del subsistema</h2>

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\UserSubsystemAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -37,6 +39,75 @@ class SubsystemTest extends TestCase
         $this->get(route('subsystems.show', $subsystem))
             ->assertOk()
             ->assertSee('Probar disponibilidad');
+    }
+
+    public function test_subsystem_show_lists_associated_accounts(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678900',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez',
+            'external_account_id' => '42',
+            'estado' => 'activo',
+        ]);
+
+        $this->get(route('subsystems.show', $subsystem))
+            ->assertOk()
+            ->assertSee('Ana Pérez')
+            ->assertSee('Deshabilitar')
+            ->assertSee('Eliminar');
+    }
+
+    public function test_account_state_is_updated_only_when_subsystem_confirms_it(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678900',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez',
+            'external_account_id' => '42',
+            'estado' => 'activo',
+        ]);
+
+        Http::fake(function ($request) {
+            return match ($request->method()) {
+                'PUT' => Http::response([], 200),
+                'GET' => Http::response(['is_active' => true]),
+                default => Http::response([]),
+            };
+        });
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'disable',
+        ])->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('error', 'El subsistema no confirmó el cambio de estado de la cuenta.');
+
+        $this->assertDatabaseHas('user_subsystem_accounts', [
+            'id' => $account->id,
+            'estado' => 'activo',
+        ]);
     }
 
     public function test_subsystem_can_be_created_with_json_configuration(): void

@@ -32,16 +32,19 @@
         </dl>
 
         <div class="mt-8">
-            <h2 class="mb-4 text-xl font-bold text-[#17211b]">Cuentas en subsistemas</h2>
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h2 class="text-xl font-bold text-[#17211b]">Cuentas en subsistemas</h2>
+                <a class="button button-primary" href="{{ route('gestor-users.accounts.create', $gestorUser) }}">Nueva cuenta</a>
+            </div>
             @if ($gestorUser->subsystemAccounts->isEmpty())
                 <div class="border border-dashed border-[#d9e2dc] px-5 py-6 text-[#68756d]">Este usuario no tiene cuentas vinculadas.</div>
             @else
                 <div class="overflow-x-auto rounded-lg border border-[#d9e2dc]">
                     <table class="min-w-full border-collapse text-left">
-                        <thead class="bg-[#f7faf8] text-xs uppercase tracking-[0.04em] text-[#68756d]"><tr><th class="px-4 py-3.5 font-bold">Subsistema</th><th class="px-4 py-3.5 font-bold">Credencial</th><th class="px-4 py-3.5 font-bold">ID externo</th><th class="px-4 py-3.5 font-bold">Estado</th></tr></thead>
+                        <thead class="bg-[#f7faf8] text-xs uppercase tracking-[0.04em] text-[#68756d]"><tr><th class="px-4 py-3.5 font-bold">Subsistema</th><th class="px-4 py-3.5 font-bold">Credencial</th><th class="px-4 py-3.5 font-bold">ID externo</th><th class="px-4 py-3.5 font-bold">Estado</th><th class="px-4 py-3.5 font-bold">Acciones</th></tr></thead>
                         <tbody>
                             @foreach ($gestorUser->subsystemAccounts as $account)
-                                <tr class="border-t border-[#e8eee9]"><td class="px-4 py-3.5 font-bold">{{ $account->subsystem?->nombre ?: 'No disponible' }}</td><td class="px-4 py-3.5">{{ $account->credencial_usuario }}</td><td class="px-4 py-3.5">{{ $account->external_account_id ?: 'No informado' }}</td><td class="px-4 py-3.5">{{ $account->estado?->value ?? $account->estado }}</td></tr>
+                                <tr class="border-t border-[#e8eee9]"><td class="px-4 py-3.5 font-bold">{{ $account->subsystem?->nombre ?: 'No disponible' }}</td><td class="px-4 py-3.5">{{ $account->credencial_usuario }}</td><td class="px-4 py-3.5">{{ $account->external_account_id ?: 'No informado' }}</td><td class="px-4 py-3.5">{{ $account->estado?->value ?? $account->estado }}</td><td class="px-4 py-3.5"><div class="flex gap-2"><a class="text-sm font-semibold text-[#1f5d49]" href="{{ route('gestor-users.accounts.edit', [$gestorUser, $account]) }}">Editar</a><form action="{{ route('gestor-users.accounts.destroy', [$gestorUser, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">@csrf @method('DELETE')<button class="text-sm font-semibold text-red-700" type="submit">Eliminar</button></form></div></td></tr>
                             @endforeach
                         </tbody>
                     </table>

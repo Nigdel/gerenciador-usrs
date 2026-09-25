@@ -9,6 +9,7 @@ use App\Services\Subsystems\AdagioService;
 use App\Services\Subsystems\ChatwootService;
 use App\Services\Subsystems\EmailService;
 use App\Services\Subsystems\EntraIdService;
+use App\Services\Subsystems\GlpiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -17,6 +18,37 @@ use Tests\TestCase;
 class SubsystemServicesTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_glpi_disables_a_user_without_deleting_it(): void
+    {
+        $subsystem = $this->subsystem('glpi');
+        $account = $this->account($subsystem, 'glpi-42');
+        Http::fake(fn () => Http::response(['id' => 42, 'is_active' => false]));
+
+        $result = app(GlpiService::class)->disableUser($account);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('deshabilitado', $result->estado);
+        Http::assertSent(fn ($request) => $request->method() === 'PUT'
+            && str_ends_with($request->url(), '/User/glpi-42')
+            && ($request->data()['input']['is_active'] ?? null) === false);
+    }
+
+    public function test_glpi_deletes_a_user_remotely_when_requested(): void
+    {
+        $subsystem = $this->subsystem('glpi');
+        $account = $this->account($subsystem, 'glpi-42');
+        Http::fake(fn () => Http::response(['id' => 42]));
+
+        $result = app(GlpiService::class)->deleteUser($account);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('eliminado', $result->estado);
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), '/User/glpi-42')
+            && ($request->data()['input']['id'] ?? null) === 'glpi-42'
+            && ($request->data()['force_purge'] ?? null) === false);
+    }
 
     public function test_adagio_finds_users_checks_email_and_manages_lifecycle(): void
     {

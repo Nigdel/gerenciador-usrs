@@ -3,7 +3,9 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\SubsystemServiceInterface;
+use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
+use App\Models\UserSubsystemAccount;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -43,5 +45,15 @@ abstract class BaseSubsystemService implements SubsystemServiceInterface
     protected function log(string $mensaje, array $contexto = []): void
     {
         Log::channel(config('logging.default'))->info('[gestor:'.static::class.'] '.$mensaje, $contexto);
+    }
+
+    public function supportsDeleteUser(): bool
+    {
+        return false;
+    }
+
+    public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        return SubsystemOperationResult::fail('Este subsistema no admite eliminación remota de usuarios.');
     }
 }

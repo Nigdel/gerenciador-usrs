@@ -29,5 +29,9 @@ interface SubsystemServiceInterface
 
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult;
 
+    public function supportsDeleteUser(): bool;
+
+    public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult;
+
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult;
 }

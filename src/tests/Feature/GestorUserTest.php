@@ -124,4 +124,59 @@ class GestorUserTest extends TestCase
 
         $this->assertDatabaseHas('gestor_users', ['id' => $gestorUser->id]);
     }
+
+    public function test_gestor_user_account_can_be_created_updated_and_deleted(): void
+    {
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Bruno Souza',
+            'cpf' => '12345678902',
+            'password_general' => 'Password123!',
+            'usuario' => 'bruno.souza',
+            'empresa' => 'Empresa Teste',
+        ]);
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'activo' => true,
+        ]);
+
+        $this->get(route('gestor-users.accounts.create', $gestorUser))->assertOk();
+
+        $this->post(route('gestor-users.accounts.store', $gestorUser), [
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'bruno.glpi',
+            'external_account_id' => 'glpi-100',
+            'estado' => 'activo',
+        ])->assertRedirect(route('gestor-users.accounts.index', $gestorUser));
+
+        $this->assertDatabaseHas('user_subsystem_accounts', [
+            'gestor_user_id' => $gestorUser->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'bruno.glpi',
+            'external_account_id' => 'glpi-100',
+        ]);
+
+        $account = $gestorUser->subsystemAccounts()->firstOrFail();
+
+        $this->put(route('gestor-users.accounts.update', [$gestorUser, $account]), [
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'bruno.glpi.editado',
+            'external_account_id' => 'glpi-101',
+            'estado' => 'suspendido',
+        ])->assertRedirect(route('gestor-users.accounts.index', $gestorUser))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('user_subsystem_accounts', [
+            'id' => $account->id,
+            'credencial_usuario' => 'bruno.glpi.editado',
+            'external_account_id' => 'glpi-101',
+            'estado' => 'suspendido',
+        ]);
+
+        $this->delete(route('gestor-users.accounts.destroy', [$gestorUser, $account]))
+            ->assertRedirect(route('gestor-users.accounts.index', $gestorUser))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('user_subsystem_accounts', ['id' => $account->id]);
+    }
 }
