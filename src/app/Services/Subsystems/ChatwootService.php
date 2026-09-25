@@ -2,12 +2,36 @@
 
 namespace App\Services\Subsystems;
 
+use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 
-class ChatwootService extends BaseSubsystemService
+class ChatwootService extends BaseSubsystemService implements SubsystemConnectionInterface
 {
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult
+    {
+        $accountId = $subsystem->api_config['account_id'] ?? null;
+
+        if (empty($accountId)) {
+            return SubsystemOperationResult::fail('Falta api_config.account_id del subsistema Chatwoot');
+        }
+
+        $response = $this->http($subsystem)->get("/api/v1/accounts/{$accountId}");
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'Chatwoot no está disponible o rechazó la autenticación (HTTP '.$response->status().')',
+                $response->json() ?? [],
+            );
+        }
+
+        return SubsystemOperationResult::ok(
+            mensaje: 'Conexión y autenticación con Chatwoot exitosas',
+            raw: $response->json() ?? [],
+        );
+    }
+
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $accountId = $subsystem->api_config['account_id'] ?? null;

@@ -41,6 +41,40 @@ class SubsystemTest extends TestCase
             ->assertSee('Probar disponibilidad');
     }
 
+    public function test_connection_button_is_available_for_chatwoot(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Chatwoot',
+            'slug' => 'chatwoot',
+            'api_url' => 'https://chatwoot.test',
+            'api_config' => ['account_id' => 77],
+            'activo' => true,
+        ]);
+
+        $this->get(route('subsystems.show', $subsystem))
+            ->assertOk()
+            ->assertSee('Probar disponibilidad');
+    }
+
+    public function test_chatwoot_connection_can_be_tested(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Chatwoot',
+            'slug' => 'chatwoot',
+            'api_url' => 'https://chatwoot.test',
+            'api_config' => ['account_id' => 77, 'token' => 'test-token'],
+            'activo' => true,
+        ]);
+        Http::fake(fn () => Http::response(['id' => 77, 'name' => 'Soporte']));
+
+        $this->post(route('subsystems.test-connection', $subsystem))
+            ->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success', 'Conexión y autenticación con Chatwoot exitosas');
+
+        Http::assertSent(fn ($request) => $request->method() === 'GET'
+            && str_ends_with($request->url(), '/api/v1/accounts/77'));
+    }
+
     public function test_subsystem_show_lists_associated_accounts(): void
     {
         $subsystem = Subsystem::create([
