@@ -4,7 +4,80 @@ Sistema de gestión de usuarios que centraliza el alta y la suspensión de
 accesos en múltiples subsistemas (Adagio, GLPI, Chatwoot, Email, Slack,
 EntraId, SambaAd, ...) a través de un contrato universal.
 
-## Instalación
+## Reproducir el proyecto
+
+### Requisitos del host
+
+- Git.
+- Docker Engine con Docker Compose v2 (`docker compose`).
+- Puertos `8085` (aplicación) y `3307` (MySQL) disponibles.
+
+PHP, Composer, Node.js y npm se ejecutan dentro de contenedores; no hace falta
+instalarlos en el host.
+
+### Primera instalación
+
+Ejecuta los comandos desde la raíz del repositorio, donde está
+`docker-compose.yml`:
+
+```bash
+git clone <URL-del-repositorio> gerenciador-usrs
+cd gerenciador-usrs
+cp src/.env.example src/.env
+```
+
+Revisa `src/.env`. El ejemplo ya apunta al servicio MySQL de Compose. Cambia
+`APP_URL` si vas a publicar la aplicación en otro host o puerto. Si vas a
+integrar subsistemas externos, configura también sus credenciales y URLs antes
+de sembrarlos; las variables están referenciadas en
+`src/database/seeders/SubsystemSeeder.php`.
+
+Construye y levanta los contenedores:
+
+```bash
+docker compose up -d --build
+```
+
+El servicio `assets` instala las dependencias JavaScript fijadas en
+`src/package-lock.json`, genera el manifiesto de Vite y compila los estilos
+Tailwind antes de que nginx arranque. Instala las dependencias PHP y prepara la
+aplicación:
+
+```bash
+docker compose exec app composer install --no-interaction --prefer-dist
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate --force
+docker compose exec app php artisan db:seed --class=SubsystemSeeder --force
+```
+
+Abre `http://localhost:8085`. Si ese puerto ya está ocupado, cambia el puerto
+del lado izquierdo en `docker-compose.yml` y ajusta `APP_URL` en `src/.env` para
+que coincidan. El puerto de MySQL expuesto al host es `3307`; entre contenedores
+la aplicación se conecta a `mysql:3306`.
+
+Los valores de MySQL incluidos en Compose son únicamente para desarrollo local;
+no expongas esos valores ni `APP_DEBUG=true` en un entorno público.
+
+### Uso diario y reinicio
+
+```bash
+docker compose up -d
+docker compose logs -f app nginx
+docker compose down
+```
+
+`docker compose down` conserva los datos de MySQL. Para borrar también la base
+de datos local y empezar desde cero:
+
+```bash
+docker compose down -v
+```
+
+Después de borrar el volumen, repite los comandos de migración y seeder de la
+primera instalación. Para recompilar los estilos después de cambiar dependencias
+o configuración frontend, ejecuta `docker compose up -d --force-recreate assets`.
+
+## Integrar en otro proyecto Laravel
 
 1. Copia estas carpetas dentro de un proyecto Laravel existente (11.x o
    superior recomendado, requiere PHP 8.1+ por los enums):

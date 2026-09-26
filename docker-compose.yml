@@ -15,7 +15,7 @@ services:
   assets:
     image: node:22-alpine
     working_dir: /var/www
-    command: sh -c "npm install --no-audit --no-fund && npm run build"
+    command: sh -c "npm ci --no-audit --no-fund && npm run build"
     volumes:
       - ./src:/var/www
     networks:
