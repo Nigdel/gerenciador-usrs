@@ -5,7 +5,7 @@
 @section('content')
     <section class="form-panel" aria-labelledby="page-title">
         <div class="form-heading">
-            <p class="eyebrow">Gestión de accesos externos</p>
+            <a class="eyebrow" href="{{ route('home') }}">Gestión de accesos externos</a>
             <h1 id="page-title">Nuevo usuario gestionado</h1>
             <p>Registra la persona y crea sus cuentas en los subsistemas seleccionados.</p>
         </div>

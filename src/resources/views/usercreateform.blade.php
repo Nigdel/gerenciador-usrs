@@ -5,7 +5,7 @@
 @section('content')
         <section class="form-panel" aria-labelledby="page-title">
             <div class="form-heading">
-                <p class="eyebrow">Gestão de acessos</p>
+                <a class="eyebrow" href="{{ route('home') }}">Gestão de acessos</a>
                 <h1 id="page-title">Cadastrar usuário</h1>
                 <p>Preencha os dados abaixo para criar um novo acesso no sistema.</p>
             </div>

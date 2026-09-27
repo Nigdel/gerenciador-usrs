@@ -6,7 +6,7 @@
     <section class="w-full max-w-5xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title">
         <div class="mb-8 flex flex-col items-start justify-between gap-6 sm:flex-row">
             <div>
-                <p class="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-emerald-700">Gestão de acessos</p>
+                <a class="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-emerald-700" href="{{ route('home') }}">Gestão de acessos</a>
                 <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Subsistemas</h1>
                 <p class="max-w-prose leading-6 text-[#68756d]">Administre las plataformas conectadas al gestor de usuarios.</p>
             </div>

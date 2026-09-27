@@ -6,7 +6,8 @@
     <section class="form-panel crud-panel" aria-labelledby="page-title">
         <div class="page-toolbar">
             <div class="form-heading">
-                <p class="eyebrow">Usuario gestionado</p>
+                <a class="eyebrow" href="{{ route('home') }}">...Gestão de acessos</a>
+                
                 <h1 id="page-title">{{ $gestorUser->nombre_completo }}</h1>
                 <p>Identidad central y cuentas externas vinculadas.</p>
             </div>

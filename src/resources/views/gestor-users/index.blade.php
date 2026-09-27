@@ -6,7 +6,7 @@
     <section class="form-panel crud-panel" aria-labelledby="page-title">
         <div class="page-toolbar">
             <div class="form-heading">
-                <p class="eyebrow">Gestión de accesos externos</p>
+                <a class="eyebrow" href="{{ route('home') }}">Gestión de accesos externos</a>
                 <h1 id="page-title">Usuarios gestionados</h1>
                 <p>Administra personas y sus cuentas en los subsistemas conectados.</p>
             </div>
