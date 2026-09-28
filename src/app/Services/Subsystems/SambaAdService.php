@@ -2,6 +2,7 @@
 
 namespace App\Services\Subsystems;
 
+use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -11,8 +12,21 @@ use App\Models\UserSubsystemAccount;
  * `samba-tool` o LDAP, ya que no tiene una API REST nativa. Este adaptador
  * asume un wrapper REST configurado en api_url/api_config.
  */
-class SambaAdService extends BaseSubsystemService
+class SambaAdService extends BaseSubsystemService implements SubsystemConnectionInterface
 {
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult
+    {
+        $response = $this->http($subsystem)->get('/health');
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'Samba AD no está disponible o rechazó la autenticación (HTTP '.$response->status().')',
+            );
+        }
+
+        return SubsystemOperationResult::ok(mensaje: 'Conexión y autenticación con Samba AD exitosas');
+    }
+
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $response = $this->http($subsystem)->post('/users', [

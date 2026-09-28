@@ -2,6 +2,7 @@
 
 namespace App\Services\Subsystems;
 
+use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -10,8 +11,21 @@ use App\Models\UserSubsystemAccount;
  * Gestiona la casilla de correo corporativa (ej. panel de un proveedor de
  * email, cPanel, Google Workspace, Zimbra, etc. según api_config).
  */
-class EmailService extends BaseSubsystemService
+class EmailService extends BaseSubsystemService implements SubsystemConnectionInterface
 {
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult
+    {
+        $response = $this->http($subsystem)->get('/mailboxes', ['limit' => 1]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'El servicio de email no está disponible o rechazó la autenticación (HTTP '.$response->status().')',
+            );
+        }
+
+        return SubsystemOperationResult::ok(mensaje: 'Conexión y autenticación con el servicio de email exitosas');
+    }
+
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $dominio = $subsystem->api_config['dominio'] ?? ($userData['empresa'] ?? 'empresa').'.com.br';

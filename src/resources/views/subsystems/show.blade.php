@@ -10,7 +10,15 @@
                 <h1 id="page-title">{{ $subsystem->nombre }}</h1>
                 <p>Detalle de la configuración del subsistema.</p>
             </div>
-            <a class="button button-primary" href="{{ route('subsystems.edit', $subsystem) }}">Editar subsistema</a>
+            <div class="flex gap-3">
+                @if ($connectionTestable)
+                    <form action="{{ route('subsystems.test-connection', $subsystem) }}" method="POST">
+                        @csrf
+                        <button class="button button-secondary" type="submit">Probar disponibilidad</button>
+                    </form>
+                @endif
+                <a class="button button-primary" href="{{ route('subsystems.edit', $subsystem) }}">Editar subsistema</a>
+            </div>
         </div>
 
         <dl class="detail-grid">
@@ -78,17 +86,6 @@
                 </div>
             @endif
         </div>
-
-        @if ($connectionTestable)
-            <div class="mt-8 border-t border-[#d9e2dc] pt-6">
-                <h2 class="mb-2 text-xl font-bold text-[#17211b]">Disponibilidad del subsistema</h2>
-                <p class="mb-4 text-sm text-[#68756d]">Realiza una petición autenticada para verificar que la API está disponible.</p>
-                <form action="{{ route('subsystems.test-connection', $subsystem) }}" method="POST">
-                    @csrf
-                    <button class="button button-primary" type="submit">Probar disponibilidad</button>
-                </form>
-            </div>
-        @endif
 
         <div class="form-actions">
             <a class="button button-secondary" href="{{ route('subsystems.index') }}">Volver a subsistemas</a>

@@ -3,6 +3,7 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\IdentityProviderInterface;
+use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -36,7 +37,7 @@ use RuntimeException;
  * compartido solo cubre login + creación. Los de abajo son un patrón
  * provisional sobre /proprietarios/internos/{id}
  */
-class AdagioService extends BaseSubsystemService implements IdentityProviderInterface
+class AdagioService extends BaseSubsystemService implements IdentityProviderInterface, SubsystemConnectionInterface
 {
     private const ENTIDAD_CONTEXTO = [
         'klios' => '64',

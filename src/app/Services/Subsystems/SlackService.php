@@ -2,6 +2,7 @@
 
 namespace App\Services\Subsystems;
 
+use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -12,8 +13,27 @@ use App\Models\UserSubsystemAccount;
  * endpoint SCIM si api_config['scim'] está habilitado; si no, deja la
  * invitación como pendiente y registra el intento.
  */
-class SlackService extends BaseSubsystemService
+class SlackService extends BaseSubsystemService implements SubsystemConnectionInterface
 {
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult
+    {
+        if (empty($subsystem->api_config['scim_habilitado'])) {
+            return SubsystemOperationResult::ok(
+                mensaje: 'Slack está configurado en modo manual (SCIM no habilitado)',
+            );
+        }
+
+        $response = $this->http($subsystem)->get('/scim/v1/ServiceProviderConfig');
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'Slack SCIM no está disponible o rechazó la autenticación (HTTP '.$response->status().')',
+            );
+        }
+
+        return SubsystemOperationResult::ok(mensaje: 'Conexión y autenticación con Slack SCIM exitosas');
+    }
+
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         if (empty($subsystem->api_config['scim_habilitado'])) {
