@@ -14,11 +14,10 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Microsoft Entra ID (Azure AD) vía Microsoft Graph API, multi-instancia.
+ * Microsoft Entra ID (Azure AD) vía Microsoft Graph API, multi-tenant.
  *
- * Cada Subsystem es un tenant distinto (ej. klios, federalst) y guarda en api_config:
- *   tenant_id, client_id, client_secret  -> app registration del tenant (client_credentials)
- *   dominio                              -> dominio verificado para el userPrincipalName
+ * Un único Subsystem administra varios tenants y guarda en api_config.accounts:
+ *   tenant_id, client_id, client_secret, dominio -> configuración por empresa
  *   timeout (opcional)                   -> segundos, por defecto 15
  *
  * cpf se mapea a employeeId; el login se construye como userPrincipalName.
@@ -38,34 +37,36 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
      * Cliente HTTP hacia Graph con el token del tenant del subsistema.
      * Si Graph responde 401 (token vencido o revocado) renueva el token y reintenta una vez.
      */
-    protected function http(Subsystem $subsystem): PendingRequest
+    protected function http(Subsystem $subsystem, ?string $empresa = null): PendingRequest
     {
+        [$config, $cuenta] = $this->configuracionDeEmpresa($subsystem, $empresa);
+
         return Http::baseUrl(self::GRAPH_URL)
             ->acceptJson()
-            ->timeout((int) ($subsystem->api_config['timeout'] ?? 15))
-            ->withToken($this->accessToken($subsystem))
-            ->retry(2, 0, function ($exception, PendingRequest $request) use ($subsystem) {
+            ->timeout((int) ($config['timeout'] ?? 15))
+            ->withToken($this->accessToken($subsystem, $config, $cuenta))
+            ->retry(2, 0, function ($exception, PendingRequest $request) use ($subsystem, $config, $cuenta) {
                 if (! $exception instanceof RequestException || $exception->response->status() !== 401) {
                     return false;
                 }
 
-                Cache::forget($this->tokenCacheKey($subsystem));
-                $request->withToken($this->accessToken($subsystem));
+                Cache::forget($this->tokenCacheKey($subsystem, $config));
+                $request->withToken($this->accessToken($subsystem, $config, $cuenta));
 
                 return true;
             }, throw: false);
     }
 
-    private function accessToken(Subsystem $subsystem): string
+    private function accessToken(Subsystem $subsystem, array $config, ?string $cuenta): string
     {
-        $key = $this->tokenCacheKey($subsystem);
+        $key = $this->tokenCacheKey($subsystem, $config);
 
         $cached = Cache::get($key);
         if (is_string($cached) && $cached !== '') {
             return $cached;
         }
 
-        $config = $this->requiredConfig($subsystem);
+        $config = $this->requiredConfig($config, $cuenta);
 
         $response = Http::asForm()
             ->acceptJson()
@@ -92,28 +93,68 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
         return $token;
     }
 
-    private function tokenCacheKey(Subsystem $subsystem): string
+    private function tokenCacheKey(Subsystem $subsystem, array $config): string
     {
-        return "entraid:token:{$subsystem->id}";
+        return "entraid:token:{$subsystem->id}:".($config['tenant_id'] ?? 'default');
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function requiredConfig(Subsystem $subsystem): array
+    private function requiredConfig(array $config, ?string $cuenta = null): array
     {
-        $config = $subsystem->api_config ?? [];
-
         $faltantes = array_filter(
             ['tenant_id', 'client_id', 'client_secret'],
             fn (string $clave) => empty($config[$clave]),
         );
 
         if ($faltantes !== []) {
-            throw new RuntimeException('Falta configuración de Entra ID en api_config: '.implode(', ', $faltantes));
+            $contexto = $cuenta ? " para la empresa '{$cuenta}'" : '';
+            throw new RuntimeException('Falta configuración de Entra ID'.$contexto.': '.implode(', ', $faltantes));
         }
 
         return $config;
+    }
+
+    /**
+     * @return array{0: array<string, mixed>, 1: ?string}
+     */
+    private function configuracionDeEmpresa(Subsystem $subsystem, ?string $empresa): array
+    {
+        $config = $subsystem->api_config ?? [];
+        $cuentas = $config['accounts'] ?? [];
+
+        if ($cuentas === []) {
+            return [$config, null];
+        }
+
+        $empresaNormalizada = $this->normalizarEmpresa($empresa);
+
+        foreach ($cuentas as $cuenta => $configuracion) {
+            if ($this->normalizarEmpresa((string) $cuenta) !== $empresaNormalizada) {
+                continue;
+            }
+
+            if (! is_array($configuracion)) {
+                throw new RuntimeException("La configuración de Entra ID para '{$cuenta}' debe ser un objeto");
+            }
+
+            return [array_merge($config, $configuracion), (string) $cuenta];
+        }
+
+        throw new RuntimeException(
+            "No hay configuración de Entra ID para la empresa '{$empresa}'. Empresas configuradas: ".implode(', ', array_keys($cuentas)),
+        );
+    }
+
+    private function normalizarEmpresa(?string $empresa): string
+    {
+        return strtolower(trim((string) $empresa));
+    }
+
+    private function mapaCuentas(Subsystem $subsystem): array
+    {
+        return $subsystem->api_config['accounts'] ?? [];
     }
 
     // ---------------------------------------------------------------
@@ -122,28 +163,45 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
     public function testConnection(Subsystem $subsystem): SubsystemOperationResult
     {
-        try {
-            // /users necesita solo User.ReadWrite.All; /organization exigiría un permiso extra.
-            $response = $this->http($subsystem)->get('/v1.0/users', [
-                '$top' => 1,
-                '$select' => 'id',
-            ]);
-        } catch (Throwable $exception) {
-            return SubsystemOperationResult::fail($exception->getMessage());
+        $cuentas = $this->mapaCuentas($subsystem);
+        $empresas = $cuentas === [] ? [null] : array_keys($cuentas);
+        $resultados = [];
+
+        foreach ($empresas as $empresa) {
+            try {
+                // /users necesita solo User.ReadWrite.All; /organization exigiría un permiso extra.
+                $response = $this->http($subsystem, $empresa)->get('/v1.0/users', [
+                    '$top' => 1,
+                    '$select' => 'id',
+                ]);
+            } catch (Throwable $exception) {
+                return SubsystemOperationResult::fail($exception->getMessage(), $resultados);
+            }
+
+            $resultados[$empresa ?? 'default'] = [
+                'ok' => $response->successful(),
+                'status' => $response->status(),
+            ];
+
+            if ($response->failed()) {
+                return SubsystemOperationResult::fail(
+                    'Entra ID no está disponible o rechazó la autenticación para '.($empresa ?? 'la configuración principal').' (HTTP '.$response->status().')',
+                    $resultados,
+                );
+            }
         }
 
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail(
-                'Entra ID no está disponible o rechazó la autenticación (HTTP '.$response->status().')',
-            );
-        }
-
-        return SubsystemOperationResult::ok(mensaje: 'Conexión y autenticación con Entra ID exitosas');
+        return SubsystemOperationResult::ok(
+            mensaje: 'Conexión y autenticación con Entra ID exitosas (todas las cuentas)',
+            raw: $resultados,
+        );
     }
 
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
-        $dominio = $subsystem->api_config['dominio'] ?? null;
+        $empresa = $userData['empresa'] ?? null;
+        [$config] = $this->configuracionDeEmpresa($subsystem, $empresa);
+        $dominio = $config['dominio'] ?? null;
 
         if (! $dominio) {
             return SubsystemOperationResult::fail('Falta api_config.dominio para armar el userPrincipalName');
@@ -152,7 +210,7 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
         $upn = $userData['usuario'].'@'.$dominio;
 
         // Idempotente: si ya existe un usuario con ese UPN, se reutiliza en vez de duplicar.
-        $existente = $this->http($subsystem)->get('/v1.0/users/'.rawurlencode($upn), [
+        $existente = $this->http($subsystem, $empresa)->get('/v1.0/users/'.rawurlencode($upn), [
             '$select' => 'id,accountEnabled,userPrincipalName',
         ]);
 
@@ -187,7 +245,7 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
             $payload['employeeId'] = $userData['cpf'];
         }
 
-        $response = $this->http($subsystem)->post('/v1.0/users', $payload);
+        $response = $this->http($subsystem, $empresa)->post('/v1.0/users', $payload);
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('Entra ID rechazó la creación del usuario', $response->json() ?? []);
@@ -203,7 +261,7 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
     public function suspendUser(UserSubsystemAccount $account, array $suspensionData): SubsystemOperationResult
     {
-        $response = $this->http($account->subsystem)->patch('/v1.0/users/'.$account->external_account_id, [
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)->patch('/v1.0/users/'.$account->external_account_id, [
             'accountEnabled' => false,
         ]);
 
@@ -217,7 +275,7 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
     public function reactivateUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->http($account->subsystem)->patch('/v1.0/users/'.$account->external_account_id, [
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)->patch('/v1.0/users/'.$account->external_account_id, [
             'accountEnabled' => true,
         ]);
 
@@ -230,7 +288,7 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->http($account->subsystem)->patch('/v1.0/users/'.$account->external_account_id, [
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)->patch('/v1.0/users/'.$account->external_account_id, [
             'accountEnabled' => false,
         ]);
 
@@ -241,9 +299,26 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
         return SubsystemOperationResult::ok(estado: 'deshabilitado');
     }
 
+    public function supportsDeleteUser(): bool
+    {
+        return true;
+    }
+
+    public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)
+            ->delete('/v1.0/users/'.rawurlencode((string) $account->external_account_id));
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo eliminar el usuario en Entra ID', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'eliminado');
+    }
+
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->http($account->subsystem)->get('/v1.0/users/'.$account->external_account_id, [
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)->get('/v1.0/users/'.$account->external_account_id, [
             '$select' => 'accountEnabled',
         ]);
 

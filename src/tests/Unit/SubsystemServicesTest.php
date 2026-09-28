@@ -241,9 +241,24 @@ class SubsystemServicesTest extends TestCase
 
     public function test_entra_id_creates_and_manages_a_user(): void
     {
-        $subsystem = $this->subsystem('entraid', ['dominio' => 'tenant.onmicrosoft.com']);
+        $subsystem = $this->subsystem('entraid', [
+            'accounts' => [
+                'empresa teste' => [
+                    'tenant_id' => 'tenant-1',
+                    'client_id' => 'client-1',
+                    'client_secret' => 'secret-1',
+                    'dominio' => 'tenant.onmicrosoft.com',
+                ],
+            ],
+        ]);
         $account = $this->account($subsystem, 'entra-5');
         Http::fake(function ($request) {
+            if (str_contains($request->url(), '/oauth2/v2.0/token')) {
+                return Http::response(['access_token' => 'entra-token', 'expires_in' => 3600]);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), 'ana.silva')) {
+                return Http::response([], 404);
+            }
             if ($request->method() === 'GET') {
                 return Http::response(['accountEnabled' => true]);
             }
@@ -267,8 +282,26 @@ class SubsystemServicesTest extends TestCase
 
     public function test_entra_id_reports_creation_failures(): void
     {
-        $subsystem = $this->subsystem('entraid');
-        Http::fake(fn () => Http::response([], 400));
+        $subsystem = $this->subsystem('entraid', [
+            'accounts' => [
+                'empresa teste' => [
+                    'tenant_id' => 'tenant-1',
+                    'client_id' => 'client-1',
+                    'client_secret' => 'secret-1',
+                    'dominio' => 'tenant.onmicrosoft.com',
+                ],
+            ],
+        ]);
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/oauth2/v2.0/token')) {
+                return Http::response(['access_token' => 'entra-token', 'expires_in' => 3600]);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), 'ana.silva')) {
+                return Http::response([], 404);
+            }
+
+            return Http::response([], 400);
+        });
 
         $result = app(EntraIdService::class)->createUser($this->userData(), $subsystem);
 
@@ -276,17 +309,70 @@ class SubsystemServicesTest extends TestCase
         $this->assertSame('Entra ID rechazó la creación del usuario', $result->mensaje);
     }
 
+    public function test_entra_id_deletes_a_user_remotely(): void
+    {
+        $subsystem = $this->subsystem('entraid', [
+            'accounts' => [
+                'empresa teste' => [
+                    'tenant_id' => 'tenant-1',
+                    'client_id' => 'client-1',
+                    'client_secret' => 'secret-1',
+                    'dominio' => 'tenant.onmicrosoft.com',
+                ],
+            ],
+        ]);
+        $account = $this->account($subsystem, 'entra-5');
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/oauth2/v2.0/token')) {
+                return Http::response(['access_token' => 'entra-token', 'expires_in' => 3600]);
+            }
+
+            return Http::response([], 204);
+        });
+
+        $service = app(EntraIdService::class);
+        $result = $service->deleteUser($account);
+
+        $this->assertTrue($service->supportsDeleteUser());
+        $this->assertTrue($result->success);
+        $this->assertSame('eliminado', $result->estado);
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), '/v1.0/users/entra-5'));
+    }
+
     public function test_entra_id_tests_graph_connection_from_the_subsystem_view(): void
     {
-        $subsystem = $this->subsystem('entraid', ['token' => 'entra-token']);
-        Http::fake(fn () => Http::response(['value' => [['id' => 'tenant-1']]]));
+        $subsystem = $this->subsystem('entraid', [
+            'accounts' => [
+                'klios' => [
+                    'tenant_id' => 'tenant-klios',
+                    'client_id' => 'client-klios',
+                    'client_secret' => 'secret-klios',
+                    'dominio' => 'klios.com.br',
+                ],
+                'federal' => [
+                    'tenant_id' => 'tenant-federal',
+                    'client_id' => 'client-federal',
+                    'client_secret' => 'secret-federal',
+                    'dominio' => 'federalst.com.br',
+                ],
+            ],
+        ]);
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/oauth2/v2.0/token')) {
+                return Http::response(['access_token' => 'entra-token', 'expires_in' => 3600]);
+            }
+
+            return Http::response(['value' => [['id' => 'tenant-1']]]);
+        });
 
         $result = app(EntraIdService::class)->testConnection($subsystem);
 
         $this->assertTrue($result->success);
-        $this->assertSame('Conexión y autenticación con Entra ID exitosas', $result->mensaje);
+        $this->assertSame('Conexión y autenticación con Entra ID exitosas (todas las cuentas)', $result->mensaje);
+        Http::assertSentCount(4);
         Http::assertSent(fn ($request) => $request->method() === 'GET'
-            && str_ends_with($request->url(), '/v1.0/organization')
+            && str_contains($request->url(), '/v1.0/users')
             && $request->header('Authorization') === ['Bearer entra-token']);
     }
 

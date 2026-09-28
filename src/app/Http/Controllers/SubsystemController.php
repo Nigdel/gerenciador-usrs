@@ -97,7 +97,21 @@ class SubsystemController extends Controller
         $expectedState = $operation === 'enable' ? 'activo' : 'deshabilitado';
 
         if ($result->success) {
-            $confirmation = $service->getUserStatus($userSubsystemAccount);
+            $config = $subsystem->api_config ?? [];
+            $attempts = max(1, min((int) ($config['state_confirmation_attempts'] ?? 1), 10));
+            $delayMilliseconds = max(0, min((int) ($config['state_confirmation_delay_ms'] ?? 0), 5000));
+
+            for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+                $confirmation = $service->getUserStatus($userSubsystemAccount);
+
+                if ($confirmation->success && $confirmation->estado === $expectedState) {
+                    break;
+                }
+
+                if ($attempt < $attempts && $delayMilliseconds > 0) {
+                    usleep($delayMilliseconds * 1000);
+                }
+            }
 
             if (! $confirmation->success || $confirmation->estado !== $expectedState) {
                 return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)

@@ -56,6 +56,36 @@ class SubsystemTest extends TestCase
             ->assertSee('Probar disponibilidad');
     }
 
+    public function test_connection_button_is_available_for_multi_tenant_entra_id(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'EntraId',
+            'slug' => 'entraid',
+            'api_url' => 'https://graph.microsoft.com',
+            'api_config' => [
+                'accounts' => [
+                    'klios' => [
+                        'tenant_id' => 'tenant-klios',
+                        'client_id' => 'client-klios',
+                        'client_secret' => 'secret-klios',
+                        'dominio' => 'klios.com.br',
+                    ],
+                    'federal' => [
+                        'tenant_id' => 'tenant-federal',
+                        'client_id' => 'client-federal',
+                        'client_secret' => 'secret-federal',
+                        'dominio' => 'federalst.com.br',
+                    ],
+                ],
+            ],
+            'activo' => true,
+        ]);
+
+        $this->get(route('subsystems.show', $subsystem))
+            ->assertOk()
+            ->assertSee('Probar disponibilidad');
+    }
+
     public function test_chatwoot_connection_can_be_tested(): void
     {
         $subsystem = Subsystem::create([
@@ -144,6 +174,67 @@ class SubsystemTest extends TestCase
         ])->assertRedirect(route('subsystems.show', $subsystem))
             ->assertSessionHas('error', 'El subsistema no confirmó el cambio de estado de la cuenta.');
 
+        $this->assertDatabaseHas('user_subsystem_accounts', [
+            'id' => $account->id,
+            'estado' => 'activo',
+        ]);
+    }
+
+    public function test_entra_id_retries_state_confirmation_after_graph_propagation(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'EntraId',
+            'slug' => 'entraid',
+            'api_url' => 'https://graph.microsoft.com',
+            'api_config' => [
+                'accounts' => [
+                    'acme' => [
+                        'tenant_id' => 'tenant-acme',
+                        'client_id' => 'client-acme',
+                        'client_secret' => 'secret-acme',
+                        'dominio' => 'acme.test',
+                    ],
+                ],
+                'state_confirmation_attempts' => 2,
+                'state_confirmation_delay_ms' => 0,
+            ],
+            'activo' => true,
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678900',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez',
+            'external_account_id' => 'entra-42',
+            'estado' => 'deshabilitado',
+        ]);
+        $statusReads = 0;
+        Http::fake(function ($request) use (&$statusReads) {
+            if (str_contains($request->url(), '/oauth2/v2.0/token')) {
+                return Http::response(['access_token' => 'entra-token', 'expires_in' => 3600]);
+            }
+
+            if ($request->method() === 'PATCH') {
+                return Http::response([], 204);
+            }
+
+            $statusReads++;
+
+            return Http::response(['accountEnabled' => $statusReads > 1]);
+        });
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'enable',
+        ])->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success');
+
+        $this->assertSame(2, $statusReads);
         $this->assertDatabaseHas('user_subsystem_accounts', [
             'id' => $account->id,
             'estado' => 'activo',

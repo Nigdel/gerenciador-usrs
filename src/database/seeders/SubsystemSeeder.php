@@ -68,33 +68,31 @@ class SubsystemSeeder extends Seeder
                 'api_config' => ['token' => env('SLACK_API_TOKEN'), 'scim_habilitado' => false],
                 'external_subsystem_id' => 'slack-01',
             ],
-            // Entra ID: un subsistema por tenant (cada uno con su app registration,
-            // client_credentials sobre Microsoft Graph).
+            // Entra ID: una instancia con varias app registrations, una por empresa.
             [
-                'nombre' => 'EntraId Klios',
-                'slug' => 'entraid-klios',
-                'descripcion' => 'Microsoft Entra ID (Azure AD) del tenant Klios vía Graph API',
+                'nombre' => 'EntraId',
+                'slug' => 'entraid',
+                'descripcion' => 'Microsoft Entra ID (Azure AD) multi-tenant vía Graph API',
                 'api_url' => env('ENTRAID_GRAPH_URL', 'https://graph.microsoft.com'),
                 'api_config' => [
-                    'tenant_id' => env('ENTRAID_KLIOS_TENANT_ID'),
-                    'client_id' => env('ENTRAID_KLIOS_CLIENT_ID'),
-                    'client_secret' => env('ENTRAID_KLIOS_CLIENT_SECRET'),
-                    'dominio' => env('ENTRAID_KLIOS_DOMINIO', 'klios.com.br'),
+                    'accounts' => [
+                        'klios' => [
+                            'tenant_id' => env('ENTRAID_KLIOS_TENANT_ID'),
+                            'client_id' => env('ENTRAID_KLIOS_CLIENT_ID'),
+                            'client_secret' => env('ENTRAID_KLIOS_CLIENT_SECRET'),
+                            'dominio' => env('ENTRAID_KLIOS_DOMINIO', 'klios.com.br'),
+                        ],
+                        'federal' => [
+                            'tenant_id' => env('ENTRAID_FEDERALST_TENANT_ID'),
+                            'client_id' => env('ENTRAID_FEDERALST_CLIENT_ID'),
+                            'client_secret' => env('ENTRAID_FEDERALST_CLIENT_SECRET'),
+                            'dominio' => env('ENTRAID_FEDERALST_DOMINIO', 'federalst.com.br'),
+                        ],
+                    ],
+                    'state_confirmation_attempts' => 5,
+                    'state_confirmation_delay_ms' => 500,
                 ],
-                'external_subsystem_id' => 'entraid-klios-01',
-            ],
-            [
-                'nombre' => 'EntraId Federalst',
-                'slug' => 'entraid-federalst',
-                'descripcion' => 'Microsoft Entra ID (Azure AD) del tenant Federal Soluções Técnicas vía Graph API',
-                'api_url' => env('ENTRAID_GRAPH_URL', 'https://graph.microsoft.com'),
-                'api_config' => [
-                    'tenant_id' => env('ENTRAID_FEDERALST_TENANT_ID'),
-                    'client_id' => env('ENTRAID_FEDERALST_CLIENT_ID'),
-                    'client_secret' => env('ENTRAID_FEDERALST_CLIENT_SECRET'),
-                    'dominio' => env('ENTRAID_FEDERALST_DOMINIO', 'federalst.com.br'),
-                ],
-                'external_subsystem_id' => 'entraid-federalst-01',
+                'external_subsystem_id' => 'entraid-01',
             ],
             [
                 'nombre' => 'SambaAd',
@@ -106,14 +104,17 @@ class SubsystemSeeder extends Seeder
             ],
         ];
 
-        // La fila anterior (una sola instancia, slug "entraid") pasa a ser la de Klios,
-        // conservando su id y las cuentas de usuario ya vinculadas.
-        if (! Subsystem::where('slug', 'entraid-klios')->exists()) {
-            Subsystem::where('slug', 'entraid')->update(['slug' => 'entraid-klios']);
-        }
-
         foreach ($subsistemas as $subsistema) {
             Subsystem::updateOrCreate(['slug' => $subsistema['slug']], $subsistema);
         }
+
+        $principal = Subsystem::where('slug', 'entraid')->firstOrFail();
+
+        Subsystem::whereIn('slug', ['entraid-klios', 'entraid-federalst'])
+            ->where('id', '<>', $principal->id)
+            ->each(function (Subsystem $legacy) use ($principal): void {
+                $legacy->accounts()->update(['subsystem_id' => $principal->id]);
+                $legacy->delete();
+            });
     }
 }
