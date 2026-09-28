@@ -2,9 +2,11 @@
 
 namespace App\Services\Subsystems;
 
+use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use Throwable;
 
 /**
  * Microsoft Entra ID (Azure AD) vía Microsoft Graph API.
@@ -12,8 +14,25 @@ use App\Models\UserSubsystemAccount;
  * dentro del dominio configurado en api_config['dominio'].
  * Nota: PATCH en Graph devuelve 204 sin cuerpo -> no depender de $response->json().
  */
-class EntraIdService extends BaseSubsystemService
+class EntraIdService extends BaseSubsystemService implements SubsystemConnectionInterface
 {
+    public function testConnection(Subsystem $subsystem): SubsystemOperationResult
+    {
+        try {
+            $response = $this->http($subsystem)->get('/v1.0/organization');
+        } catch (Throwable $exception) {
+            return SubsystemOperationResult::fail($exception->getMessage());
+        }
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'Entra ID no está disponible o rechazó la autenticación (HTTP '.$response->status().')',
+            );
+        }
+
+        return SubsystemOperationResult::ok(mensaje: 'Conexión y autenticación con Entra ID exitosas');
+    }
+
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $dominio = $subsystem->api_config['dominio'] ?? ($userData['empresa'] ?? 'empresa').'.onmicrosoft.com';

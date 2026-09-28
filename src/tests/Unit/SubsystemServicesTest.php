@@ -276,6 +276,20 @@ class SubsystemServicesTest extends TestCase
         $this->assertSame('Entra ID rechazó la creación del usuario', $result->mensaje);
     }
 
+    public function test_entra_id_tests_graph_connection_from_the_subsystem_view(): void
+    {
+        $subsystem = $this->subsystem('entraid', ['token' => 'entra-token']);
+        Http::fake(fn () => Http::response(['value' => [['id' => 'tenant-1']]]));
+
+        $result = app(EntraIdService::class)->testConnection($subsystem);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('Conexión y autenticación con Entra ID exitosas', $result->mensaje);
+        Http::assertSent(fn ($request) => $request->method() === 'GET'
+            && str_ends_with($request->url(), '/v1.0/organization')
+            && $request->header('Authorization') === ['Bearer entra-token']);
+    }
+
     private function subsystem(string $slug, array $apiConfig = []): Subsystem
     {
         return Subsystem::create([
