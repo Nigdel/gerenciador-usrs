@@ -19,12 +19,16 @@ class Subsystem extends Model
         'external_subsystem_id',
         'activo',
         'es_proveedor_identidad',
+        'last_connection_test_at',
+        'last_connection_test_success',
     ];
 
     protected $casts = [
         'api_config' => 'array',
         'activo' => 'boolean',
         'es_proveedor_identidad' => 'boolean',
+        'last_connection_test_at' => 'datetime',
+        'last_connection_test_success' => 'boolean',
     ];
 
     protected $hidden = [

@@ -28,6 +28,18 @@
             <div><dt>Cuentas asociadas</dt><dd>{{ $subsystem->accounts_count }}</dd></div>
             <div><dt>URL de API</dt><dd>{{ $subsystem->api_url ?: 'No configurada' }}</dd></div>
             <div><dt>ID externo</dt><dd>{{ $subsystem->external_subsystem_id ?: 'No configurado' }}</dd></div>
+            @if ($connectionTestable)
+                <div><dt>Última prueba de conexión</dt><dd>{{ $subsystem->last_connection_test_at ? $subsystem->last_connection_test_at->format('d/m/Y H:i:s') : 'Nunca probado' }}</dd></div>
+                <div><dt>Resultado última prueba</dt><dd>
+                    @if ($subsystem->last_connection_test_success === null)
+                        <span class="text-[#68756d]">Sin pruebas realizadas</span>
+                    @elseif ($subsystem->last_connection_test_success)
+                        <span class="text-[#1f5d49] font-semibold">✓ Exitoso</span>
+                    @else
+                        <span class="text-red-700 font-semibold">✗ Fallido</span>
+                    @endif
+                </dd></div>
+            @endif
             <div class="detail-wide"><dt>Descripción</dt><dd>{{ $subsystem->descripcion ?: 'Sin descripción' }}</dd></div>
         </dl>
 

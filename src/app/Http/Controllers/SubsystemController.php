@@ -149,8 +149,20 @@ class SubsystemController extends Controller
             }
 
             $result = $service->testConnection($subsystem);
+
+            // Actualizar los campos de última prueba de conexión
+            $subsystem->update([
+                'last_connection_test_at' => now(),
+                'last_connection_test_success' => $result->success,
+            ]);
         } catch (Throwable $exception) {
             report($exception);
+
+            // Registrar el fallo en la prueba de conexión
+            $subsystem->update([
+                'last_connection_test_at' => now(),
+                'last_connection_test_success' => false,
+            ]);
 
             return redirect()
                 ->route('subsystems.show', $subsystem)
