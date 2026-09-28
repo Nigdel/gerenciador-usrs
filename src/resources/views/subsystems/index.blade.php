@@ -24,9 +24,9 @@
                     <thead class="bg-[#f7faf8] text-xs uppercase tracking-[0.04em] text-[#68756d]">
                         <tr>
                             <th class="px-4 py-3.5 font-bold">Nombre</th>
-                            <th class="px-4 py-3.5 font-bold">Slug</th>
+                            
                             <th class="px-4 py-3.5 font-bold">Estado</th>
-                            <th class="px-4 py-3.5 font-bold">Proveedor de identidad</th>
+                            <th class="px-4 py-3.5 font-bold">Ultimo Test</th>                            
                             <th class="px-4 py-3.5 font-bold">Cuentas</th>
                             <th class="px-4 py-3.5 font-bold"><span class="sr-only">Acciones</span></th>
                         </tr>
@@ -40,9 +40,17 @@
                                         <small class="mt-1 block max-w-[280px] text-[#68756d]">{{ Str::limit($subsystem->descripcion, 70) }}</small>
                                     @endif
                                 </td>
-                                <td class="px-4 py-3.5"><code class="rounded bg-emerald-50 px-1.5 py-1 text-xs text-emerald-800">{{ $subsystem->slug }}</code></td>
+                              
                                 <td class="px-4 py-3.5"><span class="inline-flex rounded-full px-2 py-1 text-xs font-bold {{ $subsystem->activo ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600' }}">{{ $subsystem->activo ? 'Activo' : 'Inactivo' }}</span></td>
-                                <td class="px-4 py-3.5 text-[#17211b]">{{ $subsystem->es_proveedor_identidad ? 'Sí' : 'No' }}</td>
+                                <td class="px-4 py-3.5 text-[#17211b]">
+                                @if ($subsystem->last_connection_test_success === null)
+                                    <span class="text-[#68756d]">Sem probas realizadas</span>
+                                @elseif ($subsystem->last_connection_test_success)
+                                    <span class="text-[#1f5d49] font-semibold">✓ ok</span>
+                                @else
+                                    <span class="text-red-700 font-semibold">✗ Fail</span>
+                                @endif
+                                    {{ $subsystem->last_connection_test_at ? $subsystem->last_connection_test_at->format('d/m/y H:i') : '-' }}</td>                                
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $subsystem->accounts_count }}</td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-3 whitespace-nowrap sm:justify-end">
