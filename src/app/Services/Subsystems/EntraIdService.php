@@ -6,20 +6,128 @@ use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Throwable;
 
 /**
- * Microsoft Entra ID (Azure AD) vía Microsoft Graph API.
- * cpf se mapea a employeeId; el login se construye como userPrincipalName
- * dentro del dominio configurado en api_config['dominio'].
+ * Microsoft Entra ID (Azure AD) vía Microsoft Graph API, multi-instancia.
+ *
+ * Cada Subsystem es un tenant distinto (ej. klios, federalst) y guarda en api_config:
+ *   tenant_id, client_id, client_secret  -> app registration del tenant (client_credentials)
+ *   dominio                              -> dominio verificado para el userPrincipalName
+ *   timeout (opcional)                   -> segundos, por defecto 15
+ *
+ * cpf se mapea a employeeId; el login se construye como userPrincipalName.
  * Nota: PATCH en Graph devuelve 204 sin cuerpo -> no depender de $response->json().
  */
 class EntraIdService extends BaseSubsystemService implements SubsystemConnectionInterface
 {
+    private const GRAPH_URL = 'https://graph.microsoft.com';
+
+    private const LOGIN_URL = 'https://login.microsoftonline.com';
+
+    // ---------------------------------------------------------------
+    // Autenticación (client_credentials) y cliente HTTP
+    // ---------------------------------------------------------------
+
+    /**
+     * Cliente HTTP hacia Graph con el token del tenant del subsistema.
+     * Si Graph responde 401 (token vencido o revocado) renueva el token y reintenta una vez.
+     */
+    protected function http(Subsystem $subsystem): PendingRequest
+    {
+        return Http::baseUrl(self::GRAPH_URL)
+            ->acceptJson()
+            ->timeout((int) ($subsystem->api_config['timeout'] ?? 15))
+            ->withToken($this->accessToken($subsystem))
+            ->retry(2, 0, function ($exception, PendingRequest $request) use ($subsystem) {
+                if (! $exception instanceof RequestException || $exception->response->status() !== 401) {
+                    return false;
+                }
+
+                Cache::forget($this->tokenCacheKey($subsystem));
+                $request->withToken($this->accessToken($subsystem));
+
+                return true;
+            }, throw: false);
+    }
+
+    private function accessToken(Subsystem $subsystem): string
+    {
+        $key = $this->tokenCacheKey($subsystem);
+
+        $cached = Cache::get($key);
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        $config = $this->requiredConfig($subsystem);
+
+        $response = Http::asForm()
+            ->acceptJson()
+            ->timeout((int) ($config['timeout'] ?? 15))
+            ->post(self::LOGIN_URL.'/'.$config['tenant_id'].'/oauth2/v2.0/token', [
+                'client_id' => $config['client_id'],
+                'client_secret' => $config['client_secret'],
+                'scope' => self::GRAPH_URL.'/.default',
+                'grant_type' => 'client_credentials',
+            ]);
+
+        $token = $response->json('access_token');
+
+        if ($response->failed() || ! is_string($token) || $token === '') {
+            // No se incluye el cuerpo completo ni el secret en el mensaje.
+            throw new RuntimeException(
+                'Entra ID no pudo emitir el token (HTTP '.$response->status().': '.$response->json('error', 'sin_detalle').')',
+            );
+        }
+
+        // Se renueva 60s antes del vencimiento real.
+        Cache::put($key, $token, max(60, (int) $response->json('expires_in', 3600) - 60));
+
+        return $token;
+    }
+
+    private function tokenCacheKey(Subsystem $subsystem): string
+    {
+        return "entraid:token:{$subsystem->id}";
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function requiredConfig(Subsystem $subsystem): array
+    {
+        $config = $subsystem->api_config ?? [];
+
+        $faltantes = array_filter(
+            ['tenant_id', 'client_id', 'client_secret'],
+            fn (string $clave) => empty($config[$clave]),
+        );
+
+        if ($faltantes !== []) {
+            throw new RuntimeException('Falta configuración de Entra ID en api_config: '.implode(', ', $faltantes));
+        }
+
+        return $config;
+    }
+
+    // ---------------------------------------------------------------
+    // Operaciones
+    // ---------------------------------------------------------------
+
     public function testConnection(Subsystem $subsystem): SubsystemOperationResult
     {
         try {
-            $response = $this->http($subsystem)->get('/v1.0/organization');
+            // /users necesita solo User.ReadWrite.All; /organization exigiría un permiso extra.
+            $response = $this->http($subsystem)->get('/v1.0/users', [
+                '$top' => 1,
+                '$select' => 'id',
+            ]);
         } catch (Throwable $exception) {
             return SubsystemOperationResult::fail($exception->getMessage());
         }
@@ -35,20 +143,51 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
-        $dominio = $subsystem->api_config['dominio'] ?? ($userData['empresa'] ?? 'empresa').'.onmicrosoft.com';
+        $dominio = $subsystem->api_config['dominio'] ?? null;
+
+        if (! $dominio) {
+            return SubsystemOperationResult::fail('Falta api_config.dominio para armar el userPrincipalName');
+        }
+
         $upn = $userData['usuario'].'@'.$dominio;
 
-        $response = $this->http($subsystem)->post('/v1.0/users', [
+        // Idempotente: si ya existe un usuario con ese UPN, se reutiliza en vez de duplicar.
+        $existente = $this->http($subsystem)->get('/v1.0/users/'.rawurlencode($upn), [
+            '$select' => 'id,accountEnabled,userPrincipalName',
+        ]);
+
+        if ($existente->successful()) {
+            return SubsystemOperationResult::ok(
+                credencialUsuario: $upn,
+                externalAccountId: (string) $existente->json('id'),
+                estado: $existente->json('accountEnabled') ? 'activo' : 'deshabilitado',
+                raw: $existente->json() ?? [],
+            );
+        }
+
+        if ($existente->status() !== 404) {
+            return SubsystemOperationResult::fail(
+                'No se pudo verificar si el usuario ya existe en Entra ID (HTTP '.$existente->status().')',
+                $existente->json() ?? [],
+            );
+        }
+
+        $payload = [
             'accountEnabled' => true,
             'displayName' => $userData['nombre_completo'],
-            'employeeId' => $userData['cpf'] ?? null,
             'mailNickname' => $userData['usuario'],
             'userPrincipalName' => $upn,
             'passwordProfile' => [
                 'forceChangePasswordNextSignIn' => true,
                 'password' => $userData['password_general'] ?? null,
             ],
-        ]);
+        ];
+
+        if (! empty($userData['cpf'])) {
+            $payload['employeeId'] = $userData['cpf'];
+        }
+
+        $response = $this->http($subsystem)->post('/v1.0/users', $payload);
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('Entra ID rechazó la creación del usuario', $response->json() ?? []);
