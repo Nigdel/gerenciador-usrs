@@ -11,6 +11,9 @@ Route::get('/', function () {
 
 Route::resource('users', UserController::class);
 
+Route::get('gestor-users/lookup-cpf', [GestorUserController::class, 'lookupByCpf'])
+    ->name('gestor-users.lookup-cpf');
+
 Route::resource('gestor-users', GestorUserController::class)
     ->parameters(['gestor-users' => 'gestorUser']);
 

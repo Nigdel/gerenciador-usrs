@@ -17,15 +17,16 @@
         <form action="{{ route('gestor-users.store') }}" method="POST">
             @csrf
             <div class="field-grid">
+                <div class="field">
+                    <label for="cpf">CPF <span aria-hidden="true">*</span></label>
+                    <input id="cpf" name="cpf" type="text" maxlength="20" value="{{ old('cpf') }}" autocomplete="off" required>
+                    <small id="cpf-status" class="field-hint" aria-live="polite">Ingresa el CPF para consultar Adagio.</small>
+                    @error('cpf')<small class="error-message">{{ $message }}</small>@enderror
+                </div>
                 <div class="field field-wide">
                     <label for="nombre_completo">Nombre completo <span aria-hidden="true">*</span></label>
                     <input id="nombre_completo" name="nombre_completo" type="text" maxlength="255" value="{{ old('nombre_completo') }}" required>
                     @error('nombre_completo')<small class="error-message">{{ $message }}</small>@enderror
-                </div>
-                <div class="field">
-                    <label for="cpf">CPF <span aria-hidden="true">*</span></label>
-                    <input id="cpf" name="cpf" type="text" maxlength="20" value="{{ old('cpf') }}" required>
-                    @error('cpf')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
                 <div class="field">
                     <label for="usuario">Usuario</label>
@@ -89,3 +90,66 @@
         </form>
     </section>
 @endsection
+
+@push('scripts')
+    <script>
+        (() => {
+            const cpfInput = document.getElementById('cpf');
+            const status = document.getElementById('cpf-status');
+            const fields = {
+                cpf: cpfInput,
+                nombre_completo: document.getElementById('nombre_completo'),
+                email_personal: document.getElementById('email_personal'),
+                usuario: document.getElementById('usuario'),
+            };
+            let requestNumber = 0;
+
+            const lookup = async () => {
+                const cpf = cpfInput.value.trim();
+
+                if (!cpf) {
+                    status.textContent = 'Ingresa el CPF para consultar Adagio.';
+                    return;
+                }
+
+                const currentRequest = ++requestNumber;
+                status.textContent = 'Consultando Adagio...';
+
+                try {
+                    const response = await fetch("{{ route('gestor-users.lookup-cpf') }}?cpf=" + encodeURIComponent(cpf), {
+                        headers: { Accept: 'application/json' },
+                    });
+
+                    if (currentRequest !== requestNumber) {
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error('lookup-failed');
+                    }
+
+                    const result = await response.json();
+
+                    if (!result.found) {
+                        status.textContent = 'CPF no encontrado en Adagio. Completa los datos manualmente.';
+                        return;
+                    }
+
+                    Object.entries(result.user).forEach(([name, value]) => {
+                        if (fields[name] && value !== null && value !== '') {
+                            fields[name].value = value;
+                        }
+                    });
+                    status.textContent = 'Datos encontrados en Adagio. Revisa y completa los campos restantes.';
+                } catch (error) {
+                    if (currentRequest === requestNumber) {
+                        status.textContent = 'No se pudo consultar Adagio. Completa los datos manualmente.';
+                    }
+                }
+            };
+
+            cpfInput.addEventListener('blur', lookup);
+            cpfInput.addEventListener('change', lookup);
+        })();
+    </script>
+@endpush

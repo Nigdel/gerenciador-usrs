@@ -27,6 +27,73 @@ class GestorUserTest extends TestCase
             ->assertSee('toast-success');
     }
 
+    public function test_cpf_lookup_returns_adagio_user_data_for_the_creation_form(): void
+    {
+        Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'api_url' => 'https://adagio.test',
+            'api_config' => [
+                'email' => 'test@example.com',
+                'password' => 'secret',
+            ],
+            'es_proveedor_identidad' => true,
+            'activo' => true,
+        ]);
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/kliosAnalise/login')) {
+                return Http::response(['token' => 'adagio-token']);
+            }
+
+            return Http::response([
+                'id' => 42,
+                'nome' => 'Ana Silva',
+                'email' => 'ana@example.com',
+                'documento' => '12345678901',
+            ]);
+        });
+
+        $this->get(route('gestor-users.lookup-cpf', ['cpf' => '123.456.789-01']))
+            ->assertOk()
+            ->assertJson([
+                'found' => true,
+                'user' => [
+                    'cpf' => '12345678901',
+                    'nombre_completo' => 'Ana Silva',
+                    'email_personal' => 'ana@example.com',
+                    'usuario' => 'ana',
+                ],
+            ]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'documento=12345678901'));
+    }
+
+    public function test_cpf_lookup_returns_not_found_without_blocking_manual_creation(): void
+    {
+        Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'api_url' => 'https://adagio.test',
+            'api_config' => [
+                'email' => 'test@example.com',
+                'password' => 'secret',
+            ],
+            'es_proveedor_identidad' => true,
+            'activo' => true,
+        ]);
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/kliosAnalise/login')) {
+                return Http::response(['token' => 'adagio-token']);
+            }
+
+            return Http::response([]);
+        });
+
+        $this->get(route('gestor-users.lookup-cpf', ['cpf' => '99999999999']))
+            ->assertOk()
+            ->assertJson(['found' => false]);
+    }
+
     public function test_gestor_user_can_be_created_with_selected_active_subsystems(): void
     {
         $adagio = Subsystem::create([
