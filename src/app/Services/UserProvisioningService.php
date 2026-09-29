@@ -7,6 +7,8 @@ use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
+use App\DTO\SubsystemOperationResult;
 
 /**
  * Orquesta la creación de un usuario a partir de un JSON de entrada:
@@ -143,5 +145,36 @@ class UserProvisioningService
             'mensaje' => $resultado->mensaje,
             'cuenta' => $account,
         ];
+    }
+
+        public function resetAllPasswords(GestorUser $gestorUser): array
+    {
+        $gestorUser->load('subsystemAccounts.subsystem');
+
+        $results = [];
+
+        foreach ($gestorUser->subsystemAccounts as $userAccount) {
+            try {
+                $results[] = $this->resetPassword($userAccount);
+            } catch (RuntimeException $exception) {
+                report($exception);
+
+                $results[] = SubsystemOperationResult::fail(
+                    
+                    $exception->getMessage(),
+                    $userAccount->subsystem?->slug ? ['subsystem' => $userAccount->subsystem->slug] : []
+                );
+            }
+        }
+
+        return $results;
+    }
+
+        public function resetPassword(UserSubsystemAccount $userAccount): SubsystemOperationResult
+    {
+        return SubsystemOperationResult::fail('Not implemented yet');
+        // Determinar qué subsistema es
+        // Ejecutar el reset correspondiente
+        // Devolver resultado
     }
 }

@@ -146,24 +146,20 @@ class GestorUserController extends Controller
             ->with('success', 'Usuario eliminado correctamente.');
     }
 
-    public function resetPassword(GestorUser $gestorUser): RedirectResponse
+        public function resetPassword(GestorUser $gestorUser): RedirectResponse
     {
-        $gestorUser->load('subsystemAccounts.subsystem');
-
         try {
-            $gestorUser->subsystemAccounts->each(function ($account) {
-                $this->provisioningService->resetPassword($account);
-            });
+            $this->provisioningService->resetAllPasswords($gestorUser);
+
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('success', 'Contraseñas restablecidas correctamente.');
         } catch (RuntimeException $exception) {
             report($exception);
 
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('error', 'No se pudo restablecer la contraseña del usuario.');
+                ->with('error', 'No se pudieron restablecer las contraseñas.');
         }
-
-        return redirect()
-            ->route('gestor-users.show', $gestorUser)
-            ->with('success', 'Contraseña restablecida correctamente.');
     }
 }
