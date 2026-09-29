@@ -37,7 +37,7 @@ class SubsystemSeeder extends Seeder
                 ],
                 'external_subsystem_id' => 'glpi-01',
             ],
-           [
+            [
                 'nombre' => 'Chatwoot',
                 'slug' => 'chatwoot',
                 'descripcion' => 'Atención al cliente / chat (una instancia, 2 cuentas: Klios y Federal)',
@@ -95,11 +95,22 @@ class SubsystemSeeder extends Seeder
                 'external_subsystem_id' => 'entraid-01',
             ],
             [
-                'nombre' => 'SambaAd',
+                'nombre' => 'Samba AD',
                 'slug' => 'sambaad',
-                'descripcion' => 'Directorio Samba AD',
-                'api_url' => env('SAMBAAD_API_URL'),
-                'api_config' => ['token' => env('SAMBAAD_API_TOKEN'), 'ou' => env('SAMBAAD_OU')],
+                'descripcion' => 'Directorio Activo Samba AD para gestión de usuarios',
+                'api_url' => env('AD_HOST', 'dc1.klios.br'),
+                'api_config' => [
+                    'host' => env('AD_HOST', 'dc1.klios.br'),
+                    'port' => (int) env('AD_PORT', 636),
+                    'base_dn' => env('AD_BASE_DN', 'DC=klios,DC=br'),
+                    'bind_dn' => env('AD_BIND_DN', 'CN=svc-gestor,CN=Users,DC=klios,DC=br'),
+                    'bind_password' => env('AD_BIND_PASSWORD'),
+                    'users_ou' => env('AD_USERS_OU', 'OU=Usuarios,DC=klios,DC=br'),
+                    'use_ldaps' => (bool) env('AD_USE_LDAPS', true),
+                    'tls_verify' => (bool) env('AD_TLS_VERIFY', true),
+                    'ca_cert_path' => env('AD_CA_CERT_PATH'),
+                    'dominio' => env('AD_DOMINIO', 'klios.br'),
+                ],
                 'external_subsystem_id' => 'sambaad-01',
             ],
         ];
