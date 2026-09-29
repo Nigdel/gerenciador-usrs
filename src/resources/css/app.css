@@ -103,9 +103,11 @@ label span {
     color: var(--primary);
 }
 
-input:not([type="checkbox"]) {
+input:not([type="checkbox"]),
+select {
     width: 100%;
     min-height: 46px;
+    height: 46px;
     padding: 11px 13px;
     border: 1px solid var(--line);
     border-radius: 6px;
@@ -116,12 +118,20 @@ input:not([type="checkbox"]) {
     transition: border-color .15s ease, box-shadow .15s ease;
 }
 
-input:not([type="checkbox"]):focus {
+select {
+    padding-top: 0;
+    padding-bottom: 0;
+    cursor: pointer;
+}
+
+input:not([type="checkbox"]):focus,
+select:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(23, 107, 77, .14);
 }
 
-input.input-error {
+input.input-error,
+select.input-error {
     border-color: var(--danger);
 }
 

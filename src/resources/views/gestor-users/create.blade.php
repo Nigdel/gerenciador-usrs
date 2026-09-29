@@ -41,7 +41,7 @@
                 </div>
                 <div class="field">
                     <label for="empresa">Empresa <span aria-hidden="true">*</span></label>
-                    <select id="empresa" name="empresa" required>
+                    <select id="empresa" name="empresa" required >
                         <option value="">Selecciona una empresa</option>
                         <option value="klios" @selected(old('empresa') === 'klios')>Klios</option>
                         <option value="federal" @selected(old('empresa') === 'federal')>Federal</option>
