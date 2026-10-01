@@ -143,6 +143,19 @@ class GestorUserTest extends TestCase
         $this->assertDatabaseHas('subsystems', ['id' => $adagio->id, 'activo' => true]);
     }
 
+    public function test_creation_form_submits_adagio_even_though_its_checkbox_is_disabled(): void
+    {
+        Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'activo' => true,
+        ]);
+
+        $this->get(route('gestor-users.create'))
+            ->assertSee('<input type="hidden" name="subsistemas[]" value="adagio">', false)
+            ->assertSee('value="adagio" checked disabled', false);
+    }
+
     public function test_inactive_subsystems_cannot_be_selected_for_creation(): void
     {
         Subsystem::create([

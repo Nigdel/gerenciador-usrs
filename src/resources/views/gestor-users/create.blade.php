@@ -77,6 +77,9 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($subsystems as $subsystem)
                             <label class="checkbox-field rounded-md border border-[#d9e2dc] p-3 {{ $subsystem->slug === 'adagio' ? 'opacity-75' : '' }}" for="subsystem-{{ $subsystem->id }}" data-subsystem-slug="{{ $subsystem->slug }}">
+                                @if ($subsystem->slug === 'adagio')
+                                    <input type="hidden" name="subsistemas[]" value="adagio">
+                                @endif
                                 <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio')>
                                 <span>
                                     <strong>{{ $subsystem->nombre }}</strong>
