@@ -155,7 +155,7 @@ class UserProvisioningService
 
         foreach ($gestorUser->subsystemAccounts as $userAccount) {
             try {
-                $results[] = $this->resetPassword($userAccount);
+                $results[] = $this->resetPassword($gestorUser, $userAccount);
             } catch (RuntimeException $exception) {
                 report($exception);
 
@@ -170,7 +170,7 @@ class UserProvisioningService
         return $results;
     }
 
-        public function resetPassword(UserSubsystemAccount $userAccount): SubsystemOperationResult
+        public function resetPassword(GestorUser $gestorUser, UserSubsystemAccount $userAccount): SubsystemOperationResult
     {
         return SubsystemOperationResult::fail('Not implemented yet');
         // Determinar qué subsistema es

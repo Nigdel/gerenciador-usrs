@@ -336,4 +336,39 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
     {
         return Subsystem::proveedorIdentidad()->activos()->firstOrFail();
     }
+
+    /**
+     * Reinicia la contraseña de un usuario en Adagio.
+     *
+     * @param  UserSubsystemAccount  $account
+     * @param  string  $newPassword //unsupported, Adagio generates e link and send it by email to user
+     * @return SubsystemOperationResult
+     */
+    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult 
+    {
+        $baseUrl = rtrim((string) $account->subsystem->api_url, '/');
+
+        // ADAGIO_BASE_URL termina en /api,
+        // pero el endpoint de reset está fuera de /api.
+        $baseUrl = preg_replace('/\/api$/', '', $baseUrl);
+
+        $response = Http::timeout(
+            $account->subsystem->api_config['timeout'] ?? 30
+        )->post($baseUrl . '/password/email', [
+            'email' => $account->credencial_usuario,
+        ]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'Adagio rechazó la solicitud de reset de contraseña',
+                $response->json() ?? []
+            );
+        }
+
+        return SubsystemOperationResult::ok(
+            mensaje: 'Solicitud de reset de contraseña enviada a Adagio',
+            raw: $response->json() ?? []
+        );
+    }
+
 }

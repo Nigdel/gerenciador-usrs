@@ -34,4 +34,6 @@ interface SubsystemServiceInterface
     public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult;
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult;
+
+    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult;
 }

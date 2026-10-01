@@ -331,4 +331,27 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
             raw: $response->json() ?? [],
         );
     }
+
+    /**
+     * Restablece la contraseña de un usuario en Entra ID.
+     *
+     * @param UserSubsystemAccount $account
+     * @param string $newPassword
+     * @return SubsystemOperationResult
+     */
+    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
+    {
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)->patch('/v1.0/users/'.$account->external_account_id, [
+            'passwordProfile' => [
+                'forceChangePasswordNextSignIn' => true,
+                'password' => $newPassword,
+            ],
+        ]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo restablecer la contraseña en Entra ID', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo');
+    }
 }

@@ -20,29 +20,30 @@ abstract class BaseSubsystemService implements SubsystemServiceInterface
     protected function http(Subsystem $subsystem): PendingRequest
     {
         $config = $subsystem->api_config ?? [];
-        $request = Http::baseUrl(rtrim((string) $subsystem->api_url, '/'))
+        $baseUrl = rtrim((string) $subsystem->api_url, '/');
+
+        if ($baseUrl === '') {
+            throw new \RuntimeException("El subsistema {$subsystem->getKey()} no tiene api_url configurada");
+        }
+
+        $request = Http::baseUrl($baseUrl)
             ->acceptJson()
-            ->timeout($config['timeout'] ?? 15);
-
-        if (! empty($config['token'])) {
-            if (! empty($config['auth_header'])) {
-                // Algunas APIs (ej. Chatwoot) no usan "Authorization: Bearer",
-                // sino un header propio con el token tal cual.
-                $request = $request->withHeaders([$config['auth_header'] => $config['token']]);
-            } else {
-                $request = $request->withToken($config['token']);
-            }
-        }
-
-        if (! empty($config['headers']) && is_array($config['headers'])) {
-            $request = $request->withHeaders($config['headers']);
-        }
+            ->connectTimeout((int) ($config['connect_timeout'] ?? 5))
+            ->timeout((int) ($config['timeout'] ?? 15));
 
         if (! empty($config['auth_basic']) && is_array($config['auth_basic'])) {
             $request = $request->withBasicAuth(
                 $config['auth_basic']['usuario'] ?? '',
                 $config['auth_basic']['password'] ?? '',
             );
+        } elseif (! empty($config['token'])) {
+            $request = ! empty($config['auth_header'])
+                ? $request->withHeaders([$config['auth_header'] => $config['token']])
+                : $request->withToken($config['token']);
+        }
+
+        if (! empty($config['headers']) && is_array($config['headers'])) {
+            $request = $request->withHeaders($config['headers']);
         }
 
         return $request;

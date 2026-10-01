@@ -219,4 +219,26 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
 
         return SubsystemOperationResult::ok(estado: $activo ? 'activo' : 'deshabilitado', raw: $response->json() ?? []);
     }
+    /**
+     * Restablece la contraseña de un usuario en GLPI.
+     *
+     * @param UserSubsystemAccount $account
+     * @param string $newPassword
+     * @return SubsystemOperationResult
+     */
+    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
+    {
+        $response = $this->http($account->subsystem)->put('/User/'.$account->external_account_id, [
+            'input' => [
+                'password' => $newPassword,
+                'password2' => $newPassword,
+            ],
+        ]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo restablecer la contraseña en GLPI', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(raw: $response->json() ?? []);
+    }
 }

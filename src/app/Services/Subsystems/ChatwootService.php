@@ -7,7 +7,8 @@ use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use RuntimeException;
-
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
 /**
  * Chatwoot: se gerencian 2 cuentas distintas dentro de la misma instancia
  * (Klios y Federal), cada una con su propio account_id. El mapeo
@@ -163,4 +164,76 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     {
         return $this->resolverAccountId($account->subsystem, $account->user->empresa ?? null);
     }
+
+    /**
+     * Fija una nueva contraseña para el usuario en Chatwoot (Platform API).
+     *
+     * Requiere `platform_token` en api_config y que la Platform App tenga permiso sobre el usuario.
+     */
+    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
+    {
+        if (blank($account->external_account_id)) {
+            return SubsystemOperationResult::fail('La cuenta no tiene un ID externo de usuario en Chatwoot');
+        }
+
+        try {
+            $response = $this->platformHttp($account->subsystem)->patch(
+                "/platform/api/v1/users/{$account->external_account_id}",
+                ['password' => $newPassword],
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            return SubsystemOperationResult::fail('Error de comunicación con Chatwoot al cambiar la contraseña');
+        }
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                match ($response->status()) {
+                    401 => 'Token de Platform App inválido en Chatwoot',
+                    403 => 'La Platform App no tiene permiso sobre este usuario en Chatwoot',
+                    404 => 'El usuario no existe en Chatwoot',
+                    422 => 'Chatwoot rechazó la contraseña (no cumple su política)',
+                    default => 'No se pudo cambiar la contraseña del usuario en Chatwoot',
+                },
+                $this->sanitizeRaw($response->json() ?? []),
+            );
+        }
+
+        return SubsystemOperationResult::ok(
+            estado: $account->estado, // cambiar la contraseña no altera el estado
+            raw: $this->sanitizeRaw($response->json() ?? []),
+        );
+    }
+
+    private function sanitizeRaw(array $raw): array
+    {
+        unset($raw['access_token'], $raw['password']);
+
+        return $raw;
+    }
+
+    /**
+     * Cliente HTTP para la Platform API de Chatwoot (/platform/api/v1/...).
+     * Usa `platform_token`, distinto del token de agente que usa http().
+     */
+    protected function platformHttp(Subsystem $subsystem): PendingRequest
+    {
+        $config = $subsystem->api_config ?? [];
+        $baseUrl = rtrim((string) $subsystem->api_url, '/');
+
+        if ($baseUrl === '') {
+            throw new \RuntimeException("El subsistema {$subsystem->getKey()} no tiene api_url configurada");
+        }
+
+        if (blank($config['platform_token'] ?? null)) {
+            throw new \RuntimeException("El subsistema {$subsystem->getKey()} no tiene platform_token configurado");
+        }
+
+        return Http::baseUrl($baseUrl)
+            ->acceptJson()
+            ->connectTimeout((int) ($config['connect_timeout'] ?? 5))
+            ->timeout((int) ($config['timeout'] ?? 15))
+            ->withHeaders(['api_access_token' => $config['platform_token']]);
+    }
+
 }
