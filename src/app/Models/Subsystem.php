@@ -40,6 +40,14 @@ class Subsystem extends Model
         return $this->hasMany(UserSubsystemAccount::class);
     }
 
+    public function getAccessUrlAttribute(): ?string
+    {
+        $apiConfig = is_array($this->api_config) ? $this->api_config : [];
+        $url = data_get($apiConfig, 'url') ?: $this->api_url;
+
+        return filled($url) ? trim((string) $url) : null;
+    }
+
     public function scopeActivos($query)
     {
         return $query->where('activo', true);

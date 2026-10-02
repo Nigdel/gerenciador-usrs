@@ -5,14 +5,16 @@
 @section('content')
     <section class="form-panel" aria-labelledby="page-title">
         <div class="form-heading">
-            <a class="eyebrow" href="{{ route('home') }}">Gestión de accesos externos</a>
-            <h1 id="page-title">Nuevo usuario gestionado</h1>
-            <p>Registra la persona y crea sus cuentas en los subsistemas seleccionados.</p>
+            <a class="eyebrow" href="{{ route('home') }}">Home</a>
+            <h1 id="page-title">Novo Usuario</h1>
+            <p>Cadastra o usuário e cria suas contas nos subsistemas selecionados.</p>
         </div>
 
         @if ($errors->any())
             <div class="feedback feedback-error" role="alert">Revisa los campos destacados.</div>
         @endif
+
+        @php $chatwootSubsystem = $subsystems->firstWhere('slug', 'chatwoot'); @endphp
 
         <form action="{{ route('gestor-users.store') }}" method="POST">
             @csrf
@@ -20,57 +22,57 @@
                 <div class="field">
                     <label for="cpf">CPF <span aria-hidden="true">*</span></label>
                     <input id="cpf" name="cpf" type="text" pattern="\d{11}" minlength="11" maxlength="11" value="{{ old('cpf') }}" autocomplete="off" placeholder="Solo 11 dígitos" required>
-                    <small id="cpf-status" class="field-hint" aria-live="polite">Ingresa el CPF para consultar Adagio.</small>
+                    <small id="cpf-status" class="field-hint" aria-live="polite">Insira o CPF para consultar no Adagio.</small>
                     @error('cpf')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
                 <div class="field field-wide">
-                    <label for="nombre_completo">Nombre completo <span aria-hidden="true">*</span></label>
+                    <label for="nombre_completo">Nome Completo <span aria-hidden="true">*</span></label>
                     <input id="nombre_completo" name="nombre_completo" type="text" maxlength="255" value="{{ old('nombre_completo') }}" required>
                     @error('nombre_completo')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
                 <div class="field">
-                    <label for="usuario">Usuario</label>
+                    <label for="usuario">Usuário</label>
                     <input id="usuario" name="usuario" type="text" maxlength="255" value="{{ old('usuario') }}">
-                    <small class="field-hint">Si queda vacío, el sistema propondrá uno.</small>
+                    <small class="field-hint">Se ficar vazio, o sistema proporá um.</small>
                     @error('usuario')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
                 <div class="field">
-                    <label for="email_personal">E-mail personal</label>
+                    <label for="email_personal">E-mail</label>
                     <input id="email_personal" name="email_personal" type="email" maxlength="255" value="{{ old('email_personal') }}">
                     @error('email_personal')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
                 <div class="field">
                     <label for="empresa">Empresa <span aria-hidden="true">*</span></label>
                     <select id="empresa" name="empresa" required >
-                        <option value="">Selecciona una empresa</option>
+                        <option value="">Seleccione uma empresa</option>
                         <option value="klios" @selected(old('empresa') === 'klios')>Klios</option>
                         <option value="federal" @selected(old('empresa') === 'federal')>Federal</option>
                     </select>
                     @error('empresa')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
                 <div class="field">
-                    <label for="telefono_personal">Teléfono personal</label>
+                    <label for="telefono_personal">Teléfono pessoal</label>
                     <input id="telefono_personal" name="telefono_personal" type="tel" maxlength="30" value="{{ old('telefono_personal') }}">
                 </div>
                 <div class="field">
-                    <label for="telefono_trabajo">Teléfono de trabajo</label>
+                    <label for="telefono_trabajo">Teléfono corporativo</label>
                     <input id="telefono_trabajo" name="telefono_trabajo" type="tel" maxlength="30" value="{{ old('telefono_trabajo') }}">
                 </div>
                 <div class="field field-wide">
-                    <label for="direccion_particular">Dirección particular</label>
+                    <label for="direccion_particular">Endereço particular</label>
                     <input id="direccion_particular" name="direccion_particular" type="text" maxlength="255" value="{{ old('direccion_particular') }}">
                 </div>
                 <div class="field field-wide">
-                    <label for="password_general">Contraseña general <span aria-hidden="true">*</span></label>
+                    <label for="password_general">Senha Padrao <span aria-hidden="true">*</span></label>
                     <input id="password_general" name="password_general" type="password" minlength="8" autocomplete="new-password" required>
-                    <small class="field-hint">Se almacenará con hash y se utilizará para el aprovisionamiento.</small>
+                    <small class="field-hint">Será armazenada com hash e utilizada para o aprovisionamento.</small>
                     @error('password_general')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
             </div>
 
             <fieldset class="mt-8 border-t border-[#d9e2dc] pt-6">
-                <legend class="mb-2 text-lg font-bold text-[#17211b]">Cuentas a crear</legend>
-                <p class="mb-4 text-sm text-[#68756d]">Selecciona uno o más subsistemas activos.</p>
+                <legend class="mb-2 text-lg font-bold text-[#17211b]">Contas nos Subsistemas</legend>
+                <p class="mb-4 text-sm text-[#68756d]">Selecione os subsistemas nos quais o usuário terá uma conta.</p>
                 @if ($subsystems->isEmpty())
                     <p class="feedback feedback-error">No hay subsistemas activos disponibles.</p>
                 @else
@@ -80,7 +82,7 @@
                                 @if ($subsystem->slug === 'adagio')
                                     <input type="hidden" name="subsistemas[]" value="adagio">
                                 @endif
-                                <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio')>
+                                <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio') @if ($subsystem->slug === 'chatwoot') data-chatwoot-route="{{ route('subsystems.chatwoot.teams', $subsystem) }}" @endif>
                                 <span>
                                     <strong>{{ $subsystem->nombre }}</strong>
                                     <small class="block text-[#68756d]" data-original-text="{{ $subsystem->descripcion ?: $subsystem->slug }}">
@@ -91,6 +93,16 @@
                                         @endif
                                     </small>
                                 </span>
+
+                                @if ($subsystem->slug === 'chatwoot')
+                                    <div class="chatwoot-team-panel mt-3 hidden w-full rounded-md border border-[#d9e2dc] bg-slate-50 p-3">
+                                        <div class="mb-2 flex items-center justify-between gap-2">
+                                            <strong class="text-sm text-[#17211b]">Equipos disponibles</strong>
+                                            <small class="chatwoot-team-status text-xs text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
+                                        </div>
+                                        <div class="chatwoot-team-options grid w-full gap-2"></div>
+                                    </div>
+                                @endif
                             </label>
                         @endforeach
                     </div>
@@ -119,9 +131,134 @@
                 usuario: document.getElementById('usuario'),
                 empresa: document.getElementById('empresa'),
             };
+            const chatwootLabel = document.querySelector('label[data-subsystem-slug="chatwoot"]');
+            const chatwootCheckbox = chatwootLabel ? chatwootLabel.querySelector('input[name="subsistemas[]"][value="chatwoot"]') : null;
+            const chatwootRoute = chatwootCheckbox ? chatwootCheckbox.dataset.chatwootRoute || '' : '';
+            const chatwootPanel = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-panel') : null;
+            const chatwootTeamOptions = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-options') : null;
+            const chatwootTeamStatus = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-status') : null;
             let requestNumber = 0;
+            let teamRequestNumber = 0;
             let usuarioEncontradoEnAdagio = false; // Flag para saber si el usuario existe en Adagio
             let ultimoCpfConsultado = ''; // Para evitar consultas duplicadas
+
+            const clearChatwootTeams = () => {
+                if (!chatwootTeamOptions) {
+                    return;
+                }
+
+                chatwootTeamOptions.querySelectorAll('input[type="checkbox"][name="subsystem_config[chatwoot][teams][]"]').forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+            };
+
+            const hideChatwootTeams = () => {
+                if (!chatwootPanel) {
+                    return;
+                }
+
+                chatwootPanel.classList.add('hidden');
+                clearChatwootTeams();
+                if (chatwootTeamStatus) {
+                    chatwootTeamStatus.textContent = 'Selecciona una empresa y marca Chatwoot.';
+                }
+            };
+
+            const renderChatwootTeams = (teams) => {
+                if (!chatwootTeamOptions) {
+                    return;
+                }
+
+                chatwootTeamOptions.innerHTML = '';
+
+                if (!Array.isArray(teams) || teams.length === 0) {
+                    if (chatwootTeamStatus) {
+                        chatwootTeamStatus.textContent = 'No se encontraron equipos disponibles para la empresa seleccionada.';
+                    }
+                    return;
+                }
+
+                if (chatwootTeamStatus) {
+                    chatwootTeamStatus.textContent = `${teams.length} equipos disponibles.`;
+                }
+
+                teams.forEach((team) => {
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center gap-2 rounded-md border border-[#d9e2dc] bg-white p-2 text-sm text-[#17211b]';
+
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.name = 'subsystem_config[chatwoot][teams][]';
+                    input.value = team.id;
+                    input.checked = false;
+
+                    const span = document.createElement('span');
+                    span.textContent = team.name;
+
+                    label.appendChild(input);
+                    label.appendChild(span);
+                    chatwootTeamOptions.appendChild(label);
+                });
+            };
+
+            const loadChatwootTeams = async () => {
+                if (!chatwootCheckbox || !chatwootCheckbox.checked || !fields.empresa || !fields.empresa.value || !chatwootRoute) {
+                    hideChatwootTeams();
+                    return;
+                }
+
+                if (!chatwootPanel || !chatwootTeamStatus) {
+                    return;
+                }
+
+                chatwootPanel.classList.remove('hidden');
+                chatwootTeamStatus.textContent = 'Consultando equipos de Chatwoot...';
+                clearChatwootTeams();
+
+                const requestId = ++teamRequestNumber;
+
+                try {
+                    const response = await fetch(`${chatwootRoute}?empresa=${encodeURIComponent(fields.empresa.value)}`, {
+                        headers: { Accept: 'application/json' },
+                    });
+
+                    if (requestId !== teamRequestNumber) {
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error('chatwoot-teams-error');
+                    }
+
+                    const result = await response.json();
+                    renderChatwootTeams(Array.isArray(result.teams) ? result.teams : []);
+                } catch (error) {
+                    if (requestId !== teamRequestNumber) {
+                        return;
+                    }
+
+                    chatwootTeamStatus.textContent = 'No se pudieron cargar los equipos para la empresa seleccionada.';
+                    clearChatwootTeams();
+                }
+            };
+
+            if (chatwootCheckbox) {
+                chatwootCheckbox.addEventListener('change', () => {
+                    if (!chatwootCheckbox.checked) {
+                        hideChatwootTeams();
+                        return;
+                    }
+
+                    loadChatwootTeams();
+                });
+            }
+
+            if (fields.empresa) {
+                fields.empresa.addEventListener('change', () => {
+                    clearChatwootTeams();
+                    loadChatwootTeams();
+                });
+            }
 
             // Validación para aceptar solo números en el campo CPF
             cpfInput.addEventListener('input', (e) => {

@@ -16,6 +16,7 @@ class SubsystemSeeder extends Seeder
                 'descripcion' => 'Sistema de gestión de personal, usado como proveedor de identidad',
                 'api_url' => env('ADAGIO_API_URL', env('ADAGIO_BASE_URL')),
                 'api_config' => [
+                    'url' => env('ADAGIO_WEB_URL', env('ADAGIO_API_URL', env('ADAGIO_BASE_URL'))),
                     'email' => env('ADAGIO_EMAIL'),
                     'password' => env('ADAGIO_PASSWORD'),
                     'token' => env('ADAGIO_API_TOKEN'),
@@ -30,6 +31,7 @@ class SubsystemSeeder extends Seeder
                 'descripcion' => 'Mesa de ayuda / inventario TI',
                 'api_url' => env('GLPI_API_URL', env('GLPI_BASE_URL')),
                 'api_config' => [
+                    'url' => env('GLPI_WEB_URL', env('GLPI_API_URL', env('GLPI_BASE_URL'))),
                     'token' => env('GLPI_API_TOKEN', env('GLPI_USER_TOKEN')),
                     'headers' => array_filter([
                         'App-Token' => env('GLPI_APP_TOKEN'),
@@ -43,6 +45,7 @@ class SubsystemSeeder extends Seeder
                 'descripcion' => 'Atención al cliente / chat (una instancia, 2 cuentas: Klios y Federal)',
                 'api_url' => env('CHATWOOT_API_URL'),
                 'api_config' => [
+                    'url' => env('CHATWOOT_WEB_URL', env('CHATWOOT_API_URL')),
                     'token' => env('CHATWOOT_API_TOKEN'),
                     'auth_header' => 'api_access_token', // Chatwoot no usa Authorization: Bearer
                     'accounts' => [
@@ -57,7 +60,11 @@ class SubsystemSeeder extends Seeder
                 'slug' => 'email',
                 'descripcion' => 'Correo corporativo',
                 'api_url' => env('EMAIL_API_URL'),
-                'api_config' => ['token' => env('EMAIL_API_TOKEN'), 'dominio' => env('EMAIL_DOMINIO')],
+                'api_config' => [
+                    'url' => env('EMAIL_WEB_URL', env('EMAIL_API_URL')),
+                    'token' => env('EMAIL_API_TOKEN'),
+                    'dominio' => env('EMAIL_DOMINIO'),
+                ],
                 'external_subsystem_id' => 'email-01',
             ],
             [
@@ -65,7 +72,11 @@ class SubsystemSeeder extends Seeder
                 'slug' => 'slack',
                 'descripcion' => 'Mensajería interna',
                 'api_url' => env('SLACK_API_URL', 'https://slack.com/api'),
-                'api_config' => ['token' => env('SLACK_API_TOKEN'), 'scim_habilitado' => false],
+                'api_config' => [
+                    'url' => env('SLACK_WEB_URL', env('SLACK_API_URL', 'https://slack.com/api')),
+                    'token' => env('SLACK_API_TOKEN'),
+                    'scim_habilitado' => false,
+                ],
                 'external_subsystem_id' => 'slack-01',
             ],
             // Entra ID: una instancia con varias app registrations, una por empresa.
@@ -75,6 +86,7 @@ class SubsystemSeeder extends Seeder
                 'descripcion' => 'Microsoft Entra ID (Azure AD) multi-tenant vía Graph API',
                 'api_url' => env('ENTRAID_GRAPH_URL', 'https://graph.microsoft.com'),
                 'api_config' => [
+                    'url' => env('ENTRAID_WEB_URL', env('ENTRAID_GRAPH_URL', 'https://graph.microsoft.com')),
                     'accounts' => [
                         'klios' => [
                             'tenant_id' => env('ENTRAID_KLIOS_TENANT_ID'),
@@ -100,6 +112,7 @@ class SubsystemSeeder extends Seeder
                 'descripcion' => 'Directorio Activo Samba AD para gestión de usuarios',
                 'api_url' => env('AD_HOST', 'dc1.klios.br'),
                 'api_config' => [
+                    'url' => env('AD_WEB_URL', env('AD_HOST', 'dc1.klios.br')),
                     'host' => env('AD_HOST', 'dc1.klios.br'),
                     'port' => (int) env('AD_PORT', 636),
                     'base_dn' => env('AD_BASE_DN', 'DC=klios,DC=br'),

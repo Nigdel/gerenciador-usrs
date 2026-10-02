@@ -48,6 +48,41 @@ class SubsystemController extends Controller
         ]);
     }
 
+    public function chatwootTeams(Subsystem $subsystem, Request $request): \Illuminate\Http\JsonResponse
+    {
+        if ($subsystem->slug !== 'chatwoot') {
+            return response()->json([
+                'message' => 'Este endpoint solo aplica a Chatwoot.',
+            ], 400);
+        }
+
+        $empresa = strtolower(trim((string) $request->query('empresa', '')));
+
+        if ($empresa === '') {
+            return response()->json([
+                'message' => 'Debe indicar la empresa para consultar los equipos de Chatwoot.',
+            ], 422);
+        }
+
+        try {
+            $service = $this->registry->resolve($subsystem->slug);
+
+            if (! method_exists($service, 'listTeams')) {
+                throw new \RuntimeException('El subsistema Chatwoot no expone equipos disponibles.');
+            }
+
+            return response()->json([
+                'teams' => $service->listTeams($subsystem, $empresa),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 500);
+        }
+    }
+
     public function accountAction(Request $request, Subsystem $subsystem, UserSubsystemAccount $userSubsystemAccount): RedirectResponse
     {
         abort_if($userSubsystemAccount->subsystem_id !== $subsystem->id, 404);

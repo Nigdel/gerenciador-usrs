@@ -128,6 +128,46 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         return SubsystemOperationResult::ok(estado: $response->json('availability') === 'online' ? 'activo' : 'deshabilitado', raw: $response->json() ?? []);
     }
 
+    /**
+     * @return array<int, array{id: mixed, name: string}>
+     */
+    public function listTeams(Subsystem $subsystem, ?string $empresa): array
+    {
+        $accountId = $this->resolverAccountId($subsystem, $empresa);
+
+        $response = $this->http($subsystem)->get("/api/v1/accounts/{$accountId}/teams");
+
+        if ($response->failed()) {
+            throw new RuntimeException("No se pudo consultar los equipos de Chatwoot para la empresa '{$empresa}'.");
+        }
+
+        $payload = $response->json();
+        $items = $payload['payload'] ?? $payload['data'] ?? $payload ?? [];
+
+        if (! is_array($items)) {
+            return [];
+        }
+
+        $teams = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $id = $item['id'] ?? $item['team_id'] ?? null;
+            $name = $item['name'] ?? $item['title'] ?? $item['label'] ?? null;
+
+            if ($id === null || $name === null) {
+                continue;
+            }
+
+            $teams[] = ['id' => $id, 'name' => (string) $name];
+        }
+
+        return $teams;
+    }
+
     // -----------------------------------------------------------------
     // Resolución de cuenta (account_id) según empresa
     // -----------------------------------------------------------------

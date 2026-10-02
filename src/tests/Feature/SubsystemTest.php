@@ -27,6 +27,22 @@ class SubsystemTest extends TestCase
         $this->get(route('subsystems.edit', $subsystem))->assertOk();
     }
 
+    public function test_index_lists_quick_access_button_for_each_subsystem(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+            'api_config' => ['url' => 'https://glpi.test'],
+            'activo' => true,
+        ]);
+
+        $this->get('/subsystems')
+            ->assertOk()
+            ->assertSee('Abrir plataforma')
+            ->assertSee('https://glpi.test');
+    }
+
     public function test_connection_button_is_available_for_glpi(): void
     {
         $subsystem = Subsystem::create([

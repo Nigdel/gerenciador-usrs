@@ -28,6 +28,9 @@ Route::resource('gestor-users.accounts', App\Http\Controllers\UserSubsystemAccou
         'accounts' => 'userSubsystemAccount',
     ]);
 
+Route::get('subsystems/{subsystem}/chatwoot/teams', [SubsystemController::class, 'chatwootTeams'])
+    ->name('subsystems.chatwoot.teams');
+
 Route::post('subsystems/{subsystem}/test-connection', [SubsystemController::class, 'testConnection'])
     ->name('subsystems.test-connection');
 

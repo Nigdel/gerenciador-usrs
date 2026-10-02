@@ -53,14 +53,20 @@
                                     {{ $subsystem->last_connection_test_at ? $subsystem->last_connection_test_at->format('d/m/y H:i') : '-' }}</td>                                
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $subsystem->accounts_count }}</td>
                                 <td class="px-4 py-3.5">
-                                    <div class="flex justify-start gap-3 whitespace-nowrap sm:justify-end">
-                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('subsystems.show', $subsystem) }}" aria-label="Ver {{ $subsystem->nombre }}" title="Ver"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-eye"></use></svg><span class="sr-only">Ver</span></a>
-                                    <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}" aria-label="Editar {{ $subsystem->nombre }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
-                                    <form class="inline-flex" action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit" aria-label="Eliminar {{ $subsystem->nombre }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
-                                    </form>
+                                    <div class="flex flex-wrap justify-start gap-3 whitespace-nowrap sm:justify-end">
+                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-600/25" href="{{ route('subsystems.show', $subsystem) }}" aria-label="Ver {{ $subsystem->nombre }}" title="Ver"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-eye"></use></svg><span class="sr-only">Ver</span></a>
+                                        @if (filled($subsystem->access_url))
+                                            <a class="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-3 py-2 text-sm font-bold text-white no-underline shadow-sm transition hover:bg-emerald-800 hover:text-white focus:outline-none focus:ring-4 focus:ring-emerald-700/20" href="{{ $subsystem->access_url }}" target="_blank" rel="noopener noreferrer" aria-label="Abrir plataforma de {{ $subsystem->nombre }}" title="Abrir {{ $subsystem->nombre }}">
+                                                <svg class="h-4 w-4" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>
+                                                
+                                            </a>
+                                        @endif
+                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}" aria-label="Editar {{ $subsystem->nombre }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
+                                        <form class="inline-flex" action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit" aria-label="Eliminar {{ $subsystem->nombre }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>

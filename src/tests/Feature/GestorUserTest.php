@@ -94,6 +94,32 @@ class GestorUserTest extends TestCase
             ->assertJson(['found' => false]);
     }
 
+    public function test_chatwoot_team_list_is_loaded_for_the_selected_company(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Chatwoot',
+            'slug' => 'chatwoot',
+            'api_url' => 'https://chatwoot.test',
+            'api_config' => [
+                'accounts' => ['klios' => 77, 'federal' => 88],
+                'token' => 'test-token',
+            ],
+            'activo' => true,
+        ]);
+
+        Http::fake([
+            'https://chatwoot.test/api/v1/accounts/77/teams' => Http::response([
+                ['id' => 1, 'name' => 'Soporte Klios'],
+                ['id' => 2, 'name' => 'Ventas Klios'],
+            ]),
+        ]);
+
+        $this->getJson(route('subsystems.chatwoot.teams', ['subsystem' => $subsystem, 'empresa' => 'klios']))
+            ->assertOk()
+            ->assertJsonPath('teams.0.name', 'Soporte Klios')
+            ->assertJsonPath('teams.1.name', 'Ventas Klios');
+    }
+
     public function test_gestor_user_can_be_created_with_selected_active_subsystems(): void
     {
         $adagio = Subsystem::create([
