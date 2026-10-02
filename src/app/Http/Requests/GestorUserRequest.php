@@ -38,6 +38,9 @@ class GestorUserRequest extends FormRequest
                 'string',
                 Rule::exists('subsystems', 'slug')->where(fn ($query) => $query->where('activo', true)),
             ],
+            'subsystem_config' => ['nullable', 'array'],
+            'subsystem_config.chatwoot.teams' => ['nullable', 'array'],
+            'subsystem_config.chatwoot.teams.*' => ['integer', 'min:1'],
         ];
     }
 }

@@ -12,6 +12,30 @@ class CreateUserTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_chatwoot_creates_an_agent_in_the_selected_teams(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Chatwoot',
+            'slug' => 'chatwoot',
+            'api_url' => 'https://chatwoot.test',
+            'api_config' => ['accounts' => ['klios' => 77]],
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['https://chatwoot.test/api/v1/accounts/77/agents' => Http::response(['id' => 42])]);
+
+        app(ChatwootService::class)->createUser([
+            'nombre_completo' => 'Ana Silva',
+            'usuario' => 'ana.silva',
+            'email_personal' => 'ana@example.test',
+            'empresa' => 'klios',
+            'subsystem_config' => ['chatwoot' => ['teams' => [4, 8]]],
+        ], $subsystem);
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/api/v1/accounts/77/agents')
+            && $request['team_ids'] === [4, 8]);
+    }
+
     public function test_chatwoot_creates_an_agent_in_the_company_account(): void
     {
         $subsystem = Subsystem::create([

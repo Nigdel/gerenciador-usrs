@@ -52,7 +52,7 @@ class UserProvisioningService
 
         $resultados = [];
         foreach ($subsistemas as $subsystem) {
-            $resultados[] = $this->crearEnSubsistema($gestorUser, $subsystem, $datosResueltos);
+            $resultados[] = $this->crearEnSubsistema($gestorUser, $subsystem, $datosResueltos, $payload['subsystem_config'] ?? []);
         }
 
         return ['gestor_user' => $gestorUser->fresh('subsystemAccounts.subsystem'), 'resultados' => $resultados];
@@ -123,10 +123,11 @@ class UserProvisioningService
         return $query->get();
     }
 
-    private function crearEnSubsistema(GestorUser $gestorUser, Subsystem $subsystem, array $datos): array
+    private function crearEnSubsistema(GestorUser $gestorUser, Subsystem $subsystem, array $datos, array $subsystemConfig = []): array
     {
+        $datosParaSubsistema = $this->mergeSubsystemConfig($datos, $subsystem, $subsystemConfig);
         $servicio = $this->registry->resolve($subsystem->slug);
-        $resultado = $servicio->createUser($datos, $subsystem);
+        $resultado = $servicio->createUser($datosParaSubsistema, $subsystem);
 
         $account = UserSubsystemAccount::updateOrCreate(
             ['gestor_user_id' => $gestorUser->id, 'subsystem_id' => $subsystem->id],
@@ -145,6 +146,17 @@ class UserProvisioningService
             'mensaje' => $resultado->mensaje,
             'cuenta' => $account,
         ];
+    }
+
+    private function mergeSubsystemConfig(array $datos, Subsystem $subsystem, array $subsystemConfig): array
+    {
+        if (empty($subsystemConfig[$subsystem->slug] ?? null)) {
+            return $datos;
+        }
+
+        $datos['subsystem_config'] = $subsystemConfig[$subsystem->slug];
+
+        return $datos;
     }
 
         public function resetAllPasswords(GestorUser $gestorUser): array

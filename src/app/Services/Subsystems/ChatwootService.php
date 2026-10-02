@@ -58,12 +58,18 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $accountId = $this->resolverAccountId($subsystem, $userData['empresa'] ?? null);
-
-        $response = $this->http($subsystem)->post("/api/v1/accounts/{$accountId}/agents", [
+        $payload = [
             'name' => $userData['nombre_completo'],
             'email' => $userData['email_personal'] ?? $userData['usuario'].'@'.($userData['empresa'] ?? 'empresa'),
             'role' => 'agent',
-        ]);
+        ];
+
+        $teamIds = $this->resolverTeamIds($userData, $subsystem);
+        if (! empty($teamIds)) {
+            $payload['team_ids'] = $teamIds;
+        }
+
+        $response = $this->http($subsystem)->post("/api/v1/accounts/{$accountId}/agents", $payload);
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('Chatwoot rechazó la creación del agente', $response->json() ?? []);
@@ -126,6 +132,26 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         return SubsystemOperationResult::ok(estado: $response->json('availability') === 'online' ? 'activo' : 'deshabilitado', raw: $response->json() ?? []);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolverTeamIds(array $userData, Subsystem $subsystem): array
+    {
+        $selectedTeams = $userData['subsystem_config']['chatwoot']['teams']
+            ?? $userData['subsystem_config'][$subsystem->slug]['teams']
+            ?? $userData['teams']
+            ?? $userData['team_ids']
+            ?? [];
+
+        if (! is_array($selectedTeams)) {
+            return [];
+        }
+
+        $normalized = array_values(array_unique(array_map(static fn ($teamId) => (int) $teamId, $selectedTeams)));
+
+        return array_values(array_filter($normalized, static fn (int $teamId): bool => $teamId > 0));
     }
 
     /**
