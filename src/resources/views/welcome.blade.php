@@ -11,9 +11,9 @@
         </div>
 
         <div class="form-actions">
-            <a class="button button-primary" href="{{ route('users.index') }}">Usuários Locais</a>
+            <!-- <a class="button button-primary" href="{{ route('users.index') }}">Usuários Locais</a> -->
             <a class="button button-primary" href="{{ route('gestor-users.index') }}">Usuarios Gestionados</a>
-            <a class="button button-primary" href="{{ route('subsystems.index') }}">Subsystems</a>
+            <a class="button button-primary" href="{{ route('subsystems.index') }}">Listagem dos Subsystemas</a>
         </div>
     </section>
 @endsection

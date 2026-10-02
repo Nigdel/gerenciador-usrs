@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Integration;
+namespace Tests\Integration\Subsystems\Glpi;
 
 use App\Models\GestorUser;
 use App\Models\Subsystem;
@@ -9,11 +9,11 @@ use App\Services\Subsystems\GlpiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class GlpiServiceTest extends TestCase
+class GlpiLifecycleTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_it_creates_reuses_and_manages_a_real_glpi_user(): void
+    public function test_glpi_creates_reuses_and_manages_a_real_user(): void
     {
         $subsystem = $this->liveSubsystem();
         $service = app(GlpiService::class);
@@ -23,13 +23,11 @@ class GlpiServiceTest extends TestCase
         $this->assertTrue($connection->success, $connection->mensaje ?? 'GLPI no está disponible');
 
         $created = $service->createUser($userData, $subsystem);
-
         $this->assertTrue($created->success, $created->mensaje ?? 'GLPI no creó el usuario');
         $this->assertNotEmpty($created->externalAccountId);
         $this->assertSame($userData['usuario'], $created->credencialUsuario);
 
         $reused = $service->createUser($userData, $subsystem);
-
         $this->assertTrue($reused->success, $reused->mensaje ?? 'GLPI no reutilizó el usuario');
         $this->assertSame($created->externalAccountId, $reused->externalAccountId);
         $this->assertSame('Usuario ya existía en GLPI, se reutilizó', $reused->mensaje);
@@ -69,9 +67,7 @@ class GlpiServiceTest extends TestCase
             'api_url' => $apiUrl,
             'api_config' => array_filter([
                 'token' => $token,
-                'headers' => array_filter([
-                    'App-Token' => env('GLPI_APP_TOKEN'),
-                ]),
+                'headers' => array_filter(['App-Token' => env('GLPI_APP_TOKEN')]),
             ]),
             'activo' => true,
         ]);
@@ -94,7 +90,6 @@ class GlpiServiceTest extends TestCase
             'external_account_id' => $externalId,
             'estado' => 'activo',
         ]);
-
         $account->setRelation('subsystem', $subsystem);
 
         return $account;

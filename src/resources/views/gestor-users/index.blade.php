@@ -6,11 +6,11 @@
     <section class="form-panel crud-panel" aria-labelledby="page-title">
         <div class="page-toolbar">
             <div class="form-heading">
-                <a class="eyebrow" href="{{ route('home') }}">Gestión de accesos externos</a>
-                <h1 id="page-title">Usuarios gestionados</h1>
+                <a class="eyebrow" href="{{ route('home') }}">Home</a>
+                <h1 id="page-title">Listagem de Usuarios Gestionados</h1>
                 <p>Administra personas y sus cuentas en los subsistemas conectados.</p>
             </div>
-            <a class="button button-primary" href="{{ route('gestor-users.create') }}">Nuevo usuario</a>
+            <a class="button button-primary" href="{{ route('gestor-users.create') }}">Novo</a>
         </div>
 
         @if ($gestorUsers->isEmpty())
@@ -33,7 +33,7 @@
                     <tbody>
                         @foreach ($gestorUsers as $gestorUser)
                             <tr class="border-t border-[#e8eee9] align-middle">
-                                <td class="px-4 py-3.5 font-bold text-[#17211b]">{{ $gestorUser->nombre_completo }}</td>
+                                <td class="px-4 py-3.5 font-bold text-[#17211b]"><a  href="{{ route('gestor-users.show', $gestorUser) }}" aria-label="Ver {{ $gestorUser->nombre_completo }}" title="Ver">{{ $gestorUser->nombre_completo }}</a></td>
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->cpf }}</td>
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->empresa }}</td>
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->subsystem_accounts_count }}</td>

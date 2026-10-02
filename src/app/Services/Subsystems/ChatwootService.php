@@ -6,9 +6,10 @@ use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
-use RuntimeException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
+
 /**
  * Chatwoot: se gerencian 2 cuentas distintas dentro de la misma instancia
  * (Klios y Federal), cada una con su propio account_id. El mapeo
@@ -183,6 +184,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             );
         } catch (\Throwable $e) {
             report($e);
+
             return SubsystemOperationResult::fail('Error de comunicación con Chatwoot al cambiar la contraseña');
         }
 
@@ -200,7 +202,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         return SubsystemOperationResult::ok(
-            estado: $account->estado, // cambiar la contraseña no altera el estado
+            estado: $account->estado->value,
             raw: $this->sanitizeRaw($response->json() ?? []),
         );
     }
@@ -222,11 +224,11 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         $baseUrl = rtrim((string) $subsystem->api_url, '/');
 
         if ($baseUrl === '') {
-            throw new \RuntimeException("El subsistema {$subsystem->getKey()} no tiene api_url configurada");
+            throw new RuntimeException("El subsistema {$subsystem->getKey()} no tiene api_url configurada");
         }
 
         if (blank($config['platform_token'] ?? null)) {
-            throw new \RuntimeException("El subsistema {$subsystem->getKey()} no tiene platform_token configurado");
+            throw new RuntimeException("El subsistema {$subsystem->getKey()} no tiene platform_token configurado");
         }
 
         return Http::baseUrl($baseUrl)
@@ -235,5 +237,4 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             ->timeout((int) ($config['timeout'] ?? 15))
             ->withHeaders(['api_access_token' => $config['platform_token']]);
     }
-
 }
