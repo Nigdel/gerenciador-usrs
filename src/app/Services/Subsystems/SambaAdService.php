@@ -9,12 +9,15 @@ use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Exception;
 use Illuminate\Support\Facades\Log;
+use LDAP\Connection;
 use RuntimeException;
 
 class SambaAdService extends BaseSubsystemService implements IdentityProviderInterface, SubsystemConnectionInterface
 {
     private const UAC_NORMAL_ACCOUNT = 512;
+
     private const UAC_DISABLED_ACCOUNT = 514; // 512 + ACCOUNTDISABLE (2)
+
     private const UAC_ACCOUNTDISABLE = 2;
 
     /**
@@ -47,10 +50,10 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         try {
             $ldap = $this->connectAndBind($subsystem);
             $baseDn = $this->getUsersOu($subsystem);
-            $filter = '(employeeNumber=' . $this->escapeFilter($cpfLimpio) . ')';
+            $filter = '(employeeNumber='.$this->escapeFilter($cpfLimpio).')';
 
             $search = @ldap_search($ldap, $baseDn, $filter, ['cn', 'sAMAccountName', 'mail', 'employeeNumber', 'userAccountControl']);
-            if (!$search) {
+            if (! $search) {
                 return null;
             }
 
@@ -63,10 +66,10 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $user = $entries[0];
 
             return [
-                'nombre_completo'     => $user['cn'][0] ?? null,
-                'email_personal'      => $user['mail'][0] ?? null,
-                'cpf'                 => $user['employeenumber'][0] ?? $cpfLimpio,
-                'usuario'             => $user['samaccountname'][0] ?? null,
+                'nombre_completo' => $user['cn'][0] ?? null,
+                'email_personal' => $user['mail'][0] ?? null,
+                'cpf' => $user['employeenumber'][0] ?? $cpfLimpio,
+                'usuario' => $user['samaccountname'][0] ?? null,
                 'external_account_id' => $user['samaccountname'][0] ?? null,
             ];
         } catch (Exception $e) {
@@ -93,7 +96,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $filter = "(|(userPrincipalName={$cleanEmail})(mail={$cleanEmail}))";
 
             $search = @ldap_search($ldap, $baseDn, $filter, ['dn']);
-            if (!$search) {
+            if (! $search) {
                 return false;
             }
 
@@ -132,7 +135,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
         $usersOu = $this->getUsersOu($subsystem);
         // El RDN (CN) debe coincidir con el atributo cn.
-        $userDn = 'CN=' . ldap_escape($nombreCompleto, '', LDAP_ESCAPE_DN) . ',' . $usersOu;
+        $userDn = 'CN='.ldap_escape($nombreCompleto, '', LDAP_ESCAPE_DN).','.$usersOu;
         $ldap = null;
 
         try {
@@ -142,7 +145,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $search = @ldap_search(
                 $ldap,
                 $usersOu,
-                '(sAMAccountName=' . $this->escapeFilter($samAccountName) . ')',
+                '(sAMAccountName='.$this->escapeFilter($samAccountName).')',
                 ['dn']
             );
             if ($search && (@ldap_get_entries($ldap, $search)['count'] ?? 0) > 0) {
@@ -159,32 +162,32 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $upn = "{$samAccountName}@{$domain}";
 
             $entry = [
-                'objectClass'        => ['top', 'person', 'organizationalPerson', 'user'],
-                'sAMAccountName'     => $samAccountName,
-                'userPrincipalName'  => $upn,
-                'cn'                 => $nombreCompleto,
-                'displayName'        => $nombreCompleto,
+                'objectClass' => ['top', 'person', 'organizationalPerson', 'user'],
+                'sAMAccountName' => $samAccountName,
+                'userPrincipalName' => $upn,
+                'cn' => $nombreCompleto,
+                'displayName' => $nombreCompleto,
                 // Se crea deshabilitada; se habilita al final tras fijar la contraseña.
                 'userAccountControl' => (string) self::UAC_DISABLED_ACCOUNT,
             ];
 
-            if (!empty($userData['email_personal'])) {
+            if (! empty($userData['email_personal'])) {
                 $entry['mail'] = $userData['email_personal'];
             }
 
-            if (!empty($userData['cpf'])) {
+            if (! empty($userData['cpf'])) {
                 $entry['employeeNumber'] = $this->limpiarDocumento($userData['cpf']);
             }
 
             // 1) Crear la cuenta
-            if (!@ldap_add($ldap, $userDn, $entry)) {
+            if (! @ldap_add($ldap, $userDn, $entry)) {
                 return SubsystemOperationResult::fail(
-                    'Error al crear usuario en Samba AD: ' . $this->ldapError($ldap) . " (DN: {$userDn})"
+                    'Error al crear usuario en Samba AD: '.$this->ldapError($ldap)." (DN: {$userDn})"
                 );
             }
 
             // 2) Fijar contraseña (requiere LDAPS y cumplir la política de complejidad)
-            if (!@ldap_mod_replace($ldap, $userDn, ['unicodePwd' => $this->encodePassword($password)])) {
+            if (! @ldap_mod_replace($ldap, $userDn, ['unicodePwd' => $this->encodePassword($password)])) {
                 $error = $this->ldapError($ldap);
                 @ldap_delete($ldap, $userDn); // rollback
 
@@ -194,7 +197,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             }
 
             // 3) Habilitar la cuenta
-            if (!@ldap_mod_replace($ldap, $userDn, ['userAccountControl' => (string) self::UAC_NORMAL_ACCOUNT])) {
+            if (! @ldap_mod_replace($ldap, $userDn, ['userAccountControl' => (string) self::UAC_NORMAL_ACCOUNT])) {
                 $error = $this->ldapError($ldap);
                 @ldap_delete($ldap, $userDn); // rollback
 
@@ -228,9 +231,9 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $ldap = $this->connectAndBind($subsystem);
             $userDn = $this->resolveUserDn($ldap, $account, $subsystem);
 
-            if (!@ldap_mod_replace($ldap, $userDn, ['unicodePwd' => $this->encodePassword($newPassword)])) {
+            if (! @ldap_mod_replace($ldap, $userDn, ['unicodePwd' => $this->encodePassword($newPassword)])) {
                 return SubsystemOperationResult::fail(
-                    'No se pudo resetear la contraseña en Samba AD: ' . $this->ldapError($ldap)
+                    'No se pudo resetear la contraseña en Samba AD: '.$this->ldapError($ldap)
                 );
             }
 
@@ -270,7 +273,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $userDn = $this->resolveUserDn($ldap, $account, $subsystem);
 
             $search = @ldap_read($ldap, $userDn, '(objectClass=*)', ['userAccountControl']);
-            if (!$search) {
+            if (! $search) {
                 return SubsystemOperationResult::fail('Usuario no encontrado en Samba AD');
             }
 
@@ -304,9 +307,9 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $ldap = $this->connectAndBind($subsystem);
             $userDn = $this->resolveUserDn($ldap, $account, $subsystem);
 
-            if (!@ldap_delete($ldap, $userDn)) {
+            if (! @ldap_delete($ldap, $userDn)) {
                 return SubsystemOperationResult::fail(
-                    'No se pudo eliminar el usuario en Samba AD: ' . $this->ldapError($ldap)
+                    'No se pudo eliminar el usuario en Samba AD: '.$this->ldapError($ldap)
                 );
             }
 
@@ -323,11 +326,11 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     // -----------------------------------------------------------------
 
     /**
-     * @return \LDAP\Connection
+     * @return Connection
      */
     private function connectAndBind(Subsystem $subsystem)
     {
-        if (!extension_loaded('ldap')) {
+        if (! extension_loaded('ldap')) {
             throw new RuntimeException('La extensión PHP ldap no está cargada en este proceso (revisa CLI vs php-fpm).');
         }
 
@@ -354,13 +357,13 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         $ldapUri = "{$protocol}{$host}:{$port}";
 
         // Opciones TLS globales: deben fijarse ANTES de ldap_connect().
-        if (!$tlsVerify) {
+        if (! $tlsVerify) {
             ldap_set_option(null, LDAP_OPT_X_TLS_REQUIRE_CERT, LDAP_OPT_X_TLS_NEVER);
         } else {
             ldap_set_option(null, LDAP_OPT_X_TLS_REQUIRE_CERT, LDAP_OPT_X_TLS_DEMAND);
 
             if ($caCertPath !== '') {
-                if (!is_readable($caCertPath)) {
+                if (! is_readable($caCertPath)) {
                     throw new RuntimeException(
                         "El certificado CA '{$caCertPath}' no existe o no es legible por el usuario del proceso PHP."
                     );
@@ -369,15 +372,15 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             }
         }
 
-                // Aplica las opciones TLS a un contexto nuevo (necesario en procesos long-running como Octane/queue).
+        // Aplica las opciones TLS a un contexto nuevo (necesario en procesos long-running como Octane/queue).
         /*         if (defined('LDAP_OPT_X_TLS_NEWCTX')) {
                     @ldap_set_option(null, LDAP_OPT_X_TLS_NEWCTX, 0);
                 } */
 
         $ldap = @ldap_connect($ldapUri);
-        if (!$ldap) {
+        if (! $ldap) {
             throw new RuntimeException(
-                "No se pudo conectar al DC Active Directory: {$host} (URI: '{$ldapUri}', longitud: " . strlen($ldapUri) . ')'
+                "No se pudo conectar al DC Active Directory: {$host} (URI: '{$ldapUri}', longitud: ".strlen($ldapUri).')'
             );
         }
 
@@ -388,7 +391,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         $bindDn = trim((string) ($config['bind_dn'] ?? config('services.samba_ad.bind_dn')));
         $bindPassword = (string) ($config['bind_password'] ?? config('services.samba_ad.bind_password'));
 
-        if (!@ldap_bind($ldap, $bindDn, $bindPassword)) {
+        if (! @ldap_bind($ldap, $bindDn, $bindPassword)) {
             $error = $this->ldapError($ldap);
             $this->unbind($ldap);
 
@@ -408,7 +411,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             $userDn = $this->resolveUserDn($ldap, $account, $subsystem);
 
             $search = @ldap_read($ldap, $userDn, '(objectClass=*)', ['userAccountControl']);
-            if (!$search) {
+            if (! $search) {
                 return SubsystemOperationResult::fail('Usuario no encontrado');
             }
 
@@ -419,9 +422,9 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
                 ? ($currentUac | self::UAC_ACCOUNTDISABLE)
                 : ($currentUac & ~self::UAC_ACCOUNTDISABLE);
 
-            if (!@ldap_mod_replace($ldap, $userDn, ['userAccountControl' => (string) $newUac])) {
+            if (! @ldap_mod_replace($ldap, $userDn, ['userAccountControl' => (string) $newUac])) {
                 return SubsystemOperationResult::fail(
-                    'Error al actualizar userAccountControl: ' . $this->ldapError($ldap)
+                    'Error al actualizar userAccountControl: '.$this->ldapError($ldap)
                 );
             }
 
@@ -444,7 +447,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         $search = @ldap_search(
             $ldap,
             $usersOu,
-            '(sAMAccountName=' . $this->escapeFilter($samAccountName) . ')',
+            '(sAMAccountName='.$this->escapeFilter($samAccountName).')',
             ['dn']
         );
 
@@ -466,7 +469,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         @ldap_get_option($ldap, LDAP_OPT_DIAGNOSTIC_MESSAGE, $diagnostic);
 
         $message = "[{$errno}] {$error}";
-        if (!empty($diagnostic)) {
+        if (! empty($diagnostic)) {
             $message .= " - {$diagnostic}";
         }
 
@@ -487,7 +490,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
     private function encodePassword(string $password): string
     {
-        return iconv('UTF-8', 'UTF-16LE', '"' . $password . '"');
+        return iconv('UTF-8', 'UTF-16LE', '"'.$password.'"');
     }
 
     private function getUsersOu(Subsystem $subsystem): string
@@ -512,8 +515,6 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
     private function generatePassword(): string
     {
-        return 'Klios#' . bin2hex(random_bytes(4)) . '!';
+        return 'Klios#'.bin2hex(random_bytes(4)).'!';
     }
-
-    
 }

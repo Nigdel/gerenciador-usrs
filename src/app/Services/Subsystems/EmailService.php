@@ -98,12 +98,9 @@ class EmailService extends BaseSubsystemService implements SubsystemConnectionIn
             raw: $response->json() ?? [],
         );
     }
+
     /**
      * Restablece la contraseña de una casilla de correo.
-     *
-     * @param UserSubsystemAccount $account
-     * @param string $newPassword
-     * @return SubsystemOperationResult
      */
     public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
     {

@@ -11,8 +11,7 @@ class UserSuspensionController extends Controller
 {
     public function __construct(
         private readonly UserSuspensionService $suspensionService,
-    ) {
-    }
+    ) {}
 
     /**
      * POST /api/usuarios/suspender

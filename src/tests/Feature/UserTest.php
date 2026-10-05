@@ -1,4 +1,5 @@
 <?php
+
 namespace tests\Feature;
 
 use App\Models\User;

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Contracts\IdentityProviderInterface;
-use App\Models\Subsystem;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -16,8 +15,7 @@ class UsernameGeneratorService
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
-    ) {
-    }
+    ) {}
 
     /**
      * @return string Login propuesto, ej: "juan.perez" (sin el dominio de email).
@@ -90,15 +88,15 @@ class UsernameGeneratorService
 
     private function resolverProveedorIdentidad(): IdentityProviderInterface
     {
-      
+
         return $this->registry->resolveIdentityProvider();
-    /*  $slug = config('subsystems.proveedor_identidad_slug', 'adagio');
-        $servicio = $this->registry->resolve($slug);
+        /*  $slug = config('subsystems.proveedor_identidad_slug', 'adagio');
+            $servicio = $this->registry->resolve($slug);
 
-        if (! $servicio instanceof IdentityProviderInterface) {
-            throw new RuntimeException("El subsistema proveedor de identidad [{$slug}] debe implementar IdentityProviderInterface");
-        }
+            if (! $servicio instanceof IdentityProviderInterface) {
+                throw new RuntimeException("El subsistema proveedor de identidad [{$slug}] debe implementar IdentityProviderInterface");
+            }
 
-        return $servicio; */
+            return $servicio; */
     }
 }

@@ -3,12 +3,13 @@
 namespace App\Services;
 
 use App\Contracts\IdentityProviderInterface;
+use App\DTO\SubsystemOperationResult;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
-use App\DTO\SubsystemOperationResult;
 
 /**
  * Orquesta la creación de un usuario a partir de un JSON de entrada:
@@ -27,19 +28,17 @@ class UserProvisioningService
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
         private readonly UsernameGeneratorService $usernameGenerator,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array  $payload  Formato esperado:
-     *   [
-     *     'cpf' => '123.456.789-00',
-     *     'nombre_completo' => 'Juan Carlos Perez Gomez', // requerido si no existe en Adagio
-     *     'email_personal' => '...', 'telefono_personal' => '...', 'telefono_trabajo' => '...',
-     *     'direccion_particular' => '...', 'empresa' => 'Acme', 'password_general' => '...',
-     *     'subsistemas' => ['adagio', 'glpi', ...], // opcional: si falta, se usan todos los activos
-     *   ]
-     *
+     *                          [
+     *                          'cpf' => '123.456.789-00',
+     *                          'nombre_completo' => 'Juan Carlos Perez Gomez', // requerido si no existe en Adagio
+     *                          'email_personal' => '...', 'telefono_personal' => '...', 'telefono_trabajo' => '...',
+     *                          'direccion_particular' => '...', 'empresa' => 'Acme', 'password_general' => '...',
+     *                          'subsistemas' => ['adagio', 'glpi', ...], // opcional: si falta, se usan todos los activos
+     *                          ]
      * @return array{gestor_user: GestorUser, resultados: array<int, array>}
      */
     public function provisionar(array $payload): array
@@ -110,7 +109,7 @@ class UserProvisioningService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Subsystem>
+     * @return Collection<int, Subsystem>
      */
     private function resolverSubsistemas(?array $slugs)
     {
@@ -159,7 +158,7 @@ class UserProvisioningService
         return $datos;
     }
 
-        public function resetAllPasswords(GestorUser $gestorUser): array
+    public function resetAllPasswords(GestorUser $gestorUser): array
     {
         $gestorUser->load('subsystemAccounts.subsystem');
 
@@ -172,7 +171,7 @@ class UserProvisioningService
                 report($exception);
 
                 $results[] = SubsystemOperationResult::fail(
-                    
+
                     $exception->getMessage(),
                     $userAccount->subsystem?->slug ? ['subsystem' => $userAccount->subsystem->slug] : []
                 );
@@ -182,7 +181,7 @@ class UserProvisioningService
         return $results;
     }
 
-        public function resetPassword(GestorUser $gestorUser, UserSubsystemAccount $userAccount): SubsystemOperationResult
+    public function resetPassword(GestorUser $gestorUser, UserSubsystemAccount $userAccount): SubsystemOperationResult
     {
         return SubsystemOperationResult::fail('Not implemented yet');
         // Determinar qué subsistema es

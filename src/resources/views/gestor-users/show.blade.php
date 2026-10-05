@@ -7,11 +7,17 @@
         <div class="page-toolbar">
             <div class="form-heading">
                 <a class="eyebrow" href="{{ route('home') }}">...Gestão de acessos</a>
-                
+
                 <h1 id="page-title">{{ $gestorUser->nombre_completo }}</h1>
                 <p>Identidad central y cuentas externas vinculadas.</p>
             </div>
-            <a class="button button-primary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar datos de {{ $gestorUser->nombre_completo }}" title="Editar datos"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar datos</span></a>
+            <div class="flex gap-2">
+                <a class="button button-secondary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar datos de {{ $gestorUser->nombre_completo }}" title="Editar datos"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar datos</span></a>
+                <form action="{{ route('gestor-users.reset-password', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Deseas restablecer las contraseñas de todas las cuentas?');">
+                    @csrf
+                    <button class="button button-secondary" type="submit" aria-label="Restablecer contraseñas de {{ $gestorUser->nombre_completo }}" title="Restablecer contraseñas"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-key"></use></svg><span class="sr-only">Restablecer contraseñas</span></button>
+                </form>
+            </div>
         </div>
 
         @if (session('provisioning_results'))

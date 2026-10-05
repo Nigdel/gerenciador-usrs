@@ -334,10 +334,6 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
     /**
      * Restablece la contraseña de un usuario en Entra ID.
-     *
-     * @param UserSubsystemAccount $account
-     * @param string $newPassword
-     * @return SubsystemOperationResult
      */
     public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
     {

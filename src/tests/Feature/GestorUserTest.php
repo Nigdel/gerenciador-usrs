@@ -352,4 +352,34 @@ class GestorUserTest extends TestCase
 
         $this->assertDatabaseMissing('user_subsystem_accounts', ['id' => $account->id]);
     }
+
+    public function test_reset_password_post_handles_unimplemented_or_failed_resets_properly(): void
+    {
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Carlos Gomez',
+            'cpf' => '12345678999',
+            'password_general' => 'Password123!',
+            'usuario' => 'carlos.gomez',
+            'empresa' => 'Empresa Test',
+        ]);
+
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+            'activo' => true,
+        ]);
+
+        $gestorUser->subsystemAccounts()->create([
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'carlos.glpi',
+            'external_account_id' => 'glpi-99',
+            'estado' => 'activo',
+        ]);
+
+        $response = $this->post(route('gestor-users.reset-password', $gestorUser));
+
+        $response->assertRedirect(route('gestor-users.show', $gestorUser));
+        $response->assertSessionHas('warning');
+    }
 }

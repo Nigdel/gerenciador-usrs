@@ -129,7 +129,7 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
                 '_useremails' => [$userData['email_personal'] ?? null],
                 'password' => $userData['password_general'] ?? null,
                 'password2' => $userData['password_general'] ?? null,
-                'comment' => isset($userData['cpf']) ? 'cpf: ' . $userData['cpf'] : null,
+                'comment' => isset($userData['cpf']) ? 'cpf: '.$userData['cpf'] : null,
             ],
         ]);
 
@@ -219,12 +219,9 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
 
         return SubsystemOperationResult::ok(estado: $activo ? 'activo' : 'deshabilitado', raw: $response->json() ?? []);
     }
+
     /**
      * Restablece la contraseña de un usuario en GLPI.
-     *
-     * @param UserSubsystemAccount $account
-     * @param string $newPassword
-     * @return SubsystemOperationResult
      */
     public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
     {

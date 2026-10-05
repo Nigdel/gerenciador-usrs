@@ -109,6 +109,7 @@ class SlackService extends BaseSubsystemService implements SubsystemConnectionIn
 
         return SubsystemOperationResult::ok(estado: $response->json('active') ? 'activo' : 'deshabilitado', raw: $response->json() ?? []);
     }
+
     /**
      * Slack no permite cambiar la contraseña de usuarios vía API pública.
      * La contraseña se gestiona desde el propio Slack o mediante SSO.

@@ -6,6 +6,7 @@ use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Orquesta la suspensión de un usuario en uno, varios, o todos los
@@ -16,19 +17,17 @@ class UserSuspensionService
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array  $payload  Formato esperado:
-     *   [
-     *     'cpf' => '...', // o 'usuario' => '...' para identificar al GestorUser
-     *     'subsistemas' => ['glpi', 'entraid'], // opcional: si falta, se suspende en todos donde tenga cuenta
-     *     'motivo_suspension' => '...',
-     *     'inicio_suspension' => '2026-09-21', // opcional, default: ahora
-     *     'fin_suspension' => '2026-10-05',     // opcional
-     *   ]
-     *
+     *                          [
+     *                          'cpf' => '...', // o 'usuario' => '...' para identificar al GestorUser
+     *                          'subsistemas' => ['glpi', 'entraid'], // opcional: si falta, se suspende en todos donde tenga cuenta
+     *                          'motivo_suspension' => '...',
+     *                          'inicio_suspension' => '2026-09-21', // opcional, default: ahora
+     *                          'fin_suspension' => '2026-10-05',     // opcional
+     *                          ]
      * @return array<int, array>
      */
     public function suspender(array $payload): array
@@ -69,7 +68,7 @@ class UserSuspensionService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, UserSubsystemAccount>
+     * @return Collection<int, UserSubsystemAccount>
      */
     private function resolverCuentas(GestorUser $gestorUser, ?array $slugs)
     {

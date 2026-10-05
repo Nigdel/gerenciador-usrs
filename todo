@@ -134,7 +134,7 @@ Leyenda de esfuerzo: **S** ≤ 0,5 día · **M** 1–2 días · **L** 3–5 día
 - [x] **0.1 Registrar la API** (S) — añadir `api: __DIR__.'/../routes/api.php'` en `bootstrap/app.php`.
   - Aceptación: `docker compose exec app php artisan route:list --path=api` lista `provisionar` y `suspender`.
   - Test: feature test que hace `POST /api/usuarios/provisionar` y `/suspender` (con `Http::fake`).
-- [ ] **0.2 Arreglar el reset de contraseña** (M) — ver Fase 2.4; mientras tanto, hacer que el controlador
+- [x] **0.2 Arreglar el reset de contraseña** (M) — ver Fase 2.4; mientras tanto, hacer que el controlador
   muestre error real en lugar de éxito.
 - [ ] **0.3 Limpieza** (S) — eliminar `tests/Feature/UserT.php.bck`, sustituir `ExampleTest` por tests reales.
 - [ ] **0.4 Decidir el rol de `User` vs `GestorUser`** (S, decisión) — recomendado: `User` = operador del

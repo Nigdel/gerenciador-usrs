@@ -1,8 +1,9 @@
 <?php
 
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\GestorUserController;
 use App\Http\Controllers\SubsystemController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserSubsystemAccountController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -14,15 +15,15 @@ Route::resource('users', UserController::class);
 Route::get('gestor-users/lookup-cpf', [GestorUserController::class, 'lookupByCpf'])
     ->name('gestor-users.lookup-cpf');
 
-Route::get(
+Route::post(
     'gestor-users/{gestorUser}/reset-password',
     [GestorUserController::class, 'resetPassword']
-)->name('gestor-users.reset-password');    
+)->name('gestor-users.reset-password');
 
 Route::resource('gestor-users', GestorUserController::class)
     ->parameters(['gestor-users' => 'gestorUser']);
 
-Route::resource('gestor-users.accounts', App\Http\Controllers\UserSubsystemAccountController::class)
+Route::resource('gestor-users.accounts', UserSubsystemAccountController::class)
     ->parameters([
         'gestor-users' => 'gestorUser',
         'accounts' => 'userSubsystemAccount',

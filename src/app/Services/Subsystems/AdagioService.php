@@ -53,6 +53,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         } catch (RuntimeException $exception) {
             return SubsystemOperationResult::fail($exception->getMessage());
         }
+
         return SubsystemOperationResult::ok(mensaje: 'Autenticación contra Adagio exitosa');
     }
 
@@ -340,11 +341,9 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
     /**
      * Reinicia la contraseña de un usuario en Adagio.
      *
-     * @param  UserSubsystemAccount  $account
-     * @param  string  $newPassword //unsupported, Adagio generates e link and send it by email to user
-     * @return SubsystemOperationResult
+     * @param  string  $newPassword  //unsupported, Adagio generates e link and send it by email to user
      */
-    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult 
+    public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
     {
         $baseUrl = rtrim((string) $account->subsystem->api_url, '/');
 
@@ -354,7 +353,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
         $response = Http::timeout(
             $account->subsystem->api_config['timeout'] ?? 30
-        )->post($baseUrl . '/password/email', [
+        )->post($baseUrl.'/password/email', [
             'email' => $account->credencial_usuario,
         ]);
 
@@ -370,5 +369,4 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             raw: $response->json() ?? []
         );
     }
-
 }
