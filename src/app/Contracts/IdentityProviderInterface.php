@@ -2,8 +2,6 @@
 
 namespace App\Contracts;
 
-use App\Models\Subsystem;
-
 /**
  * Contrato adicional, solo para el subsistema marcado como "proveedor de
  * identidad" (es_proveedor_identidad = true), típicamente Adagio. Permite
@@ -14,7 +12,7 @@ interface IdentityProviderInterface extends SubsystemConnectionInterface
 {
     /**
      * @return array|null Datos del usuario en el proveedor (nombre_completo,
-     *                     email, cpf, ...) o null si no existe.
+     *                    email, cpf, ...) o null si no existe.
      */
     public function findByCpf(string $cpf): ?array;
 

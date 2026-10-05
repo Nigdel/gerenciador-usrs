@@ -18,8 +18,8 @@ interface SubsystemServiceInterface
      * Crea el usuario en el subsistema.
      *
      * @param  array  $userData  Datos ya resueltos del usuario: nombre_completo, cpf,
-     *                            usuario (login propuesto/reutilizado), email_personal,
-     *                            empresa, password_general, etc.
+     *                           usuario (login propuesto/reutilizado), email_personal,
+     *                           empresa, password_general, etc.
      */
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult;
 

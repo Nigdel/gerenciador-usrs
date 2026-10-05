@@ -12,8 +12,7 @@ class UserProvisioningController extends Controller
 {
     public function __construct(
         private readonly UserProvisioningService $provisioningService,
-    ) {
-    }
+    ) {}
 
     /**
      * POST /api/usuarios/provisionar

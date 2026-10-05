@@ -8,8 +8,8 @@ use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\UserProvisioningService;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use RuntimeException;
@@ -20,8 +20,7 @@ class GestorUserController extends Controller
     public function __construct(
         private readonly UserProvisioningService $provisioningService,
         private readonly SubsystemServiceRegistry $registry,
-    ) {
-    }
+    ) {}
 
     public function index(): View
     {
@@ -146,20 +145,28 @@ class GestorUserController extends Controller
             ->with('success', 'Usuario eliminado correctamente.');
     }
 
-        public function resetPassword(GestorUser $gestorUser): RedirectResponse
+    public function resetPassword(GestorUser $gestorUser): RedirectResponse
     {
         try {
-            $this->provisioningService->resetAllPasswords($gestorUser);
+            $results = $this->provisioningService->resetAllPasswords($gestorUser);
+            $fallos = collect($results)->where('exito', false);
+
+            if ($fallos->isEmpty()) {
+                return redirect()
+                    ->route('gestor-users.show', $gestorUser)
+                    ->with('success', 'Contraseñas restablecidas correctamente.');
+            }
 
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('success', 'Contraseñas restablecidas correctamente.');
+                ->with('warning', 'Algunas contraseñas no pudieron restablecerse.')
+                ->with('provisioning_results', $results);
         } catch (RuntimeException $exception) {
             report($exception);
 
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('error', 'No se pudieron restablecer las contraseñas.');
+                ->with('error', 'No se pudieron restablecer las contraseñas: '.$exception->getMessage());
         }
     }
 }

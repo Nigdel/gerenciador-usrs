@@ -5,8 +5,9 @@ namespace App\Http\Controllers;
 use App\Contracts\SubsystemConnectionInterface;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
-use App\Services\SubsystemServiceRegistry;
 use App\Services\Subsystems\BaseSubsystemService;
+use App\Services\SubsystemServiceRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,8 +18,7 @@ class SubsystemController extends Controller
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
-    ) {
-    }
+    ) {}
 
     public function index(): View
     {
@@ -48,7 +48,7 @@ class SubsystemController extends Controller
         ]);
     }
 
-    public function chatwootTeams(Subsystem $subsystem, Request $request): \Illuminate\Http\JsonResponse
+    public function chatwootTeams(Subsystem $subsystem, Request $request): JsonResponse
     {
         if ($subsystem->slug !== 'chatwoot') {
             return response()->json([
@@ -133,35 +133,35 @@ class SubsystemController extends Controller
         $acceptedStates = $operation === 'enable'
             ? ['activo']
             : ['deshabilitado', 'suspendido'];
-    if ($result->success) {
-        $config = $subsystem->api_config ?? [];
-        $attempts = max(1, min((int) ($config['state_confirmation_attempts'] ?? 1), 10));
-        $delayMilliseconds = max(0, min((int) ($config['state_confirmation_delay_ms'] ?? 0), 5000));
+        if ($result->success) {
+            $config = $subsystem->api_config ?? [];
+            $attempts = max(1, min((int) ($config['state_confirmation_attempts'] ?? 1), 10));
+            $delayMilliseconds = max(0, min((int) ($config['state_confirmation_delay_ms'] ?? 0), 5000));
 
-        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            $confirmation = $service->getUserStatus($userSubsystemAccount);
+            for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+                $confirmation = $service->getUserStatus($userSubsystemAccount);
 
-            if ($confirmation->success && in_array($confirmation->estado, $acceptedStates, true)) {
-                break;
+                if ($confirmation->success && in_array($confirmation->estado, $acceptedStates, true)) {
+                    break;
+                }
+
+                if ($attempt < $attempts && $delayMilliseconds > 0) {
+                    usleep($delayMilliseconds * 1000);
+                }
             }
 
-            if ($attempt < $attempts && $delayMilliseconds > 0) {
-                usleep($delayMilliseconds * 1000);
+            if (! $confirmation->success || ! in_array($confirmation->estado, $acceptedStates, true)) {
+                return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
+                    ->with('error', 'El subsistema no confirmó el cambio de estado de la cuenta.');
             }
         }
 
-        if (! $confirmation->success || ! in_array($confirmation->estado, $acceptedStates, true)) {
-            return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
-                ->with('error', 'El subsistema no confirmó el cambio de estado de la cuenta.');
+        if ($result->success) {
+            $userSubsystemAccount->update([
+                'estado' => $expectedState,
+                'meta' => $result->raw,
+            ]);
         }
-    }
-
-    if ($result->success) {
-        $userSubsystemAccount->update([
-            'estado' => $expectedState,
-            'meta' => $result->raw,
-        ]);
-    }
 
         return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
             ->with($result->success ? 'success' : 'error', $result->mensaje ?? ($result->success ? 'Operación completada.' : 'No se pudo completar la operación.'));

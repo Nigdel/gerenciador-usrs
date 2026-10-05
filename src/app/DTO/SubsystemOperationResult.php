@@ -16,8 +16,7 @@ class SubsystemOperationResult
         public readonly ?string $estado = null,
         public readonly ?string $mensaje = null,
         public readonly array $raw = [],
-    ) {
-    }
+    ) {}
 
     public static function ok(
         ?string $credencialUsuario = null,
