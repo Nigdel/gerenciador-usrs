@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\GestorUserController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SubsystemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserSubsystemAccountController;
@@ -10,32 +11,45 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
-Route::resource('users', UserController::class);
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', function () {
+        return view('dashboard');
+    })->middleware('verified')->name('dashboard');
 
-Route::get('gestor-users/lookup-cpf', [GestorUserController::class, 'lookupByCpf'])
-    ->name('gestor-users.lookup-cpf');
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-Route::post(
-    'gestor-users/{gestorUser}/reset-password',
-    [GestorUserController::class, 'resetPassword']
-)->name('gestor-users.reset-password');
+    // Rutas protegidas del Gestor de Usuarios
+    Route::resource('users', UserController::class);
 
-Route::resource('gestor-users', GestorUserController::class)
-    ->parameters(['gestor-users' => 'gestorUser']);
+    Route::get('gestor-users/lookup-cpf', [GestorUserController::class, 'lookupByCpf'])
+        ->name('gestor-users.lookup-cpf');
 
-Route::resource('gestor-users.accounts', UserSubsystemAccountController::class)
-    ->parameters([
-        'gestor-users' => 'gestorUser',
-        'accounts' => 'userSubsystemAccount',
-    ]);
+    Route::post(
+        'gestor-users/{gestorUser}/reset-password',
+        [GestorUserController::class, 'resetPassword']
+    )->name('gestor-users.reset-password');
 
-Route::get('subsystems/{subsystem}/chatwoot/teams', [SubsystemController::class, 'chatwootTeams'])
-    ->name('subsystems.chatwoot.teams');
+    Route::resource('gestor-users', GestorUserController::class)
+        ->parameters(['gestor-users' => 'gestorUser']);
 
-Route::post('subsystems/{subsystem}/test-connection', [SubsystemController::class, 'testConnection'])
-    ->name('subsystems.test-connection');
+    Route::resource('gestor-users.accounts', UserSubsystemAccountController::class)
+        ->parameters([
+            'gestor-users' => 'gestorUser',
+            'accounts' => 'userSubsystemAccount',
+        ]);
 
-Route::post('subsystems/{subsystem}/accounts/{userSubsystemAccount}/action', [SubsystemController::class, 'accountAction'])
-    ->name('subsystems.accounts.action');
+    Route::get('subsystems/{subsystem}/chatwoot/teams', [SubsystemController::class, 'chatwootTeams'])
+        ->name('subsystems.chatwoot.teams');
 
-Route::resource('subsystems', SubsystemController::class);
+    Route::post('subsystems/{subsystem}/test-connection', [SubsystemController::class, 'testConnection'])
+        ->name('subsystems.test-connection');
+
+    Route::post('subsystems/{subsystem}/accounts/{userSubsystemAccount}/action', [SubsystemController::class, 'accountAction'])
+        ->name('subsystems.accounts.action');
+
+    Route::resource('subsystems', SubsystemController::class);
+});
+
+require __DIR__.'/auth.php';

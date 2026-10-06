@@ -4,12 +4,19 @@ namespace Tests\Feature\Subsystems\Accounts;
 
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class CreateAccountTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create());
+    }
 
     public function test_an_account_can_be_added_to_a_gestor_user(): void
     {

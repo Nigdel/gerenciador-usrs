@@ -67,6 +67,18 @@
                     @error('encarregado_id')<small class="error-message">{{ $message }}</small>@enderror
                 </div>
 
+                <div class="field">
+                    <label for="role">Perfil de acesso</label>
+                    <select id="role" name="role">
+                        @foreach (\App\Models\User::ROLES as $roleOption)
+                            <option value="{{ $roleOption }}" @selected(old('role', $user->role) === $roleOption)>
+                                {{ \Illuminate\Support\Str::ucfirst($roleOption) }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('role')<small class="error-message">{{ $message }}</small>@enderror
+                </div>
+
                 <div class="field field-wide">
                     <label for="password">Nova senha</label>
                     <input id="password" name="password" type="password" minlength="8" autocomplete="new-password">

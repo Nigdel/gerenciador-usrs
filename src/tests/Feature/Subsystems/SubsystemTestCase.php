@@ -4,6 +4,7 @@ namespace Tests\Feature\Subsystems;
 
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -11,6 +12,13 @@ use Tests\TestCase;
 abstract class SubsystemTestCase extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Gestionar cuentas en subsistemas incluye acciones destructivas (borrar), que son de admin.
+        $this->actingAs(User::factory()->admin()->create());
+    }
 
     protected function makeAccount(
         string $slug,

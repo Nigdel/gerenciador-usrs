@@ -10,7 +10,9 @@
                 <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Subsistemas</h1>
                 <p class="max-w-prose leading-6 text-[#68756d]">Administre las plataformas conectadas al gestor de usuarios.</p>
             </div>
-            <a class="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 py-2.5 font-bold text-white no-underline transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-700/20" href="{{ route('subsystems.create') }}">Nuevo subsistema</a>
+            @can('create', [App\Models\Subsystem::class])
+                <a class="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 py-2.5 font-bold text-white no-underline transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-700/20" href="{{ route('subsystems.create') }}">Nuevo subsistema</a>
+            @endcan
         </div>
 
         @if ($subsystems->isEmpty())
@@ -61,12 +63,16 @@
                                                 
                                             </a>
                                         @endif
-                                        <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}" aria-label="Editar {{ $subsystem->nombre }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
-                                        <form class="inline-flex" action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit" aria-label="Eliminar {{ $subsystem->nombre }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
-                                        </form>
+                                        @can('update', $subsystem)
+                                            <a class="inline-flex min-h-9 items-center justify-center rounded-md bg-amber-500 px-3 py-2 text-sm font-bold text-white no-underline transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-500/25" href="{{ route('subsystems.edit', $subsystem) }}" aria-label="Editar {{ $subsystem->nombre }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
+                                        @endcan
+                                        @can('delete', $subsystem)
+                                            <form class="inline-flex" action="{{ route('subsystems.destroy', $subsystem) }}" method="POST" onsubmit="return confirm('¿Eliminar este subsistema?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="inline-flex min-h-9 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-600/25" type="submit" aria-label="Eliminar {{ $subsystem->nombre }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
+                                            </form>
+                                        @endcan
                                     </div>
                                 </td>
                             </tr>

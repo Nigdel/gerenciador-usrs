@@ -24,6 +24,8 @@ class GestorUserController extends Controller
 
     public function index(): View
     {
+        $this->authorize('viewAny', GestorUser::class);
+
         return view('gestor-users.index', [
             'gestorUsers' => GestorUser::query()
                 ->withCount('subsystemAccounts')
@@ -34,6 +36,8 @@ class GestorUserController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', GestorUser::class);
+
         return view('gestor-users.create', [
             'subsystems' => Subsystem::query()->activos()->orderBy('nombre')->get(),
         ]);
@@ -41,6 +45,8 @@ class GestorUserController extends Controller
 
     public function lookupByCpf(Request $request): JsonResponse
     {
+        $this->authorize('create', GestorUser::class);
+
         $cpf = $request->validate([
             'cpf' => ['required', 'string', 'max:20'],
         ])['cpf'];
@@ -78,6 +84,8 @@ class GestorUserController extends Controller
 
     public function store(GestorUserRequest $request): RedirectResponse
     {
+        $this->authorize('create', GestorUser::class);
+
         try {
             $resultado = $this->provisioningService->provisionar($request->validated());
         } catch (RuntimeException $exception) {
@@ -104,6 +112,8 @@ class GestorUserController extends Controller
 
     public function show(GestorUser $gestorUser): View
     {
+        $this->authorize('view', $gestorUser);
+
         return view('gestor-users.show', [
             'gestorUser' => $gestorUser->load('subsystemAccounts.subsystem'),
         ]);
@@ -111,11 +121,15 @@ class GestorUserController extends Controller
 
     public function edit(GestorUser $gestorUser): View
     {
+        $this->authorize('update', $gestorUser);
+
         return view('gestor-users.edit', compact('gestorUser'));
     }
 
     public function update(GestorUserRequest $request, GestorUser $gestorUser): RedirectResponse
     {
+        $this->authorize('update', $gestorUser);
+
         $data = $request->validated();
 
         if (blank($data['password_general'] ?? null)) {
@@ -132,6 +146,8 @@ class GestorUserController extends Controller
 
     public function destroy(GestorUser $gestorUser): RedirectResponse
     {
+        $this->authorize('delete', $gestorUser);
+
         if ($gestorUser->subsystemAccounts()->exists()) {
             return redirect()
                 ->route('gestor-users.index')
@@ -147,6 +163,8 @@ class GestorUserController extends Controller
 
     public function resetPassword(GestorUser $gestorUser): RedirectResponse
     {
+        $this->authorize('resetPassword', $gestorUser);
+
         try {
             $results = $this->provisioningService->resetAllPasswords($gestorUser);
             $fallos = collect($results)->where('exito', false);

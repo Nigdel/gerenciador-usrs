@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -13,8 +14,17 @@ class SubsystemTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create());
+    }
+
     public function test_subsystem_crud_pages_are_available(): void
     {
+        // Acceder a la gestión de subsistemas (crear/editar) es de admin.
+        $this->actingAs(User::factory()->admin()->create());
+
         $this->get('/subsystems')->assertOk();
         $this->get('/subsystems/create')->assertOk();
 
@@ -129,6 +139,9 @@ class SubsystemTest extends TestCase
 
     public function test_subsystem_show_lists_associated_accounts(): void
     {
+        // La vista muestra los botones de deshabilitar/eliminar: requieren admin.
+        $this->actingAs(User::factory()->admin()->create());
+
         $subsystem = Subsystem::create([
             'nombre' => 'GLPI',
             'slug' => 'glpi',
@@ -259,6 +272,8 @@ class SubsystemTest extends TestCase
 
     public function test_subsystem_can_be_created_with_json_configuration(): void
     {
+        $this->actingAs(User::factory()->admin()->create());
+
         $response = $this->post('/subsystems', [
             'nombre' => 'Adagio',
             'slug' => 'adagio',
@@ -285,6 +300,8 @@ class SubsystemTest extends TestCase
 
     public function test_subsystem_can_be_updated(): void
     {
+        $this->actingAs(User::factory()->admin()->create());
+
         $subsystem = Subsystem::create([
             'nombre' => 'GLPI',
             'slug' => 'glpi',
@@ -306,6 +323,8 @@ class SubsystemTest extends TestCase
 
     public function test_subsystem_can_be_deleted_without_accounts(): void
     {
+        $this->actingAs(User::factory()->admin()->create());
+
         $subsystem = Subsystem::create([
             'nombre' => 'Slack',
             'slug' => 'slack',

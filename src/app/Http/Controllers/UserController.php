@@ -11,6 +11,8 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('viewAny', User::class);
+
         $users = User::query()->with('encarregado')->orderBy('name')->get();
 
         if (! $this->isJsonRequest($request)) {
@@ -24,6 +26,8 @@ class UserController extends Controller
 
     public function show(Request $request, User $user)
     {
+        $this->authorize('view', $user);
+
         $user->load('encarregado', 'subsystemAccounts.subsystem');
 
         if (! $this->isJsonRequest($request)) {
@@ -35,6 +39,8 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('create', User::class);
+
         $validated = $this->validatedData($request);
 
         $validated['password'] = Hash::make($validated['password']);
@@ -50,16 +56,22 @@ class UserController extends Controller
 
     public function create()
     {
+        $this->authorize('create', User::class);
+
         return view('usercreateform');
     }
 
     public function edit(User $user)
     {
+        $this->authorize('update', $user);
+
         return view('usereditform', compact('user'));
     }
 
     public function update(Request $request, User $user)
     {
+        $this->authorize('update', $user);
+
         $validated = $this->validatedData($request, $user);
 
         if (! empty($validated['password'])) {
@@ -79,6 +91,8 @@ class UserController extends Controller
 
     public function destroy(Request $request, User $user)
     {
+        $this->authorize('delete', $user);
+
         $user->delete();
 
         if (! $this->isJsonRequest($request)) {
@@ -93,15 +107,15 @@ class UserController extends Controller
         return $request->expectsJson() || $request->header('Accept') === null;
     }
 
-    private function validatedData(Request $request, ?User $user = null): array
+    private function validatedData(Request $request, ?User $managedUser = null): array
     {
-        $userId = $user?->id;
+        $userId = $managedUser?->id;
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'password' => [
-                $user ? 'nullable' : 'required',
+                $managedUser ? 'nullable' : 'required',
                 'string',
                 'min:8',
                 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/',
@@ -113,7 +127,13 @@ class UserController extends Controller
             'cargo' => ['nullable', 'string', 'max:255'],
             'externo' => ['nullable', 'boolean'],
             'encarregado_id' => ['nullable', 'exists:users,id'],
+            'role' => ['sometimes', Rule::in(User::ROLES)],
         ]);
+
+        // Solo un admin puede conceder o retirar el rol de admin.
+        $validated['role'] = $request->user()?->isAdmin()
+            ? ($validated['role'] ?? $managedUser?->role ?? 'operador')
+            : ($managedUser?->role ?? 'operador');
 
         $validated['externo'] = $request->boolean('externo');
 

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use App\Services\UserProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,6 +15,12 @@ use Tests\TestCase;
 class GestorUserTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create());
+    }
 
     public function test_flash_messages_are_rendered_as_floating_notifications(): void
     {
@@ -205,6 +212,9 @@ class GestorUserTest extends TestCase
 
     public function test_gestor_user_with_accounts_cannot_be_deleted(): void
     {
+        // Eliminar un usuario gestionado es una baja: requiere admin.
+        $this->actingAs(User::factory()->admin()->create());
+
         $gestorUser = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
             'cpf' => '12345678901',
@@ -254,6 +264,8 @@ class GestorUserTest extends TestCase
             'estado' => 'activo',
         ]);
 
+        $this->actingAs(User::factory()->admin()->create());
+
         $this->get(route('gestor-users.show', $gestorUser))
             ->assertOk()
             ->assertSee(route('subsystems.accounts.action', [$subsystem, $account]), false)
@@ -300,6 +312,9 @@ class GestorUserTest extends TestCase
 
     public function test_gestor_user_account_can_be_created_updated_and_deleted(): void
     {
+        // El borrado de una cuenta en un subsistema es una baja destructiva: requiere admin.
+        $this->actingAs(User::factory()->admin()->create());
+
         $gestorUser = GestorUser::create([
             'nombre_completo' => 'Bruno Souza',
             'cpf' => '12345678902',

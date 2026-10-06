@@ -12,12 +12,16 @@
             </div>
             <div class="flex gap-3">
                 @if ($connectionTestable)
-                    <form action="{{ route('subsystems.test-connection', $subsystem) }}" method="POST">
-                        @csrf
-                        <button class="button button-secondary" type="submit">Probar disponibilidad</button>
-                    </form>
+                    @can('testConnection', $subsystem)
+                        <form action="{{ route('subsystems.test-connection', $subsystem) }}" method="POST">
+                            @csrf
+                            <button class="button button-secondary" type="submit">Probar disponibilidad</button>
+                        </form>
+                    @endcan
                 @endif
-                <a class="button button-primary" href="{{ route('subsystems.edit', $subsystem) }}">Editar subsistema</a>
+                @can('update', $subsystem)
+                    <a class="button button-primary" href="{{ route('subsystems.edit', $subsystem) }}">Editar subsistema</a>
+                @endcan
             </div>
         </div>
 
@@ -72,23 +76,29 @@
                                     <td class="px-4 py-3.5">
                                         <div class="flex flex-wrap gap-3">
                                             @if ($status === 'activo')
-                                                <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
-                                                    @csrf
-                                                    <input type="hidden" name="operation" value="disable">
-                                                    <button class="inline-flex items-center justify-center text-amber-700" type="submit" aria-label="Deshabilitar cuenta {{ $account->credencial_usuario }}" title="Deshabilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Deshabilitar</span></button>
-                                                </form>
+                                                @can('disable', $account)
+                                                    <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
+                                                        @csrf
+                                                        <input type="hidden" name="operation" value="disable">
+                                                        <button class="inline-flex items-center justify-center text-amber-700" type="submit" aria-label="Deshabilitar cuenta {{ $account->credencial_usuario }}" title="Deshabilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Deshabilitar</span></button>
+                                                    </form>
+                                                @endcan
                                             @else
-                                                <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
-                                                    @csrf
-                                                    <input type="hidden" name="operation" value="enable">
-                                                    <button class="inline-flex items-center justify-center text-[#1f5d49]" type="submit" aria-label="Habilitar cuenta {{ $account->credencial_usuario }}" title="Habilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Habilitar</span></button>
-                                                </form>
+                                                @can('reactivate', $account)
+                                                    <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST">
+                                                        @csrf
+                                                        <input type="hidden" name="operation" value="enable">
+                                                        <button class="inline-flex items-center justify-center text-[#1f5d49]" type="submit" aria-label="Habilitar cuenta {{ $account->credencial_usuario }}" title="Habilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Habilitar</span></button>
+                                                    </form>
+                                                @endcan
                                             @endif
-                                            <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
-                                                @csrf
-                                                <input type="hidden" name="operation" value="delete">
-                                                <button class="inline-flex items-center justify-center text-red-700" type="submit" aria-label="Eliminar cuenta {{ $account->credencial_usuario }}" title="Eliminar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
-                                            </form>
+                                            @can('delete', $account)
+                                                <form action="{{ route('subsystems.accounts.action', [$subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
+                                                    @csrf
+                                                    <input type="hidden" name="operation" value="delete">
+                                                    <button class="inline-flex items-center justify-center text-red-700" type="submit" aria-label="Eliminar cuenta {{ $account->credencial_usuario }}" title="Eliminar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
+                                                </form>
+                                            @endcan
                                         </div>
                                     </td>
                                 </tr>

@@ -10,7 +10,9 @@
                 <h1 id="page-title">Listagem de Usuarios Gestionados</h1>
                 <p>Administra personas y sus cuentas en los subsistemas conectados.</p>
             </div>
-            <a class="button button-primary" href="{{ route('gestor-users.create') }}">Novo</a>
+            @can('create', [App\Models\GestorUser::class])
+                <a class="button button-primary" href="{{ route('gestor-users.create') }}">Novo</a>
+            @endcan
         </div>
 
         @if ($gestorUsers->isEmpty())
@@ -40,12 +42,16 @@
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-2 whitespace-nowrap sm:justify-end">
                                         <a class="button button-secondary" href="{{ route('gestor-users.show', $gestorUser) }}" aria-label="Ver {{ $gestorUser->nombre_completo }}" title="Ver"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-eye"></use></svg><span class="sr-only">Ver</span></a>
-                                        <a class="button button-primary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar {{ $gestorUser->nombre_completo }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
-                                        <form action="{{ route('gestor-users.destroy', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Eliminar este usuario? Solo se puede eliminar si no tiene cuentas asociadas.');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="button button-danger" type="submit" aria-label="Eliminar {{ $gestorUser->nombre_completo }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
-                                        </form>
+                                        @can('update', $gestorUser)
+                                            <a class="button button-primary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar {{ $gestorUser->nombre_completo }}" title="Editar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar</span></a>
+                                        @endcan
+                                        @can('delete', $gestorUser)
+                                            <form action="{{ route('gestor-users.destroy', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Eliminar este usuario? Solo se puede eliminar si no tiene cuentas asociadas.');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="button button-danger" type="submit" aria-label="Eliminar {{ $gestorUser->nombre_completo }}" title="Eliminar"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
+                                            </form>
+                                        @endcan
                                     </div>
                                 </td>
                             </tr>

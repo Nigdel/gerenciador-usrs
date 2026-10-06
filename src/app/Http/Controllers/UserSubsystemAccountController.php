@@ -14,6 +14,8 @@ class UserSubsystemAccountController extends Controller
 {
     public function index(GestorUser $gestorUser): View
     {
+        $this->authorize('viewAny', UserSubsystemAccount::class);
+
         $gestorUser->load('subsystemAccounts.subsystem');
 
         return view('gestor-users.accounts.index', [
@@ -23,6 +25,8 @@ class UserSubsystemAccountController extends Controller
 
     public function create(GestorUser $gestorUser): View
     {
+        $this->authorize('create', UserSubsystemAccount::class);
+
         return view('gestor-users.accounts.create', [
             'gestorUser' => $gestorUser,
             'subsystems' => Subsystem::query()->activos()->orderBy('nombre')->get(),
@@ -32,6 +36,8 @@ class UserSubsystemAccountController extends Controller
 
     public function store(UserSubsystemAccountRequest $request, GestorUser $gestorUser): RedirectResponse
     {
+        $this->authorize('create', UserSubsystemAccount::class);
+
         $data = $request->validated();
         $data['gestor_user_id'] = $gestorUser->id;
         $data['fecha_creacion'] ??= now();
@@ -47,6 +53,8 @@ class UserSubsystemAccountController extends Controller
     {
         abort_if($userSubsystemAccount->gestor_user_id !== $gestorUser->id, 404);
 
+        $this->authorize('update', $userSubsystemAccount);
+
         return view('gestor-users.accounts.edit', [
             'gestorUser' => $gestorUser,
             'account' => $userSubsystemAccount,
@@ -59,6 +67,8 @@ class UserSubsystemAccountController extends Controller
     {
         abort_if($userSubsystemAccount->gestor_user_id !== $gestorUser->id, 404);
 
+        $this->authorize('update', $userSubsystemAccount);
+
         $userSubsystemAccount->update($request->validated());
 
         return redirect()
@@ -69,6 +79,8 @@ class UserSubsystemAccountController extends Controller
     public function destroy(GestorUser $gestorUser, UserSubsystemAccount $userSubsystemAccount): RedirectResponse
     {
         abort_if($userSubsystemAccount->gestor_user_id !== $gestorUser->id, 404);
+
+        $this->authorize('delete', $userSubsystemAccount);
 
         $userSubsystemAccount->delete();
 

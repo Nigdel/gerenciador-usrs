@@ -3,142 +3,63 @@
 @section('title', 'Cadastrar usuário')
 
 @section('content')
-        <section class="form-panel" aria-labelledby="page-title">
-            <div class="form-heading">
-                <a class="eyebrow" href="{{ route('home') }}">Gestão de acessos</a>
-                <h1 id="page-title">Cadastrar usuário</h1>
-                <p>Preencha os dados abaixo para criar um novo acesso no sistema.</p>
+    <div class="py-12">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    <h1 class="text-2xl font-bold mb-6">Cadastrar novo usuário</h1>
+
+                    <form action="{{ route('users.store') }}" method="POST">
+                        @csrf
+
+                        <div class="mb-4">
+                            <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Nome</label>
+                            <input type="text" name="name" id="name" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                            @error('name')
+                                <span class="text-red-600 text-sm">{{ $message }}</span>
+                            @enderror
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                            <input type="email" name="email" id="email" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                            @error('email')
+                                <span class="text-red-600 text-sm">{{ $message }}</span>
+                            @enderror
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="password" class="block text-gray-700 text-sm font-bold mb-2">Senha</label>
+                            <input type="password" name="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                            @error('password')
+                                <span class="text-red-600 text-sm">{{ $message }}</span>
+                            @enderror
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="password_confirmation" class="block text-gray-700 text-sm font-bold mb-2">Confirmar Senha</label>
+                            <input type="password" name="password_confirmation" id="password_confirmation" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="role" class="block text-gray-700 text-sm font-bold mb-2">Perfil de acesso</label>
+                            <select name="role" id="role" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                @foreach (\App\Models\User::ROLES as $roleOption)
+                                    <option value="{{ $roleOption }}" @selected(old('role', 'operador') === $roleOption)>
+                                        {{ \Illuminate\Support\Str::ucfirst($roleOption) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('role')
+                                <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Cadastrar</button>
+                        <a href="{{ route('users.index') }}" class="ml-2 text-gray-600 hover:text-gray-900">Cancelar</a>
+                    </form>
+                </div>
             </div>
-
-            <div id="feedback" class="feedback" role="status" aria-live="polite" hidden></div>
-
-            <form id="user-form" action="{{ url('/users') }}" method="POST">
-                @csrf
-
-                <div class="field-grid">
-                    <div class="field field-wide">
-                        <label for="name">Nome completo <span aria-hidden="true">*</span></label>
-                        <input id="name" name="name" type="text" autocomplete="name" maxlength="255" required>
-                        <small class="error-message" data-error-for="name"></small>
-                    </div>
-
-                    <div class="field">
-                        <label for="cpf">CPF</label>
-                        <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="11" placeholder="Somente números">
-                        <small class="error-message" data-error-for="cpf"></small>
-                    </div>
-
-                    <div class="field">
-                        <label for="telefone_pessoal">Telefone pessoal</label>
-                        <input id="telefone_pessoal" name="telefone_pessoal" type="tel" autocomplete="tel" maxlength="20">
-                        <small class="error-message" data-error-for="telefone_pessoal"></small>
-                    </div>
-
-                    <div class="field">
-                        <label for="telefone_servico">Telefone de serviço</label>
-                        <input id="telefone_servico" name="telefone_servico" type="tel" maxlength="20">
-                        <small class="error-message" data-error-for="telefone_servico"></small>
-                    </div>
-
-                    <div class="field">
-                        <label for="empresa">Empresa</label>
-                        <input id="empresa" name="empresa" type="text" maxlength="255">
-                        <small class="error-message" data-error-for="empresa"></small>
-                    </div>
-
-                    <div class="field">
-                        <label for="cargo">Cargo</label>
-                        <input id="cargo" name="cargo" type="text" maxlength="255">
-                        <small class="error-message" data-error-for="cargo"></small>
-                    </div>
-
-                    <div class="field">
-                        <label for="encarregado_id">ID do encarregado</label>
-                        <input id="encarregado_id" name="encarregado_id" type="number" min="1" inputmode="numeric">
-                        <small class="field-hint">Opcional. Informe o ID de um usuário já cadastrado.</small>
-                        <small class="error-message" data-error-for="encarregado_id"></small>
-                    </div>
-
-                    <div class="field field-wide">
-                        <label for="password">Senha <span aria-hidden="true">*</span></label>
-                        <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
-                        <small class="field-hint">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</small>
-                        <small class="error-message" data-error-for="password"></small>
-                    </div>
-                </div>
-
-                <label class="checkbox-field" for="externo">
-                    <input id="externo" name="externo" type="checkbox" value="1">
-                    <span>Este é um usuário externo</span>
-                </label>
-
-                <div class="form-actions">
-                    <a class="button button-secondary" href="{{ url('/') }}">Cancelar</a>
-                    <button class="button button-primary" type="submit" id="submit-button">Cadastrar usuário</button>
-                </div>
-            </form>
-        </section>
-        </section>
-    @endsection
-
-    @push('scripts')
-        <script>
-        const form = document.getElementById('user-form');
-        const feedback = document.getElementById('feedback');
-        const submitButton = document.getElementById('submit-button');
-
-        function showFeedback(message, type) {
-            feedback.textContent = message;
-            feedback.className = `feedback feedback-${type}`;
-            feedback.hidden = false;
-        }
-
-        function clearErrors() {
-            document.querySelectorAll('.error-message').forEach((element) => {
-                element.textContent = '';
-            });
-            document.querySelectorAll('.input-error').forEach((element) => {
-                element.classList.remove('input-error');
-            });
-        }
-
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            clearErrors();
-            feedback.hidden = true;
-            submitButton.disabled = true;
-            submitButton.textContent = 'Cadastrando...';
-
-            try {
-                const response = await fetch(form.action, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value,
-                    },
-                    body: new FormData(form),
-                });
-                const data = await response.json();
-
-                if (!response.ok) {
-                    Object.entries(data.errors || {}).forEach(([field, messages]) => {
-                        const input = document.getElementById(field);
-                        const error = document.querySelector(`[data-error-for="${field}"]`);
-                        if (input) input.classList.add('input-error');
-                        if (error) error.textContent = messages[0];
-                    });
-                    showFeedback('Revise os campos destacados.', 'error');
-                    return;
-                }
-
-                form.reset();
-                showFeedback('Usuário cadastrado com sucesso.', 'success');
-            } catch (error) {
-                showFeedback('Não foi possível concluir o cadastro. Tente novamente.', 'error');
-            } finally {
-                submitButton.disabled = false;
-                submitButton.textContent = 'Cadastrar usuário';
-            }
-        });
-    </script>
-@endpush
+        </div>
+    </div>
+@endsection

@@ -10,7 +10,9 @@
                 <h1 id="page-title">{{ $user->name }}</h1>
                 <p>Detalhes do usuário cadastrado.</p>
             </div>
-            <a class="button button-primary" href="{{ route('users.edit', $user) }}" aria-label="Editar {{ $user->name }}" title="Editar usuário"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar usuário</span></a>
+            @can('update', $user)
+                <a class="button button-primary" href="{{ route('users.edit', $user) }}" aria-label="Editar {{ $user->name }}" title="Editar usuário"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar usuário</span></a>
+            @endcan
         </div>
 
         <dl class="detail-grid">

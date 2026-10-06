@@ -22,6 +22,8 @@ class SubsystemController extends Controller
 
     public function index(): View
     {
+        $this->authorize('viewAny', Subsystem::class);
+
         return view('subsystems.index', [
             'subsystems' => Subsystem::query()->withCount('accounts')->orderBy('nombre')->get(),
         ]);
@@ -29,11 +31,15 @@ class SubsystemController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Subsystem::class);
+
         return view('subsystems.create');
     }
 
     public function show(Subsystem $subsystem): View
     {
+        $this->authorize('view', $subsystem);
+
         $connectionTestable = false;
 
         try {
@@ -50,6 +56,8 @@ class SubsystemController extends Controller
 
     public function chatwootTeams(Subsystem $subsystem, Request $request): JsonResponse
     {
+        $this->authorize('view', $subsystem);
+
         if ($subsystem->slug !== 'chatwoot') {
             return response()->json([
                 'message' => 'Este endpoint solo aplica a Chatwoot.',
@@ -90,6 +98,12 @@ class SubsystemController extends Controller
         $operation = $request->validate([
             'operation' => ['required', Rule::in(['disable', 'enable', 'delete'])],
         ])['operation'];
+
+        $this->authorize(match ($operation) {
+            'disable' => 'disable',
+            'enable' => 'reactivate',
+            'delete' => 'delete',
+        }, $userSubsystemAccount);
 
         if ($operation === 'delete') {
             try {
@@ -178,6 +192,8 @@ class SubsystemController extends Controller
 
     public function testConnection(Subsystem $subsystem): RedirectResponse
     {
+        $this->authorize('testConnection', $subsystem);
+
         try {
             $service = $this->registry->resolve($subsystem->slug);
 
@@ -213,6 +229,8 @@ class SubsystemController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Subsystem::class);
+
         $subsystem = Subsystem::create($this->validatedData($request));
 
         return redirect()
@@ -222,11 +240,15 @@ class SubsystemController extends Controller
 
     public function edit(Subsystem $subsystem): View
     {
+        $this->authorize('update', $subsystem);
+
         return view('subsystems.edit', compact('subsystem'));
     }
 
     public function update(Request $request, Subsystem $subsystem): RedirectResponse
     {
+        $this->authorize('update', $subsystem);
+
         $subsystem->update($this->validatedData($request, $subsystem));
 
         return redirect()
@@ -236,6 +258,8 @@ class SubsystemController extends Controller
 
     public function destroy(Subsystem $subsystem): RedirectResponse
     {
+        $this->authorize('delete', $subsystem);
+
         if ($subsystem->accounts()->exists()) {
             return redirect()
                 ->route('subsystems.index')

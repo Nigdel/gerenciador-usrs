@@ -105,6 +105,11 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 
 ## Arquitectura
 
+- **User**: Modelo de autenticación del sistema (operadores, administradores).
+- **GestorUser**: Modelo de identidad de los empleados finales cuya cuenta se provisiona en los subsistemas.
+
+(Nota: Actualmente el modelo `User` contiene campos de perfil que se moverán a `GestorUser` o eliminarán en fases futuras).
+
 - **`SubsystemServiceInterface`** (`app/Contracts`): contrato universal que
   implementa cada subsistema — `createUser`, `suspendUser`,
   `reactivateUser`, `disableUser`, `getUserStatus`.

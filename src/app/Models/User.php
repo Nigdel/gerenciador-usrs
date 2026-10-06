@@ -15,6 +15,7 @@ use Illuminate\Notifications\Notifiable;
     'name',
     'email',
     'password',
+    'role',
     'cpf',
     'telefone_pessoal',
     'telefone_servico',
@@ -26,6 +27,9 @@ use Illuminate\Notifications\Notifiable;
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
+    /** Roles válidos del operador del sistema. */
+    public const ROLES = ['admin', 'operador', 'auditor'];
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
@@ -48,5 +52,20 @@ class User extends Authenticatable
     public function subsystemAccounts(): HasMany
     {
         return $this->hasMany(UserSubsystemAccount::class, 'gestor_user_id');
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isOperador(): bool
+    {
+        return $this->role === 'operador';
+    }
+
+    public function isAuditor(): bool
+    {
+        return $this->role === 'auditor';
     }
 }

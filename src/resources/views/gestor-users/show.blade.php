@@ -12,11 +12,15 @@
                 <p>Identidad central y cuentas externas vinculadas.</p>
             </div>
             <div class="flex gap-2">
-                <a class="button button-secondary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar datos de {{ $gestorUser->nombre_completo }}" title="Editar datos"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar datos</span></a>
-                <form action="{{ route('gestor-users.reset-password', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Deseas restablecer las contraseñas de todas las cuentas?');">
-                    @csrf
-                    <button class="button button-secondary" type="submit" aria-label="Restablecer contraseñas de {{ $gestorUser->nombre_completo }}" title="Restablecer contraseñas"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-key"></use></svg><span class="sr-only">Restablecer contraseñas</span></button>
-                </form>
+                @can('update', $gestorUser)
+                    <a class="button button-secondary" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar datos de {{ $gestorUser->nombre_completo }}" title="Editar datos"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-edit"></use></svg><span class="sr-only">Editar datos</span></a>
+                @endcan
+                @can('resetPassword', $gestorUser)
+                    <form action="{{ route('gestor-users.reset-password', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Deseas restablecer las contraseñas de todas las cuentas?');">
+                        @csrf
+                        <button class="button button-secondary" type="submit" aria-label="Restablecer contraseñas de {{ $gestorUser->nombre_completo }}" title="Restablecer contraseñas"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-key"></use></svg><span class="sr-only">Restablecer contraseñas</span></button>
+                    </form>
+                @endcan
             </div>
         </div>
 
@@ -41,7 +45,9 @@
         <div class="mt-8">
             <div class="mb-4 flex items-center justify-between gap-3">
                 <h2 class="text-xl font-bold text-[#17211b]">Cuentas en subsistemas</h2>
-                <a class="button button-primary" href="{{ route('gestor-users.accounts.create', $gestorUser) }}">Nueva cuenta</a>
+                @can('create', [App\Models\UserSubsystemAccount::class])
+                    <a class="button button-primary" href="{{ route('gestor-users.accounts.create', $gestorUser) }}">Nueva cuenta</a>
+                @endcan
             </div>
             @if ($gestorUser->subsystemAccounts->isEmpty())
                 <div class="border border-dashed border-[#d9e2dc] px-5 py-6 text-[#68756d]">Este usuario no tiene cuentas vinculadas.</div>
@@ -56,26 +62,32 @@
                                     <td class="px-4 py-3.5 font-bold"><a href="{{ route('subsystems.show', [$account->subsystem->id]) }}">{{ $account->subsystem?->nombre ?: 'No disponible' }}</a></td>
                                     <td class="px-4 py-3.5">{{ $account->credencial_usuario }}</td><td class="px-4 py-3.5">{{ $account->external_account_id ?: 'No informado' }}</td><td class="px-4 py-3.5">@include('components.account-status', ['status' => $account->estado])</td><td class="px-4 py-3.5"><div class="flex flex-wrap gap-3">
                                         @if ($status === 'activo')
-                                            <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST">
-                                                @csrf
-                                                <input type="hidden" name="return_to" value="gestor-user">
-                                                <input type="hidden" name="operation" value="disable">
-                                                <button class="inline-flex items-center justify-center text-amber-700" type="submit" aria-label="Deshabilitar cuenta {{ $account->credencial_usuario }}" title="Deshabilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Deshabilitar</span></button>
-                                            </form>
+                                            @can('disable', $account)
+                                                <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST">
+                                                    @csrf
+                                                    <input type="hidden" name="return_to" value="gestor-user">
+                                                    <input type="hidden" name="operation" value="disable">
+                                                    <button class="inline-flex items-center justify-center text-amber-700" type="submit" aria-label="Deshabilitar cuenta {{ $account->credencial_usuario }}" title="Deshabilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Deshabilitar</span></button>
+                                                </form>
+                                            @endcan
                                         @else
-                                            <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST">
+                                            @can('reactivate', $account)
+                                                <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST">
+                                                    @csrf
+                                                    <input type="hidden" name="return_to" value="gestor-user">
+                                                    <input type="hidden" name="operation" value="enable">
+                                                    <button class="inline-flex items-center justify-center text-[#1f5d49]" type="submit" aria-label="Habilitar cuenta {{ $account->credencial_usuario }}" title="Habilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Habilitar</span></button>
+                                                </form>
+                                            @endcan
+                                        @endif
+                                        @can('delete', $account)
+                                            <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
                                                 @csrf
                                                 <input type="hidden" name="return_to" value="gestor-user">
-                                                <input type="hidden" name="operation" value="enable">
-                                                <button class="inline-flex items-center justify-center text-[#1f5d49]" type="submit" aria-label="Habilitar cuenta {{ $account->credencial_usuario }}" title="Habilitar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Habilitar</span></button>
+                                                <input type="hidden" name="operation" value="delete">
+                                                <button class="inline-flex items-center justify-center text-red-700" type="submit" aria-label="Eliminar cuenta {{ $account->credencial_usuario }}" title="Eliminar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
                                             </form>
-                                        @endif
-                                        <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar esta cuenta?');">
-                                            @csrf
-                                            <input type="hidden" name="return_to" value="gestor-user">
-                                            <input type="hidden" name="operation" value="delete">
-                                            <button class="inline-flex items-center justify-center text-red-700" type="submit" aria-label="Eliminar cuenta {{ $account->credencial_usuario }}" title="Eliminar"><svg class="h-5 w-5" aria-hidden="true"><use href="#icon-trash"></use></svg><span class="sr-only">Eliminar</span></button>
-                                        </form>
+                                        @endcan
                                     </div></td></tr>
                             @endforeach
                         </tbody>
