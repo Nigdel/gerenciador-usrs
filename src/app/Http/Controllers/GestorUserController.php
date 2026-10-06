@@ -4,10 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Contracts\IdentityProviderInterface;
 use App\Http\Requests\GestorUserRequest;
+use App\Http\Requests\OffboardGestorUserRequest;
+use App\Http\Requests\SuspendGestorUserRequest;
+use App\Http\Requests\SyncGestorUserRequest;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Services\SubsystemServiceRegistry;
+use App\Services\UserDataSyncService;
+use App\Services\UserOffboardingService;
 use App\Services\UserProvisioningService;
+use App\Services\UserSuspensionService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +26,9 @@ class GestorUserController extends Controller
 {
     public function __construct(
         private readonly UserProvisioningService $provisioningService,
+        private readonly UserSuspensionService $suspensionService,
+        private readonly UserOffboardingService $offboardingService,
+        private readonly UserDataSyncService $syncService,
         private readonly SubsystemServiceRegistry $registry,
     ) {}
 
@@ -116,7 +126,82 @@ class GestorUserController extends Controller
 
         return view('gestor-users.show', [
             'gestorUser' => $gestorUser->load('subsystemAccounts.subsystem'),
+            // Es un panel de consulta rápida: 50 entradas más recientes.
+            'historial' => $gestorUser->historial()->limit(50)->get(),
         ]);
+    }
+
+    /**
+     * Baja completa (Fase 2.6): deshabilita la cuenta en todos los subsistemas
+     * y marca al usuario como dado de baja.
+     */
+    public function offboard(OffboardGestorUserRequest $request, GestorUser $gestorUser): RedirectResponse
+    {
+        $this->authorize('offboard', $gestorUser);
+
+        try {
+            $resultado = $this->offboardingService->darDeBaja($gestorUser, $request->validated('motivo_baja'));
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('error', $exception->getMessage());
+        }
+
+        $resultados = $resultado['resultados'];
+        $fallos = collect($resultados)->where('exito', false);
+
+        if ($resultados === []) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('warning', 'El usuario no tiene cuentas en subsistemas que dar de baja.');
+        }
+
+        if ($fallos->isEmpty()) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('success', 'Usuario dado de baja correctamente.');
+        }
+
+        // El usuario NO queda marcado de baja si alguna cuenta falló: el
+        // servicio se encarga de eso. Aquí solo se informa de qué falló.
+        return redirect()
+            ->route('gestor-users.show', $gestorUser)
+            ->with('warning', 'La baja se completó solo en algunos subsistemas. Revisa el detalle antes de repetirla.')
+            ->with('provisioning_results', $resultados);
+    }
+
+    /**
+     * Revierte una baja: reactiva las cuentas en los subsistemas y devuelve al
+     * usuario a activo.
+     */
+    public function reactivate(GestorUser $gestorUser): RedirectResponse
+    {
+        $this->authorize('offboard', $gestorUser);
+
+        try {
+            $resultado = $this->offboardingService->reactivar($gestorUser);
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('error', $exception->getMessage());
+        }
+
+        $fallos = collect($resultado['resultados'])->where('exito', false);
+
+        if ($fallos->isEmpty()) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('success', 'Usuario reactivado correctamente.');
+        }
+
+        return redirect()
+            ->route('gestor-users.show', $gestorUser)
+            ->with('warning', 'Algunas cuentas no pudieron reactivarse.')
+            ->with('provisioning_results', $resultado['resultados']);
     }
 
     public function edit(GestorUser $gestorUser): View
@@ -124,6 +209,45 @@ class GestorUserController extends Controller
         $this->authorize('update', $gestorUser);
 
         return view('gestor-users.edit', compact('gestorUser'));
+    }
+
+    /**
+     * Propaga los datos de contacto del usuario a sus cuentas en subsistemas
+     * (Fase 2.7).
+     *
+     * Es una acción aparte del guardado y no automática a propósito: el
+     * operador decide cuándo salir a los subsistemas, en lugar de que corregir
+     * una dirección dispare N llamadas externas sin querer.
+     */
+    public function syncSubsystems(SyncGestorUserRequest $request, GestorUser $gestorUser): RedirectResponse
+    {
+        $this->authorize('update', $gestorUser);
+
+        $resultado = $this->syncService->sincronizar(
+            $gestorUser,
+            $request->validated('subsistemas') ?: null,
+        );
+
+        $resultados = $resultado['resultados'];
+
+        if ($resultados === []) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('warning', 'El usuario no tiene cuentas en los subsistemas seleccionados.');
+        }
+
+        $fallos = collect($resultados)->where('exito', false);
+
+        if ($fallos->isEmpty()) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('success', 'Datos sincronizados con los subsistemas.');
+        }
+
+        return redirect()
+            ->route('gestor-users.show', $gestorUser)
+            ->with('warning', 'Los datos se actualizaron solo en algunos subsistemas.')
+            ->with('provisioning_results', $resultados);
     }
 
     public function update(GestorUserRequest $request, GestorUser $gestorUser): RedirectResponse
@@ -161,24 +285,72 @@ class GestorUserController extends Controller
             ->with('success', 'Usuario eliminado correctamente.');
     }
 
+    public function suspend(SuspendGestorUserRequest $request, GestorUser $gestorUser): RedirectResponse
+    {
+        $this->authorize('suspend', $gestorUser);
+
+        try {
+            $resultados = $this->suspensionService->suspender([
+                'usuario' => $gestorUser->usuario,
+                'subsistemas' => $request->validated('subsistemas') ?: null,
+                'motivo_suspension' => $request->validated('motivo_suspension'),
+                'inicio_suspension' => $request->validated('inicio_suspension') ?: null,
+                'fin_suspension' => $request->validated('fin_suspension') ?: null,
+            ]);
+        } catch (RuntimeException|ModelNotFoundException $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('error', 'No se pudo suspender: '.$exception->getMessage());
+        }
+
+        $fallos = collect($resultados)->where('exito', false);
+
+        if ($resultados === []) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('warning', 'El usuario no tiene cuentas en los subsistemas seleccionados.');
+        }
+
+        if ($fallos->isEmpty()) {
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('success', 'Cuentas suspendidas correctamente.');
+        }
+
+        return redirect()
+            ->route('gestor-users.show', $gestorUser)
+            ->with('warning', 'Algunas cuentas no pudieron suspenderse.')
+            ->with('provisioning_results', $resultados);
+    }
+
     public function resetPassword(GestorUser $gestorUser): RedirectResponse
     {
         $this->authorize('resetPassword', $gestorUser);
 
         try {
-            $results = $this->provisioningService->resetAllPasswords($gestorUser);
+            $resultado = $this->provisioningService->resetAllPasswords($gestorUser);
+            $results = $resultado['resultados'];
             $fallos = collect($results)->where('exito', false);
+
+            // La contraseña va en el flash de una sola vez y no se guarda en
+            // ningún sitio: en la siguiente petición ya no está. Por eso la
+            // vista tiene que avisar de que no se va a repetir.
+            $flash = ['contrasena_temporal' => $resultado['contrasena']];
 
             if ($fallos->isEmpty()) {
                 return redirect()
                     ->route('gestor-users.show', $gestorUser)
-                    ->with('success', 'Contraseñas restablecidas correctamente.');
+                    ->with($flash + ['success' => 'Contraseñas restablecidas correctamente.']);
             }
 
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('warning', 'Algunas contraseñas no pudieron restablecerse.')
-                ->with('provisioning_results', $results);
+                ->with($flash + [
+                    'warning' => 'Algunas contraseñas no pudieron restablecerse.',
+                    'provisioning_results' => $results,
+                ]);
         } catch (RuntimeException $exception) {
             report($exception);
 

@@ -392,9 +392,18 @@ class GestorUserTest extends TestCase
             'estado' => 'activo',
         ]);
 
+        // El camino ya no es un stub: sale a llamar al subsistema, así que hay que
+        // falsearlo en lugar de dejar que el test intente resolver glpi.test.
+        Http::preventStrayRequests();
+        Http::fake(['https://glpi.test/*' => Http::response(['error' => 'boom'], 500)]);
+
         $response = $this->post(route('gestor-users.reset-password', $gestorUser));
 
         $response->assertRedirect(route('gestor-users.show', $gestorUser));
         $response->assertSessionHas('warning');
+        // Aunque los subsistemas fallen, la contraseña se entrega igual: la
+        // general local sí se cambió y el gestor puede dársela al usuario para
+        // que la cambie él mismo.
+        $response->assertSessionHas('contrasena_temporal');
     }
 }

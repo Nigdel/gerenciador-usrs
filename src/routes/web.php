@@ -27,9 +27,29 @@ Route::middleware('auth')->group(function () {
         ->name('gestor-users.lookup-cpf');
 
     Route::post(
+        'gestor-users/{gestorUser}/suspend',
+        [GestorUserController::class, 'suspend']
+    )->name('gestor-users.suspend');
+
+    Route::post(
         'gestor-users/{gestorUser}/reset-password',
         [GestorUserController::class, 'resetPassword']
     )->name('gestor-users.reset-password');
+
+    Route::post(
+        'gestor-users/{gestorUser}/offboard',
+        [GestorUserController::class, 'offboard']
+    )->name('gestor-users.offboard');
+
+    Route::post(
+        'gestor-users/{gestorUser}/reactivate',
+        [GestorUserController::class, 'reactivate']
+    )->name('gestor-users.reactivate');
+
+    Route::post(
+        'gestor-users/{gestorUser}/sync-subsystems',
+        [GestorUserController::class, 'syncSubsystems']
+    )->name('gestor-users.sync-subsystems');
 
     Route::resource('gestor-users', GestorUserController::class)
         ->parameters(['gestor-users' => 'gestorUser']);

@@ -7,7 +7,7 @@
         <div class="form-heading">
             <p class="eyebrow">Gestión de accesos externos</p>
             <h1 id="page-title">Editar usuario gestionado</h1>
-            <p>Actualiza los datos centrales de {{ $gestorUser->nombre_completo }}. Las cuentas existentes no se modifican desde este formulario.</p>
+            <p>Actualiza los datos centrales de {{ $gestorUser->nombre_completo }}. Las cuentas existentes no se modifican desde este formulario: guarda los cambios y luego usa «Sincronizar datos con subsistemas» en la ficha si quieres propagarlos.</p>
         </div>
 
         @if ($errors->any())

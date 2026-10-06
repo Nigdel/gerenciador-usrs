@@ -238,4 +238,31 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
 
         return SubsystemOperationResult::ok(raw: $response->json() ?? []);
     }
+
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * En GLPI el nombre real y el email son los atributos de contacto. El login
+     * ('name') y el teléfono son identidad o no forman parte de lo que se
+     * sincroniza, igual que en los demás drivers.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        $input = ['realname' => $userData['nombre_completo']];
+
+        if (! blank($userData['email_personal'] ?? null)) {
+            $input['_useremails'] = [$userData['email_personal']];
+        }
+
+        $response = $this->http($account->subsystem)->put('/User/'.$account->external_account_id, ['input' => $input]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudieron actualizar los datos del usuario en GLPI', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+    }
 }

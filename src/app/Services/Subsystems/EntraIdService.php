@@ -350,4 +350,32 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
 
         return SubsystemOperationResult::ok(estado: 'activo');
     }
+
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Solo atributos de contacto. El userPrincipalName y el mailNickname son la
+     * clave con la que se creó la cuenta, así que no se tocan: renombrarlos en
+     * Entra ID es otra operación y no un cambio de datos.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        $payload = ['displayName' => $userData['nombre_completo']];
+
+        if (! blank($userData['email_personal'] ?? null)) {
+            $payload['mail'] = $userData['email_personal'];
+        }
+
+        $response = $this->http($account->subsystem, $account->user->empresa ?? null)
+            ->patch('/v1.0/users/'.$account->external_account_id, $payload);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudieron actualizar los datos del usuario en Entra ID', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+    }
 }

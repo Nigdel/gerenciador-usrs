@@ -18,7 +18,12 @@ class SuspendUserTest extends SubsystemTestCase
 
         $this->assertTrue($result->success);
         $this->assertSame('deshabilitado', $result->estado);
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_ends_with($request->url(), '/scim/v1/Users/slack-42'));
+        // La suspensión va por disableUser(), que ya no borra el usuario SCIM
+        // sino que lo marca inactivo (misma vía que la baja del 2.6).
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && str_ends_with($request->url(), '/scim/v1/Users/slack-42')
+            && $request['Operations'][0]['path'] === 'active'
+            && $request['Operations'][0]['value'] === false);
+        Http::assertNotSent(fn ($request) => $request->method() === 'DELETE');
     }
 }

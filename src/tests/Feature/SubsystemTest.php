@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SubsystemAccountStatus;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\User;
@@ -372,5 +373,94 @@ class SubsystemTest extends TestCase
         $this->post(route('subsystems.test-connection', $subsystem))
             ->assertRedirect(route('subsystems.show', $subsystem))
             ->assertSessionHas('error', 'Falta api_config.email / api_config.password del subsistema Adagio');
+    }
+
+    public function test_habilitar_una_cuenta_limpia_el_rastro_de_la_suspension(): void
+    {
+        // Fase 2.5: mismo criterio que la reactivación automática, pero por el
+        // camino manual de la ficha del subsistema.
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678900',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez',
+            'external_account_id' => '42',
+            'estado' => 'suspendido',
+            'inicio_suspension' => now()->subDays(10),
+            'fin_suspension' => now()->subDay(),
+            'motivo_suspension' => 'Licencia',
+        ]);
+
+        Http::fake(fn ($request) => match ($request->method()) {
+            'PUT' => Http::response([], 200),
+            'GET' => Http::response(['is_active' => true]),
+            default => Http::response([]),
+        });
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'enable',
+        ])->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success');
+
+        $account->refresh();
+        $this->assertSame(SubsystemAccountStatus::Activo, $account->estado);
+        $this->assertNull($account->inicio_suspension);
+        $this->assertNull($account->fin_suspension);
+        $this->assertNull($account->motivo_suspension);
+    }
+
+    public function test_deshabilitar_no_limpia_el_rastro_de_la_suspension(): void
+    {
+        // Deshabilitar no viene de una suspensión nuestra: si la cuenta tenía
+        // datos de suspensión, se conservan para no perder la trazabilidad.
+        $subsystem = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678900',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez',
+            'external_account_id' => '42',
+            'estado' => 'suspendido',
+            'inicio_suspension' => now()->subDays(10),
+            'fin_suspension' => now()->addWeek(),
+            'motivo_suspension' => 'Licencia',
+        ]);
+
+        Http::fake(fn ($request) => match ($request->method()) {
+            'PUT' => Http::response([], 200),
+            'GET' => Http::response(['is_active' => false]),
+            default => Http::response([]),
+        });
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'disable',
+        ])->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success');
+
+        $account->refresh();
+        $this->assertSame(SubsystemAccountStatus::Deshabilitado, $account->estado);
+        $this->assertSame('Licencia', $account->motivo_suspension);
+        $this->assertNotNull($account->inicio_suspension);
     }
 }

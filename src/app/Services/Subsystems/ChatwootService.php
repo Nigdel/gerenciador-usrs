@@ -88,32 +88,58 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         return $this->disableUser($account); // Chatwoot no distingue suspendido de deshabilitado a nivel de agente
     }
 
+    /**
+     * Reactivar en Chatwoot es **volver a crear el agente**, no hacer un PATCH.
+     *
+     * Chatwoot no tiene un estado "deshabilitado" para un agente: disableUser()
+     * lo elimina del account, así que el PATCH de availability que se usaba
+     * antes ibas sobre un id que ya no existía y la reactivación no llegaba a
+     * hacer nada. El alta se delega en createUser() para no duplicar el payload
+     * (equipos, empresa, email), y el nuevo external_account_id se devuelve en
+     * el resultado para que quien reactiva lo persista: el id anterior ya no
+     * vale.
+     */
     public function reactivateUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $accountId = $this->resolverAccountIdDeCuenta($account);
+        $usuario = $account->user;
 
-        $response = $this->http($account->subsystem)->patch(
-            "/api/v1/accounts/{$accountId}/agents/{$account->external_account_id}",
-            ['availability' => 'online'],
-        );
-
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo reactivar el agente en Chatwoot', $response->json() ?? []);
+        if ($usuario === null) {
+            return SubsystemOperationResult::fail('La cuenta de Chatwoot no tiene un usuario gestionado asociado');
         }
 
-        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+        $resultado = $this->createUser([
+            'nombre_completo' => $usuario->nombre_completo,
+            'usuario' => $usuario->usuario,
+            'email_personal' => $usuario->email_personal,
+            'empresa' => $usuario->empresa,
+        ], $account->subsystem);
+
+        if (! $resultado->success) {
+            return $resultado;
+        }
+
+        return SubsystemOperationResult::ok(
+            externalAccountId: $resultado->externalAccountId,
+            estado: 'activo',
+            mensaje: 'Agente recreado en Chatwoot.',
+            raw: $resultado->raw,
+        );
     }
 
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
         $accountId = $this->resolverAccountIdDeCuenta($account);
 
+        // El DELETE es correcto aquí y no un descuido: es la única forma de
+        // quitarle el acceso a un agente de Chatwoot. La contrapartida es que
+        // la baja en este subsistema sí es una eliminación real, y por eso la
+        // reactivación consiste en crear el agente de nuevo.
         $response = $this->http($account->subsystem)->delete(
             "/api/v1/accounts/{$accountId}/agents/{$account->external_account_id}",
         );
 
         if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo deshabilitar el agente en Chatwoot', $response->json() ?? []);
+            return SubsystemOperationResult::fail('No se pudo eliminar el agente en Chatwoot', $response->json() ?? []);
         }
 
         return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
@@ -127,11 +153,51 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             "/api/v1/accounts/{$accountId}/agents/{$account->external_account_id}",
         );
 
+        // 404/410 como "deshabilitado" y no como error: en Chatwoot el agente
+        // que no existe está deshabilitado, porque no hay otro estado para
+        // expresarlo. Sin esto, la baja (Fase 2.6) nunca se confirmaría y el
+        // usuario quedaría sin marcar pese a haber perdido el acceso.
+        if (in_array($response->status(), [404, 410], true)) {
+            return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
+        }
+
         if ($response->failed()) {
             return SubsystemOperationResult::fail('No se pudo consultar el estado en Chatwoot', $response->json() ?? []);
         }
 
         return SubsystemOperationResult::ok(estado: $response->json('availability') === 'online' ? 'activo' : 'deshabilitado', raw: $response->json() ?? []);
+    }
+
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * El nombre y el email son los dos únicos atributos que un agente tiene en
+     * Chatwoot. La disponibilidad es de la sesión, no del usuario, así que no
+     * forma parte de una sincronización de datos.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        $accountId = $this->resolverAccountIdDeCuenta($account);
+
+        $payload = ['name' => $userData['nombre_completo']];
+
+        if (! blank($userData['email_personal'] ?? null)) {
+            $payload['email'] = $userData['email_personal'];
+        }
+
+        $response = $this->http($account->subsystem)->patch(
+            "/api/v1/accounts/{$accountId}/agents/{$account->external_account_id}",
+            $payload,
+        );
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo actualizar el agente en Chatwoot', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
     }
 
     /**

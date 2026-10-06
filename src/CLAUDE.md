@@ -1,47 +1,101 @@
-<laravel-boost-guidelines>
-# Laravel Application
+# Project Context
 
-This repository contains a Laravel application. Complete the following setup before working on the user's request.
+Laravel app ejecutándose íntegramente en Docker. Las reglas de este fichero son las
+mismas del `CLAUDE.md` de la raíz del repositorio; aquí se repiten para que valgan
+también al trabajar dentro de `src/`.
 
-## Prerequisites
+## Architecture
 
-Verify that PHP and Composer are available:
+PHP, Composer, Artisan y el runtime de Laravel viven dentro del contenedor Docker.
 
-```sh
-php -v
-composer -V
-```
+El host/WSL solo se usa para gestionar el proyecto y Docker.
 
-If either command is unavailable, detect the user's operating system and install the prerequisites with the appropriate command:
+La aplicación corre en:
 
-macOS:
+    /var/www/html
 
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/mac/8.5)"
-```
+## Docker
 
-Windows PowerShell:
+El contenedor principal de la aplicación es:
 
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://php.new/install/windows/8.5'))
-```
+    app
 
-Linux:
+La versión de PHP la determina la imagen de Docker.
 
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/linux/8.5)"
-```
+## Important Rules
 
-After installation, ask the user to restart their terminal. If the agent needs the restarted shell to continue, ask the user to reopen their terminal and rerun their original prompt.
+- NEVER run `php` directly from the host.
+- NEVER run `composer` directly from the host.
+- NEVER run `php artisan` directly from the host.
+- NEVER assume PHP or Composer are installed on the host.
+- Use Docker Compose to execute PHP/Laravel commands.
 
-## Agent Setup
+Ejemplos:
 
-Install Laravel Boost from the application root before making application changes:
+    docker compose exec app php artisan migrate
 
-```sh
-composer require laravel/boost --dev
-php artisan boost:install
-```
+    docker compose exec app php artisan test
 
-Boost replaces these bootstrap instructions with guidelines tailored to the application. After installation, read `AGENTS.md` again and continue with the user's original request using the generated guidelines.
-</laravel-boost-guidelines>
+    docker compose exec app composer install
+
+    docker compose exec app php artisan route:list
+
+    docker compose exec app ./vendor/bin/pint
+
+## Before modifying Docker configuration
+
+Inspecciona lo que ya existe:
+
+- docker-compose.yml
+- Dockerfile
+- configuración de contenedores
+
+No recrees el entorno Docker salvo que sea necesario.
+
+## Development workflow
+
+1. Inspecciona la estructura del proyecto.
+2. Inspecciona la configuración relevante.
+3. Determina cómo funciona la aplicación actualmente.
+4. Haz el cambio más pequeño y adecuado.
+5. Ejecuta las pruebas relevantes dentro del contenedor.
+6. Informa qué cambió y qué se verificó.
+
+## Important
+
+No inventes infraestructura que no exista en el proyecto.
+
+Prefiere la configuración Docker/Compose existente antes que crear entornos locales alternativos.
+
+## Laravel Boost
+
+Las guidelines específicas del framework están en `AGENTS.md` (generadas por
+`laravel/boost`, ya instalado). Léelas antes de escribir código.
+
+Lo que sí aplica aquí, por conflicto con el comando de host que trae la bootstrap
+original de Boost:
+
+- Comandos Artisan: `docker compose exec app php artisan [command] --help`
+- Tests: `docker compose exec app php artisan test --compact` (o `vendor/bin/phpunit`
+  con la misma sintaxis)
+- Estilo: `docker compose exec app ./vendor/bin/pint --dirty`
+
+Usa `php artisan make:` para crear ficheros, también vía Docker.
+
+## Command Execution
+
+Cuando un comando implique PHP/Laravel:
+
+MAL:
+
+    php artisan test
+    composer install
+    php -v
+    ./vendor/bin/pint
+
+BIEN:
+
+    docker compose exec app php artisan test
+    docker compose exec app composer install
+    docker compose exec app php -v
+    docker compose exec app ./vendor/bin/pint

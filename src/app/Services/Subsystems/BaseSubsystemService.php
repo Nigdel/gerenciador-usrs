@@ -63,4 +63,21 @@ abstract class BaseSubsystemService implements SubsystemServiceInterface
     {
         return SubsystemOperationResult::fail('Este subsistema no admite eliminación remota de usuarios.');
     }
+
+    public function supportsUpdateUser(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Actualizar los datos de contacto en remoto es opcional (Fase 2.7): un
+     * driver que no lo implemente devuelve este fallo en vez de fingir que se
+     * sincronizó. El orquestador distingue "el subsistema no lo admite" de
+     * "el subsistema falló", y por eso supportsUpdateUser() va aparte en vez de
+     * deducirse de que este método falló.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        return SubsystemOperationResult::fail('Este subsistema no admite actualizar los datos del usuario.');
+    }
 }

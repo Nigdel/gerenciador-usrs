@@ -23,6 +23,23 @@ services:
     networks:
       - gerenciador-usrs
 
+  # Ejecuta las tareas programadas (Fase 2.2: reactivación automática).
+  # schedule:work se queda en primer plano; en producción se usaría
+  # `schedule:run` con cron.
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: gerenciador-usrs-scheduler
+    working_dir: /var/www
+    extra_hosts:
+      - "dc1.klios.br:10.1.2.2"
+    command: php artisan schedule:work
+    volumes:
+      - ./src:/var/www
+    networks:
+      - gerenciador-usrs
+
   nginx:
     image: nginx:alpine
     container_name: gerenciador-usrs-nginx

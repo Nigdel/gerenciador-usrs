@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\GestorUserStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,7 +24,25 @@ class GestorUser extends Model
         'direccion_particular',
         'usuario',
         'empresa',
+        'estado',
+        'baja_at',
+        'motivo_baja',
     ];
+
+    protected $casts = [
+        'estado' => GestorUserStatus::class,
+        'baja_at' => 'datetime',
+    ];
+
+    /**
+     * Está dado de baja si su estado local es 'baja', con independencia de lo
+     * que diga cada cuenta: un usuario puede estar de baja y tener todavía una
+     * cuenta activa en un subsistema al que no llegó la baja.
+     */
+    public function estaDadoDeBaja(): bool
+    {
+        return $this->estado === GestorUserStatus::Baja;
+    }
 
     protected $hidden = [
         'password_general',
@@ -46,5 +65,19 @@ class GestorUser extends Model
     public function subsystemAccounts(): HasMany
     {
         return $this->hasMany(UserSubsystemAccount::class, 'gestor_user_id');
+    }
+
+    /**
+     * Histórico de sus cuentas, del más reciente al más antiguo.
+     *
+     * Va por gestor_user_id y no por la relación de cuentas a propósito: la
+     * columna está desnormalizada en la tabla para que el historial siga
+     * disponible aunque la cuenta ya se haya borrado.
+     */
+    public function historial(): HasMany
+    {
+        return $this->hasMany(AccountStateLog::class, 'gestor_user_id')
+            ->with(['subsystem', 'actor'])
+            ->latest();
     }
 }

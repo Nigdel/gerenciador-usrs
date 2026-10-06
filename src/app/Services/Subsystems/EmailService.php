@@ -76,7 +76,10 @@ class EmailService extends BaseSubsystemService implements SubsystemConnectionIn
 
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->http($account->subsystem)->delete('/mailboxes/'.$account->external_account_id);
+        // Deshabilitar, no borrar. Antes hacía DELETE, con lo que la casilla
+        // desaparecía de verdad y la baja (Fase 2.6) era irreversible: el
+        // mismo PATCH que usa suspendUser la deja en el sitio y sin acceso.
+        $response = $this->http($account->subsystem)->patch('/mailboxes/'.$account->external_account_id, ['active' => false]);
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('No se pudo deshabilitar la casilla de correo', $response->json() ?? []);
@@ -114,5 +117,29 @@ class EmailService extends BaseSubsystemService implements SubsystemConnectionIn
         }
 
         return SubsystemOperationResult::ok(raw: $response->json() ?? []);
+    }
+
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Solo se actualiza el nombre visible de la casilla. La dirección es la
+     * identidad de la cuenta (es como se construyó el login) y los teléfonos no
+     * existen como atributos en este driver.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        $response = $this->http($account->subsystem)->patch(
+            '/mailboxes/'.$account->external_account_id,
+            ['name' => $userData['nombre_completo']],
+        );
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo actualizar el nombre de la casilla de correo', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
     }
 }

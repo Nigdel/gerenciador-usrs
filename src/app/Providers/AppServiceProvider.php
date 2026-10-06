@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\UserSubsystemAccount;
+use App\Observers\AccountStateLogObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -22,6 +24,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Se registra siempre, también en consola: la reactivación automática
+        // del scheduler es justo uno de los cambios que hay que poder auditar.
+        UserSubsystemAccount::observe(AccountStateLogObserver::class);
+
         // La API se limita por integración, no por IP: cada integración tiene
         // su propia cuota para que una no consuma el cupo de las demás.
         RateLimiter::for('api', fn (Request $request) => [

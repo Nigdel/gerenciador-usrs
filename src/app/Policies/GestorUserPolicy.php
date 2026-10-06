@@ -65,4 +65,16 @@ class GestorUserPolicy
     {
         return in_array($user->role, ['admin', 'operador']);
     }
+
+    /**
+     * Determine whether the user can give the user an offboarding (baja).
+     *
+     * Exige admin, igual que eliminar. Deshabilitar el acceso de una persona
+     * en todos los subsistemas es una acción de RRHH desde el punto de vista
+     * de quien la pide: el operador que la ejecute no debería poder hacerlo.
+     */
+    public function offboard(User $user, GestorUser $gestorUser): bool
+    {
+        return $user->role === 'admin';
+    }
 }

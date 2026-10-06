@@ -28,6 +28,7 @@
                             <th class="px-4 py-3.5 font-bold">Nombre</th>
                             <th class="px-4 py-3.5 font-bold">CPF</th>
                             <th class="px-4 py-3.5 font-bold">Empresa</th>
+                            <th class="px-4 py-3.5 font-bold">Estado</th>
                             <th class="px-4 py-3.5 font-bold">Cuentas</th>
                             <th class="px-4 py-3.5 font-bold"><span class="sr-only">Acciones</span></th>
                         </tr>
@@ -38,6 +39,13 @@
                                 <td class="px-4 py-3.5 font-bold text-[#17211b]"><a  href="{{ route('gestor-users.show', $gestorUser) }}" aria-label="Ver {{ $gestorUser->nombre_completo }}" title="Ver">{{ $gestorUser->nombre_completo }}</a></td>
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->cpf }}</td>
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->empresa }}</td>
+                                <td class="px-4 py-3.5">
+                                    @if ($gestorUser->estaDadoDeBaja())
+                                        <span class="account-status-deleted" title="Dado de baja">De baja</span>
+                                    @else
+                                        <span class="text-[#68756d]">Activo</span>
+                                    @endif
+                                </td>
                                 <td class="px-4 py-3.5 text-[#17211b]">{{ $gestorUser->subsystem_accounts_count }}</td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex justify-start gap-2 whitespace-nowrap sm:justify-end">

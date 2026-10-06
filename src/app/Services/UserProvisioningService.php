@@ -28,6 +28,7 @@ class UserProvisioningService
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
         private readonly UsernameGeneratorService $usernameGenerator,
+        private readonly TemporaryPasswordGenerator $passwordGenerator,
     ) {}
 
     /**
@@ -158,34 +159,96 @@ class UserProvisioningService
         return $datos;
     }
 
+    /**
+     * Restablece la contraseña de todas las cuentas del usuario.
+     *
+     * Genera UNA sola contraseña para todas: es lo que espera el usuario final
+     * (el mismo login, la misma clave) y evita tener que volver a decirla tras
+     * cada iteración. Se devuelve aquí para que el controlador pueda mostrarla
+     * una única vez y no almacenarla.
+     *
+     * Los resultados salen como arrays y no como DTOs porque quien los consume
+     * (controlador y vista) ya trabaja con la forma de provisionar(), que usa
+     * 'exito' y 'subsistema'.
+     *
+     * @return array{contrasena: string, resultados: array<int, array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: UserSubsystemAccount}>}
+     */
     public function resetAllPasswords(GestorUser $gestorUser): array
     {
         $gestorUser->load('subsystemAccounts.subsystem');
 
+        $nuevaContrasena = $this->passwordGenerator->generar();
         $results = [];
+
+        // La contraseña general se actualiza primero y en bloque: si fallara, no
+        // se toca ningún subsistema y no queda el usuario con la general cambiada
+        // y las cuentas sin cambiar.
+        $gestorUser->forceFill(['password_general' => $nuevaContrasena])->save();
 
         foreach ($gestorUser->subsystemAccounts as $userAccount) {
             try {
-                $results[] = $this->resetPassword($gestorUser, $userAccount);
+                $resultado = $this->resetPassword($gestorUser, $userAccount, $nuevaContrasena);
             } catch (RuntimeException $exception) {
                 report($exception);
 
-                $results[] = SubsystemOperationResult::fail(
-
-                    $exception->getMessage(),
-                    $userAccount->subsystem?->slug ? ['subsystem' => $userAccount->subsystem->slug] : []
-                );
+                $resultado = SubsystemOperationResult::fail($exception->getMessage());
             }
+
+            $results[] = [
+                'subsistema' => $userAccount->subsystem?->slug,
+                'exito' => $resultado->success,
+                'mensaje' => $resultado->mensaje,
+                'cuenta' => $userAccount,
+            ];
         }
 
-        return $results;
+        return ['contrasena' => $nuevaContrasena, 'resultados' => $results];
     }
 
-    public function resetPassword(GestorUser $gestorUser, UserSubsystemAccount $userAccount): SubsystemOperationResult
-    {
-        return SubsystemOperationResult::fail('Not implemented yet');
-        // Determinar qué subsistema es
-        // Ejecutar el reset correspondiente
-        // Devolver resultado
+    /**
+     * Restablece la contraseña de una cuenta concreta.
+     *
+     * Si no se indica contraseña se genera una, para poder llamarla también desde
+     * un futuro botón "una cuenta".
+     */
+    public function resetPassword(
+        GestorUser $gestorUser,
+        UserSubsystemAccount $userAccount,
+        ?string $nuevaContrasena = null,
+    ): SubsystemOperationResult {
+        $subsystem = $userAccount->subsystem;
+
+        if ($subsystem === null) {
+            return SubsystemOperationResult::fail(
+                'La cuenta no tiene un subsistema asociado.',
+                ['subsystem' => 'desconocido'],
+            );
+        }
+
+        try {
+            $servicio = $this->registry->resolve($subsystem->slug);
+        } catch (\Throwable $exception) {
+            return SubsystemOperationResult::fail(
+                $exception->getMessage(),
+                ['subsystem' => $subsystem->slug],
+            );
+        }
+
+        $resultado = $servicio->resetPassword($userAccount, $nuevaContrasena ?? $this->passwordGenerator->generar());
+
+        if (! $resultado->success) {
+            return SubsystemOperationResult::fail(
+                $resultado->mensaje ?? 'No se pudo restablecer la contraseña.',
+                $resultado->raw ?? [],
+            );
+        }
+
+        return SubsystemOperationResult::ok(
+            credencialUsuario: $userAccount->credencial_usuario,
+            externalAccountId: $userAccount->external_account_id,
+            estado: $userAccount->estado?->value,
+            mensaje: 'Contraseña restablecida.',
+            raw: $resultado->raw ?? [],
+        );
     }
 }

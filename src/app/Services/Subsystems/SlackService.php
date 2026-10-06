@@ -86,13 +86,49 @@ class SlackService extends BaseSubsystemService implements SubsystemConnectionIn
             return SubsystemOperationResult::ok(estado: 'deshabilitado', mensaje: 'Sin cuenta SCIM asociada; nada que deshabilitar en Slack');
         }
 
-        $response = $this->http($account->subsystem)->delete('/scim/v1/Users/'.$account->external_account_id);
+        // Deshabilitar, no borrar. El PATCH es el mismo que usa reactivateUser()
+        // con 'active' a false, que es lo que getUserStatus() lee para saber si
+        // el usuario sigue activo: con un DELETE, la baja (Fase 2.6) era
+        // irreversible y había que rehacer el alta si el mismo login volvía.
+        $response = $this->http($account->subsystem)->patch('/scim/v1/Users/'.$account->external_account_id, [
+            'Operations' => [['op' => 'replace', 'path' => 'active', 'value' => false]],
+        ]);
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('No se pudo deshabilitar el usuario en Slack', $response->json() ?? []);
         }
 
         return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
+    }
+
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Sincroniza el nombre del usuario SCIM.
+     *
+     * El email es el userName del usuario SCIM — su identidad — así que no se
+     * toca. Sin SCIM habilitado no hay nada que actualizar: el mismo criterio
+     * que usan disableUser() y reactivateUser() para no llamar a un recurso que
+     * no existe.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        if (empty($account->external_account_id)) {
+            return SubsystemOperationResult::ok(estado: 'activo', mensaje: 'Sin cuenta SCIM asociada; nada que sincronizar en Slack');
+        }
+
+        $response = $this->http($account->subsystem)->patch('/scim/v1/Users/'.$account->external_account_id, [
+            'Operations' => [['op' => 'replace', 'path' => 'name', 'value' => ['givenName' => $userData['nombre_completo']]]],
+        ]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo actualizar el usuario en Slack', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
     }
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult

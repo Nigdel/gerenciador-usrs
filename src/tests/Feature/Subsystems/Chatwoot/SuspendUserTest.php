@@ -18,6 +18,10 @@ class SuspendUserTest extends SubsystemTestCase
 
         $this->assertTrue($result->success);
         $this->assertSame('deshabilitado', $result->estado);
+
+        // La suspensión va por disableUser(): en Chatwoot se quita al agente del
+        // account, porque no hay estado deshabilitado. La consecuencia es que
+        // reactivar una suspensión de Chatwoot implica recrear el agente.
         Http::assertSent(fn ($request) => $request->method() === 'DELETE'
             && str_ends_with($request->url(), '/agents/chatwoot-42'));
     }

@@ -7,6 +7,7 @@ use App\Contracts\SubsystemConnectionInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use App\Services\TemporaryPasswordGenerator;
 use Exception;
 use Illuminate\Support\Facades\Log;
 use LDAP\Connection;
@@ -157,7 +158,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
                 );
             }
 
-            $password = $userData['password_general'] ?? $this->generatePassword();
+            $password = $userData['password_general'] ?? app(TemporaryPasswordGenerator::class)->generar();
             $domain = $this->getDomain($subsystem);
             $upn = "{$samAccountName}@{$domain}";
 
@@ -314,6 +315,90 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             }
 
             return SubsystemOperationResult::ok(estado: 'eliminado');
+        } catch (Exception $e) {
+            return SubsystemOperationResult::fail($e->getMessage());
+        } finally {
+            $this->unbind($ldap);
+        }
+    }
+
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Actualiza los atributos de contacto con ldap_mod_replace.
+     *
+     * Solo el nombre y el mail: sAMAccountName y userPrincipalName son la
+     * identidad de la cuenta y no se tocan.
+     *
+     * El nombre va en displayName, y además en cn/givenName/sn. Ojo con `cn`:
+     * forma parte del RDN del DN, así que cambiarlo exige **renombrar el objeto**
+     * con ldap_rename, porque ldap_mod_replace lo rechaza. Por eso se resuelve
+     * el DN real con resolveUserDn() y no se reconstruye a mano aquí.
+     *
+     * Si el rename falla se informa con un mensaje, sin dar la operación por
+     * perdida: displayName y mail ya están aplicados y el usuario sigue siendo
+     * reconocible en el directorio aunque conserve el CN viejo.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        $ldap = null;
+
+        try {
+            $subsystem = $account->subsystem;
+            $ldap = $this->connectAndBind($subsystem);
+            $userDn = $this->resolveUserDn($ldap, $account, $subsystem);
+
+            $nombre = trim((string) ($userData['nombre_completo'] ?? ''));
+
+            if ($nombre === '') {
+                return SubsystemOperationResult::fail('Falta nombre_completo para actualizar el usuario en Samba AD');
+            }
+
+            $partes = preg_split('/\s+/u', $nombre, 2);
+
+            $entry = [
+                'displayName' => $nombre,
+                'givenName' => $partes[0],
+                'sn' => $partes[1] ?? $partes[0],
+            ];
+
+            if (! blank($userData['email_personal'] ?? null)) {
+                $entry['mail'] = $userData['email_personal'];
+            }
+
+            if (! @ldap_mod_replace($ldap, $userDn, $entry)) {
+                return SubsystemOperationResult::fail(
+                    'No se pudieron actualizar los datos en Samba AD: '.$this->ldapError($ldap),
+                );
+            }
+
+            // El CN solo cambia si el nombre cambió; si es el mismo, no hay nada
+            // que renombrar y se evita una operación innecesaria en el directorio.
+            $colaDn = substr($userDn, strpos($userDn, ',') + 1);
+            $nuevoDn = 'CN='.ldap_escape($nombre, '', LDAP_ESCAPE_DN).','.$colaDn;
+
+            if ($nuevoDn === $userDn) {
+                return SubsystemOperationResult::ok(estado: 'activo', raw: ['dn' => $userDn]);
+            }
+
+            if (! @ldap_rename($ldap, $userDn, $nuevoDn, null, true)) {
+                return SubsystemOperationResult::ok(
+                    estado: 'activo',
+                    mensaje: 'Datos actualizados, pero el nombre completo no pudo aplicarse al CN: '.$this->ldapError($ldap),
+                    raw: ['dn' => $userDn],
+                );
+            }
+
+            if (! @ldap_mod_replace($ldap, $nuevoDn, ['cn' => $nombre])) {
+                return SubsystemOperationResult::fail(
+                    'No se pudo actualizar el CN en Samba AD: '.$this->ldapError($ldap),
+                );
+            }
+
+            return SubsystemOperationResult::ok(estado: 'activo', raw: ['dn' => $nuevoDn]);
         } catch (Exception $e) {
             return SubsystemOperationResult::fail($e->getMessage());
         } finally {
@@ -511,10 +596,5 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     private function resolveSubsystem(): Subsystem
     {
         return Subsystem::where('slug', 'sambaad')->firstOrFail();
-    }
-
-    private function generatePassword(): string
-    {
-        return 'Klios#'.bin2hex(random_bytes(4)).'!';
     }
 }

@@ -29,7 +29,14 @@ class UserSubsystemAccountRequest extends FormRequest
             ],
             'credencial_usuario' => ['required', 'string', 'max:255'],
             'external_account_id' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', Rule::in(array_map(fn (SubsystemAccountStatus $status) => $status->value, SubsystemAccountStatus::cases()))],
+            // 'pendiente' queda fuera a propósito: es un estado interno que sólo
+            // establece el servicio de suspensión al agendar una suspensión con
+            // fecha futura. Dejarlo aquí permitiría inventar una suspensión
+            // agendada sin fecha ni motivo.
+            'estado' => ['required', Rule::in(array_values(array_diff(
+                array_map(fn (SubsystemAccountStatus $status) => $status->value, SubsystemAccountStatus::cases()),
+                [SubsystemAccountStatus::Pendiente->value],
+            )))],
             'inicio_suspension' => ['nullable', 'date'],
             'fin_suspension' => ['nullable', 'date'],
             'motivo_suspension' => ['nullable', 'string', 'max:500'],

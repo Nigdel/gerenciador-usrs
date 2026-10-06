@@ -167,34 +167,130 @@ Leyenda de esfuerzo: **S** ≤ 0,5 día · **M** 1–2 días · **L** 3–5 día
 
 ## Fase 2 — Ciclo de vida completo del usuario
 
-- [ ] **2.1 Suspensión en la web** (M) — formulario en `gestor-users/show` (motivo, inicio, fin, selección de
+- [x] **2.1 Suspensión en la web** (M) — formulario en `gestor-users/show` (motivo, inicio, fin, selección de
   subsistemas) que reutilice `UserSuspensionService`; mostrar inicio/fin/motivo por cuenta.
-- [ ] **2.2 Reactivación automática** (M) — comando `accounts:reactivate-expired` que busque cuentas
+  Hecho: `SuspendGestorUserRequest` (policy `suspend`, no abilities), `GestorUserController::suspend()`,
+  ruta `gestor-users.suspend`, columna «Suspensión» en la tabla de cuentas y
+  `tests/Feature/GestorUserSuspensionTest.php` (10 tests).
+- [x] **2.2 Reactivación automática** (M) — comando `accounts:reactivate-expired` que busque cuentas
   `suspendido` con `fin_suspension <= now()` y llame a `reactivateUser`; programarlo con el scheduler
   (`routes/console.php`, cada 5–15 min). Añadir servicio `scheduler` en Docker Compose
   (`php artisan schedule:work`).
-- [ ] **2.3 Suspensión programada** (M) — si `inicio_suspension` está en el futuro, no suspender aún: dejarla
+  Hecho: `AccountReactivationService` (reactiva sólo tras confirmar con `getUserStatus()`),
+  comando `accounts:reactivate-expired` con `--dry-run`, programado cada 10 min con
+  `withoutOverlapping()`+`onOneServer()`, servicio `scheduler` en `docker-compose.yml` y
+  `tests/Feature/ReactivateExpiredAccountsCommandTest.php` (10 tests).
+- [x] **2.3 Suspensión programada** (M) — si `inicio_suspension` está en el futuro, no suspender aún: dejarla
   `pendiente` y que el scheduler la aplique al llegar la fecha.
-- [ ] **2.4 Restablecimiento de contraseña** (M)
-  - Implementar `UserProvisioningService::resetPassword()` resolviendo el driver con el registry y llamando a
-    `resetPassword($account, $newPassword)`.
-  - Generar contraseña temporal segura (o aceptar una indicada) y **mostrarla/entregarla una sola vez**;
-    resolver también P4 (contraseña aleatoria en el alta).
-  - Botón en la vista `show` (por cuenta y "todas"), con resultado por subsistema.
-- [ ] **2.5 Limpieza de suspensión al habilitar** (S) — al reactivar, poner a `null` `inicio/fin/motivo`.
-- [ ] **2.6 Baja completa (offboarding)** (M) — acción "Dar de baja": deshabilitar (o eliminar si
-  `supportsDeleteUser()`) en todos los subsistemas, con resumen por cuenta y estado final del `GestorUser`
-  (nuevo campo `estado`: activo / suspendido / baja). Permitir borrado lógico (`SoftDeletes`).
-- [ ] **2.7 Modificación propagada** (M) — al editar nombre/teléfono/email, ofrecer "sincronizar con
-  subsistemas" (nuevo método opcional del contrato, p. ej. `updateUser`).
+  Hecho: caso `Pendiente` en `SubsystemAccountStatus` (no requiere migración: `estado` es `string`),
+  `UserSuspensionService::suspenderCuenta()` agenda sin tocar el subsistema,
+  `suspenderPendientesVencidas()` + `cuentasPendientesVencidas()`, comando
+  `accounts:apply-pending-suspensions` con `--dry-run`, programado cada 10 min, y
+  `tests/Feature/PendingSuspensionTest.php` (8 tests, incluido el ciclo completo
+  programar → suspender → reactivar). 'pendiente' se excluye del formulario de cuentas: es estado interno.
+- [x] **2.4 Restablecimiento de contraseña** (M) — el reset sobre el subsistema ya estaba implementado en
+  los 8 drivers; lo que faltaba era el orquestador (`UserProvisioningService::resetPassword()` devolvía
+  `Not implemented yet`) y la generación de la contraseña.
+  `TemporaryPasswordGenerator` centraliza el formato (`Klios#` + 8 hex + `!`, el mismo que usaba
+  `SambaAdService` en el alta) para que el alta y el reset no se separen con el tiempo.
+  `resetAllPasswords()` genera **una sola** contraseña para todas las cuentas (mismo login, misma clave:
+  el operador no la repite por subsistema), actualiza `password_general` **antes** de tocar los
+  subsistemas (si fallara, no queda la general cambiada y las cuentas sin tocar) y devuelve un resultado
+  por cuenta con la misma forma de array que `provisionar()`. El controlador la entrega por flash
+  (`contrasena_temporal`), que se ve una vez y no se guarda en ningún sitio.
+  Botón único "todas" en la ficha. `tests/Feature/ResetPasswordTest.php` (16 tests).
+  Nota: se deja preparado el botón por cuenta con el método `resetPassword($gestorUser, $cuenta)`, que ya
+  genera su propia contraseña si no se le pasa una.
+- [x] **2.5 Limpieza de suspensión al habilitar** (S) — al reactivar, poner a `null` `inicio/fin/motivo`.
+  Centralizado en `UserSubsystemAccount::atributosAlReactivar()` y aplicado en los dos caminos de
+  reactivación (automático de 2.2 y manual en la ficha del subsistema). Deshabilitar **no** limpia:
+  no viene de una suspensión nuestra y perdería la trazabilidad.
+- [x] **2.6 Baja completa (offboarding)** (M) — acción "Dar de baja" + su inversa, "Reactivar".
+  `UserOffboardingService::darDeBaja()` recorre todas las cuentas con el mismo patrón
+  confirm-before-persist de la suspensión (acción + `getUserStatus()`) y solo entonces marca
+  `estado = borrado` en cada una. `GestorUser` recibe columna `estado` (`GestorUserStatus`:
+  `activo` / `baja`), más `baja_at` y `motivo_baja` obligatorio (`OffboardGestorUserRequest`).
+  Ability `offboard` en la policy: **solo admin**, igual que eliminar — deshabilitar el acceso de
+  alguien en todos los subsistemas es una acción de RRHH.
+  **Decisiones tomadas por el usuario**, que se apartan de lo que decía la redacción original:
+  - La baja **deshabilita siempre**, nunca borra, ni siquiera en drivers con `supportsDeleteUser()`.
+    Es reversible, deja rastro en el directorio y la propia aplicación ya borra la fila local cuando
+    un operador elimina una cuenta a mano, así que el histórico no depende del subsistema.
+  - **Sin `SoftDeletes`**: `cpf` y `usuario` son UNIQUE, así que un borrado lógico bloquearía para
+    siempre al sustituto de un empleado dado de baja. Es una columna `estado` a propósito.
+  - `estado` del `GestorUser` solo tiene `activo` y `baja`, no `suspendido`: la suspensión es un estado
+    **por cuenta**, no de la persona. El enum documenta que ambos niveles son independientes.
+  Si algún subsistema falla, **el usuario no se marca de baja**: un listado que promete "de baja"
+  con una cuenta viva es peor que no hacer nada. Reactividad implementada sobre
+  `atributosAlReactivar()` de 2.5. Vista: panel "Usuario dado de baja" + formulario de baja en la
+  ficha, columna "Estado" en el listado. `tests/Feature/OffboardingTest.php` (10 tests).
+  **Bug real encontrado de paso**: `EmailService::disableUser()` hacía `DELETE` sobre la casilla, lo
+  que hacía la baja irreversible y destruía el correo del usuario. Ahora hace `PATCH {active: false}`,
+  igual que `suspendUser()`. `SlackService` tenía exactamente el mismo problema (borraba el usuario
+  SCIM); corregido al PATCH `active: false` simétrico de su `reactivateUser()`. Verificado que
+  `GlpiService` y `EntraIdService` ya deshabilitaban bien.
+  **Chatwoot**: su `DELETE` no era un descuido, es la única forma de quitarle el acceso a un agente
+  (confirmado por quien conoce ese sistema: Chatwoot no tiene estado "deshabilitado"). Eso obliga a
+  adaptar el driver, porque si no la baja en Chatwoot **nunca se completaba**:
+  - `getUserStatus()` trata el 404/410 como `deshabilitado` en vez de como fallo. Sin esto, la
+    confirmación de la baja daba error siempre y el usuario quedaba sin marcar.
+  - `reactivateUser()` ahora **crea el agente de nuevo** (delega en `createUser()`) en lugar de hacer
+    un PATCH de `availability`, que ibas sobre un id ya borrado y no reactivaba nada.
+  - `UserOffboardingService::reactivarCuenta()` persiste el `external_account_id` que devuelve el
+    driver y lo aplica **antes** de confirmar: confirmar sobre el id viejo daría 404 y la
+    reactivación se reportaría como fallida aunque funcionase. Solo en memoria hasta que se confirma.
+  **Pendiente**: `AdagioService::disableUser()` sigue haciendo `DELETE` y su propio mensaje dice
+  *"endpoint no confirmado"*. Se deja así por indicación expresa, a la espera de confirmar la API real.
+- [x] **2.7 Modificación propagada** (M) — botón «Sincronizar datos con subsistemas» en la ficha del
+  usuario, que propaga los datos de contacto a todas sus cuentas. Nuevo método opcional del contrato,
+  `updateUser()`, implementado por los siete drivers.
+  Dos decisiones que fijan el alcance:
+  - **Solo atributos de contacto** (`nombre_completo`, `email_personal`, `telefono_personal`,
+    `telefono_trabajo`, `direccion_particular`). El login, la empresa y el CPF son **la clave con la que
+    se creó la cuenta** en cada subsistema (sAMAccountName, UPN, dirección del buzón, employeeId):
+    propagarlos sería renombrar la identidad de la cuenta, que es otra operación y no una corrección de
+    datos. La lista blanca vive en `UserDataSyncService::CAMPOS_SINCRONIZABLES`, que además mapea
+    vacíos a `null`, de modo que ningún driver pueda tocar por accidente `password_general` o el estado
+    de la baja.
+  - **Botón aparte en la ficha**, no automático al guardar. Sincronizar sale a sistemas de terceros y
+    manda un nombre a seis sitios: que sea una acción explícita evita propagar un alta con errata.
+  `supportsUpdateUser()` va **aparte** de `updateUser()` a propósito (igual que `supportsDeleteUser()`
+  en 2.6): permite distinguir «este subsistema no lo admite» de «este subsistema falló», que para el
+  operador son cosas distintas — reintentar no tiene sentido en el primer caso. Un subsistema sin driver
+  o que no lo implemente se reporta como `exito: true` con la explicación, no como fallo.
+  Aquí, a diferencia de la suspensión, la baja y la reactivación, **no hay confirmación posterior**:
+  actualizar el nombre de alguien no tiene un estado que verificar, y una segunda lectura solo añadiría
+  una petición por subsistema sin confirmar nada.
+  Cada driver envía solo lo que su API admite: Adagio no recibe el email porque ahí **es** la credencial;
+  Entra ID nunca toca el UPN; Slack SCIM devuelve un fallo claro si no hay `external_account_id`.
+  `SambaAdService` es el caso aparte: `cn` forma parte del DN, así que además del `ldap_mod_replace`
+  hay que hacer `ldap_rename` y renombrar el `cn`; si el rename falla devuelve éxito **con el aviso** de
+  que los datos se actualizaron pero el nombre completo no pudo aplicarse al CN.
+  `tests/Feature/UserDataSyncTest.php` (9 tests).
 - [ ] **2.8 Generador de usuario robusto** (S) — más de 2 intentos (sufijo numérico), validar disponibilidad
   contra todos los subsistemas que implementen `existsByEmail`, no solo Adagio.
 
 ## Fase 3 — Robustez y trazabilidad
 
-- [ ] **3.1 Auditoría** (M) — tabla `audit_logs` (actor, acción, gestor_user_id, subsystem_id, resultado,
-  payload sin secretos, IP, fecha) alimentada desde los orquestadores y controladores; vista de consulta con
-  filtros.
+- [x] **3.1 Auditoría** (M) — implementada como **histórico de cambios por cuenta**, en la tabla
+  `account_state_logs`. Cubre el ciclo de vida completo de cada cuenta en subsistema (alta, todo cambio
+  de atributo con su antes/después, y borrado) con actor, origen (`web`/`api`/`scheduler`) y descripción.
+  Panel de consulta en la ficha del usuario (50 entradas más recientes).
+
+  Se resolvió con **un observer** (`AccountStateLogObserver`) en vez de instrumentar los orquestadores
+  uno a uno: hoy escriben estado seis sitios distintos y añadir la llamada en cada uno bastaría con que
+  el próximo cambio escribiera por otro lado para que el histórico dejara de ser fiable.
+
+  Puntos que resuelven cosas concretas de la Fase 2:
+  - Las FK son `SET NULL` y no `CASCADE`: el borrado es un evento que se quiere registrar, así que su
+    propio histórico tiene que sobrevivirle.
+  - `actor_nombre` se congela al escribir, para que borrar al operador no deje la entrada sin autor.
+  - El scheduler registra con `origen = scheduler` y actor nulo; es el caso que más hace falta auditar.
+  - Guarda el rastro que la **Fase 2.5 borra** (motivo y fechas de suspensión al reactivar).
+
+  Pendiente para cuando se quiera cerrar del todo la auditoría general (no solo de cuentas):
+  registrar también las acciones de gestión (alta/edición/baja de `GestorUser`, cambios de
+  subsistemas), la IP del llamante y los intentos fallidos.
 - [ ] **3.2 Colas** (L) — mover la creación/suspensión por subsistema a *jobs* (`ShouldQueue`) con reintentos y
   *backoff*; servicio `queue` en Docker Compose (`php artisan queue:work`). La petición responde con un
   identificador de operación y estado por cuenta (`pendiente`/`ok`/`error`).
@@ -244,6 +340,23 @@ Leyenda de esfuerzo: **S** ≤ 0,5 día · **M** 1–2 días · **L** 3–5 día
   subsistemas y de colas.
 - [ ] **6.5 Documentación** (S) — OpenAPI de la API, runbook (alta, suspensión, baja, qué hacer ante fallos),
   actualizar `README.md`.
+
+---
+
+## Pendientes para el final
+
+Cosas que funcionan pero conviene retomar con calma, cuando lo demás esté cerrado.
+
+- [ ] **Avisar de que la baja en Chatwoot es irreversible en la práctica** — Chatwoot no tiene estado
+  deshabilitado, así que la baja **elimina** al agente y la reactivación lo **crea de nuevo**. No es el
+  mismo tipo de reversibilidad que en los demás subsistemas: se pierde el historial del agente (conversaciones
+  asignadas, nombre anterior, configuración de equipos), no solo su acceso. La ficha del usuario debería
+  decirlo cuando tenga una cuenta de Chatwoot, para que el operador que da de baja lo sepa antes y no después.
+  Deuda directo del 2.6.
+- [ ] **Detalles visuales** — quedan por revisar al final, según indicación expresa: espaciado,
+  alineación y clases sueltas de las vistas de `gestor-users` y `subsystems`. Ojo al retocarlos: las
+  clases `account-status-*` solo existen en el CSS ya compilado, y un `npm run build` las borraría; para
+  estilos nuevos hay que añadirlos a `resources/css/app.css`.
 
 ---
 

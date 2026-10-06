@@ -18,7 +18,12 @@ class DisableUserTest extends SubsystemTestCase
 
         $this->assertTrue($result->success);
         $this->assertSame('deshabilitado', $result->estado);
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_ends_with($request->url(), '/scim/v1/Users/slack-42'));
+        // Deshabilitar, no borrar: la baja (Fase 2.6) tiene que ser reversible,
+        // así que el usuario SCIM se marca inactivo en lugar de hacer DELETE.
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && str_ends_with($request->url(), '/scim/v1/Users/slack-42')
+            && $request['Operations'][0]['path'] === 'active'
+            && $request['Operations'][0]['value'] === false);
+        Http::assertNotSent(fn ($request) => $request->method() === 'DELETE');
     }
 }

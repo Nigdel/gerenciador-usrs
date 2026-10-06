@@ -18,7 +18,11 @@ class DisableUserTest extends SubsystemTestCase
 
         $this->assertTrue($result->success);
         $this->assertSame('deshabilitado', $result->estado);
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_ends_with($request->url(), '/mailboxes/email-42'));
+
+        // Deshabilitar, no borrar: la baja (Fase 2.6) tiene que ser reversible,
+        // así que la casilla se marca inactiva en lugar de hacer DELETE.
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && str_ends_with($request->url(), '/mailboxes/email-42')
+            && ($request['active'] ?? null) === false);
     }
 }

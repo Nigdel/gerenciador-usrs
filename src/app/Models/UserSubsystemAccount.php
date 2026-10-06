@@ -41,4 +41,27 @@ class UserSubsystemAccount extends Model
     {
         return $this->belongsTo(Subsystem::class);
     }
+
+    /**
+     * Marcar la cuenta como activa y borrar el rastro de la suspensión
+     * (Fase 2.5).
+     *
+     * Los tres campos se limpian juntos a propósito: dejarlos sueltos produce
+     * estados imposibles — una cuenta activa con fecha de suspensión, o una
+     * suspensión sin motivo — que luego ninguna vista sabe explicar.
+     *
+     * Se devuelve el array de atributos para poder aplicarlo en un update()
+     * junto a lo que cada camino necesite (por ejemplo 'meta').
+     *
+     * @return array{estado: string, inicio_suspension: null, fin_suspension: null, motivo_suspension: null}
+     */
+    public function atributosAlReactivar(): array
+    {
+        return [
+            'estado' => SubsystemAccountStatus::Activo->value,
+            'inicio_suspension' => null,
+            'fin_suspension' => null,
+            'motivo_suspension' => null,
+        ];
+    }
 }

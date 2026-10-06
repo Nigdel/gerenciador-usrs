@@ -54,6 +54,51 @@ class UserSuspensionService
         return $resultados;
     }
 
+    /**
+     * Suspende ahora las cuentas pendientes cuya fecha de inicio ya llegó.
+     *
+     * Es la otra mitad de la suspensión programada: cuando se agenda con
+     * inicio_suspension en el futuro la cuenta queda en estado 'pendiente' y
+     * sin tocar el subsistema; aquí se ejecuta.
+     *
+     * @return array<int, array>
+     */
+    public function suspenderPendientesVencidas(): array
+    {
+        $cuentas = UserSubsystemAccount::query()
+            ->with('subsystem')
+            ->where('estado', 'pendiente')
+            ->whereNotNull('inicio_suspension')
+            ->where('inicio_suspension', '<=', now())
+            ->orderBy('id')
+            ->get();
+
+        return $cuentas
+            ->map(fn (UserSubsystemAccount $account) => $this->suspenderCuenta($account, [
+                'motivo_suspension' => $account->motivo_suspension,
+                'inicio_suspension' => $account->inicio_suspension,
+                'fin_suspension' => $account->fin_suspension,
+            ]))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Cuentas con una suspensión agendada cuya fecha ya venció, sin aplicar.
+     *
+     * @return Collection<int, UserSubsystemAccount>
+     */
+    public function cuentasPendientesVencidas(): Collection
+    {
+        return UserSubsystemAccount::query()
+            ->with('subsystem')
+            ->where('estado', 'pendiente')
+            ->whereNotNull('inicio_suspension')
+            ->where('inicio_suspension', '<=', now())
+            ->orderBy('id')
+            ->get();
+    }
+
     private function localizarUsuario(array $payload): GestorUser
     {
         if (! empty($payload['cpf'])) {
@@ -85,6 +130,26 @@ class UserSuspensionService
     {
         /** @var Subsystem $subsystem */
         $subsystem = $account->subsystem;
+
+        // Suspensión programada (Fase 2.3): si la fecha de inicio aún no llega,
+        // se agenda y no se toca el subsistema. La aplica
+        // suspenderPendientesVencidas() cuando corresponda.
+        if ($datosSuspension['inicio_suspension']->isFuture()) {
+            $account->update([
+                'estado' => 'pendiente',
+                'inicio_suspension' => $datosSuspension['inicio_suspension'],
+                'fin_suspension' => $datosSuspension['fin_suspension'],
+                'motivo_suspension' => $datosSuspension['motivo_suspension'],
+            ]);
+
+            return [
+                'subsistema' => $subsystem->slug,
+                'exito' => true,
+                'mensaje' => 'Suspensión programada para el '
+                    .$datosSuspension['inicio_suspension']->format('d/m/Y').'.',
+                'cuenta' => $account->fresh(),
+            ];
+        }
 
         $servicio = $this->registry->resolve($subsystem->slug);
         $resultado = $servicio->suspendUser($account, $datosSuspension);

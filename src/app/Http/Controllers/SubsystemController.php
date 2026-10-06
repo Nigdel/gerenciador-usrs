@@ -171,10 +171,13 @@ class SubsystemController extends Controller
         }
 
         if ($result->success) {
-            $userSubsystemAccount->update([
-                'estado' => $expectedState,
-                'meta' => $result->raw,
-            ]);
+            // Al reactivar se limpia además el rastro de la suspensión (Fase 2.5);
+            // al deshabilitar no, porque no viene de una suspensión nuestra.
+            $atributos = $operation === 'enable'
+                ? $userSubsystemAccount->atributosAlReactivar()
+                : ['estado' => $expectedState];
+
+            $userSubsystemAccount->update($atributos + ['meta' => $result->raw]);
         }
 
         return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)

@@ -185,6 +185,40 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
     // Autenticación JWT (login + cache + reintento único en 401/403)
     // -----------------------------------------------------------------
 
+    public function supportsUpdateUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Actualiza los datos de contacto del propietario interno.
+     *
+     * El email es aquí la credencial del usuario (se construye como
+     * usuario@dominio), así que NO se sincroniza: cambiarlo sería cambiarle el
+     * login. Solo el nombre.
+     */
+    public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
+    {
+        $nombre = trim((string) ($userData['nombre_completo'] ?? ''));
+
+        if ($nombre === '') {
+            return SubsystemOperationResult::fail('Falta nombre_completo para actualizar el propietario en Adagio');
+        }
+
+        $response = $this->request(
+            $account->subsystem,
+            'PUT',
+            "proprietarios/internos/{$account->external_account_id}",
+            form: ['nome' => $nombre],
+        );
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo actualizar el propietario en Adagio', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+    }
+
     private function request(
         Subsystem $subsystem,
         string $method,
