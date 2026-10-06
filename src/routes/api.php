@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ApiAbility;
 use App\Http\Controllers\Api\UserProvisioningController;
 use App\Http\Controllers\Api\UserSuspensionController;
 use Illuminate\Support\Facades\Route;
@@ -8,11 +9,20 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Rutas del Gestor de Usuarios
 |--------------------------------------------------------------------------
-| Agrega estas líneas a tu routes/api.php existente (dentro del middleware
-| de autenticación/autorización que uses, ej. ->middleware('auth:sanctum')).
+| Autenticadas con un token de Sanctum. Cada endpoint exige además la ability
+| correspondiente: el rol del usuario dueño del token no abre la puerta por sí
+| solo, solo las abilities emitidas.
+|
+| Emitir un token:
+|   php artisan api:token {integracion} --abilities=usuarios:provisionar,usuarios:suspender
 */
 
-Route::prefix('usuarios')->group(function () {
-    Route::post('/provisionar', [UserProvisioningController::class, 'store']);
-    Route::post('/suspender', [UserSuspensionController::class, 'store']);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::prefix('usuarios')->group(function () {
+        Route::post('/provisionar', [UserProvisioningController::class, 'store'])
+            ->middleware('abilities:'.ApiAbility::Provisionar->value);
+
+        Route::post('/suspender', [UserSuspensionController::class, 'store'])
+            ->middleware('abilities:'.ApiAbility::Suspender->value);
+    });
 });

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\ApiAbility;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -14,6 +16,8 @@ class UserApiTest extends TestCase
 
     public function test_can_provision_user_with_api()
     {
+        $this->tokenConAbility(ApiAbility::Provisionar);
+
         Subsystem::create([
             'nombre' => 'Adagio',
             'slug' => 'adagio',
@@ -55,6 +59,8 @@ class UserApiTest extends TestCase
 
     public function test_can_suspend_user_with_api()
     {
+        $this->tokenConAbility(ApiAbility::Suspender);
+
         $user = GestorUser::create([
             'cpf' => '12345678901',
             'nombre_completo' => 'Suspend User',
@@ -99,5 +105,22 @@ class UserApiTest extends TestCase
             'estado' => 'suspendido',
             'motivo_suspension' => 'Suspension por Api',
         ]);
+    }
+
+    /**
+     * Emite un token real con una ability concreta y autentica la petición
+     * con cabecera Authorization.
+     *
+     * No vale actingAs(): con sanctum.guard vacío la sesión web no autentica
+     * la API. Ni Sanctum::actingAs(): su token transitorio responde true a
+     * cualquier ability.
+     */
+    private function tokenConAbility(ApiAbility $ability): self
+    {
+        $plain = User::factory()->operador()->create()
+            ->createToken('test', [$ability->value])
+            ->plainTextToken;
+
+        return $this->withHeader('Authorization', 'Bearer '.$plain);
     }
 }

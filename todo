@@ -149,13 +149,21 @@ Leyenda de esfuerzo: **S** ≤ 0,5 día · **M** 1–2 días · **L** 3–5 día
   `UserSubsystemAccount` y `User`; `$this->authorize()` en todos los controladores y `@can` en las
   vistas. Sin registro público: los operadores los da de alta un `admin` desde el resource `users`.
   Cubierto por `tests/Feature/AuthorizationTest.php`.
-- [ ] **1.3 Autenticación de la API** (M) — Laravel Sanctum con tokens por integración y *abilities*
-  (`usuarios:provisionar`, `usuarios:suspender`); `throttle` en `/api`.
+- [x] **1.3 Autenticación de la API** (M) — Laravel Sanctum con tokens por integración y *abilities*
+  (`usuarios:provisionar`, `usuarios:suspender`); `throttle` en `/api`. Emitir con
+  `php artisan api:token {integracion} --abilities=... --admin` y revocar con `--revoke`.
+  `sanctum.guard` va vacío a propósito: con la sesión web activa, Sanctum asignaba un
+  `TransientToken` que respondía `true` a cualquier ability y las abilities se podían saltar.
+  La API solo acepta tokens de integración; el rol del dueño no amplía lo que el token puede hacer.
 - [x] **1.4 Acciones que cambian estado solo por POST** (S) — `gestor-users/{id}/reset-password` ya es
   `POST` con CSRF.
-- [ ] **1.5 Cifrado de secretos** (S) — cast `encrypted:array` en `Subsystem::api_config`; migración que
-  re-cifra datos existentes; ocultar `api_config` en respuestas y vistas.
-  - Aceptación: usuario sin permiso recibe 403; petición API sin token recibe 401.
+- [x] **1.5 Cifrado de secretos** (S) — cast `encrypted:array` en `Subsystem::api_config`; la columna pasó
+  de `json` a `text` porque el cifrado es base64 y MySQL no lo aceptaba en una columna JSON. La migración
+  re-cifra las 7 filas existentes leyendo el valor crudo con `DB::table` (con el modelo saldría ya
+  descifrado) y es idempotente: si la fila ya está cifrada, la deja como está. `api_config` ya estaba en
+  `$hidden` y la ficha del subsistema no lo renderiza; solo se ve en el formulario de edición, que es
+  donde se escribe. Cubierto por `SubsystemSecretsEncryptionTest`.
+  - Aceptación: usuario sin permiso recibe 403; petición API sin token recibe 401. (Cubierta por 1.2 y 1.3.)
 
 ## Fase 2 — Ciclo de vida completo del usuario
 

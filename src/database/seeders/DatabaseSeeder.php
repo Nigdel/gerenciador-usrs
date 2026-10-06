@@ -15,10 +15,18 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // El registro público está cerrado, así que sin esto una base recién
+        // desplegada se queda sin ningún admin. El comando users:create-admin
+        // es la vía para crearlo con contraseña propia; este usuario es solo
+        // para desarrollo local.
+        if (User::query()->where('role', 'admin')->exists()) {
+            $this->command?->warn('Ya hay un administrador: no se crea otro.');
 
-        User::factory()->create([
-            'name' => 'Test User',
+            return;
+        }
+
+        User::factory()->admin()->create([
+            'name' => 'Test Admin',
             'email' => 'test@example.com',
         ]);
     }

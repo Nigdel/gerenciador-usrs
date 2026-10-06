@@ -24,7 +24,9 @@ class Subsystem extends Model
     ];
 
     protected $casts = [
-        'api_config' => 'array',
+        // Contiene tokens y credenciales de los subsistemas: se guarda cifrada
+        // (encrypted:array) y no en claro en la columna.
+        'api_config' => 'encrypted:array',
         'activo' => 'boolean',
         'es_proveedor_identidad' => 'boolean',
         'last_connection_test_at' => 'datetime',

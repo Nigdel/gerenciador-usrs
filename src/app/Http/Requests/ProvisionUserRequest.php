@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\ApiAbility;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ProvisionUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // Ajustar según tu política/gate de autorización real.
+        // Defence en profundidad: la ruta ya exige el middleware
+        // abilities:usuarios:provisionar. Esto cubre el caso de que el
+        // controlador se use desde otra entrada.
+        return $this->user()?->tokenCan(ApiAbility::Provisionar->value) ?? false;
     }
 
     public function rules(): array

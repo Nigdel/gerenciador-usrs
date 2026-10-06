@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\ApiAbility;
 use Illuminate\Foundation\Http\FormRequest;
 
 class SuspendUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        // Defence en profundidad: la ruta ya exige el middleware
+        // abilities:usuarios:suspender. Esto cubre el caso de que el
+        // controlador se use desde otra entrada.
+        return $this->user()?->tokenCan(ApiAbility::Suspender->value) ?? false;
     }
 
     public function rules(): array
