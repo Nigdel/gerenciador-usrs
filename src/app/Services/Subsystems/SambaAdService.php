@@ -4,6 +4,7 @@ namespace App\Services\Subsystems;
 
 use App\Contracts\IdentityProviderInterface;
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 use LDAP\Connection;
 use RuntimeException;
 
-class SambaAdService extends BaseSubsystemService implements IdentityProviderInterface, SubsystemConnectionInterface
+class SambaAdService extends BaseSubsystemService implements IdentityProviderInterface, SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     private const UAC_NORMAL_ACCOUNT = 512;
 
@@ -108,6 +109,64 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             Log::warning('SambaAD existsByEmail falló', ['error' => $e->getMessage()]);
 
             return false;
+        } finally {
+            $this->unbind($ldap);
+        }
+    }
+
+    /**
+     * En Samba AD el login es el sAMAccountName y además forma parte del UPN,
+     * así que se buscan **los dos**: un sAMAccountName libre con el UPN ya
+     * ocupado es justo el caso en el que el alta fallaría.
+     *
+     * Un fallo de conexión se devuelve como **null** y no como false (ver
+     * UsernameAvailabilityInterface): si el directorio está caído, decir "libre"
+     * propondría un login que después el propio Samba rechazaría.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        $clean = $this->escapeFilter(trim(strtolower($login)));
+        $ldap = null;
+
+        try {
+            $ldap = $this->connectAndBind($subsystem);
+            $baseDn = $this->getUsersOu($subsystem);
+
+            $dominio = $subsystem->api_config['dominio'] ?? null;
+            $candidatos = ['samaccountname' => $clean];
+
+            if (! blank($dominio)) {
+                $upn = $clean.'@'.strtolower(trim((string) $dominio));
+                $candidatos['userprincipalname'] = $this->escapeFilter($upn);
+            }
+
+            $clausulas = array_map(
+                static fn (string $atributo, string $valor): string => "({$atributo}={$valor})",
+                array_keys($candidatos),
+                array_values($candidatos),
+            );
+
+            $search = @ldap_search($ldap, $baseDn, '(|'.implode('', $clausulas).')', ['dn']);
+
+            if (! $search) {
+                // El search devolvió false = error del directorio, no "0 resultados".
+                return null;
+            }
+
+            $entries = @ldap_get_entries($ldap, $search);
+
+            if ($entries === false) {
+                return null;
+            }
+
+            return (int) ($entries['count'] ?? 0) > 0;
+        } catch (Exception $e) {
+            Log::warning('SambaAD loginEnUso falló', [
+                'login' => $login,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
         } finally {
             $this->unbind($ldap);
         }

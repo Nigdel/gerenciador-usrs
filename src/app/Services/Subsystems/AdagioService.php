@@ -4,6 +4,7 @@ namespace App\Services\Subsystems;
 
 use App\Contracts\IdentityProviderInterface;
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -11,6 +12,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -37,7 +39,7 @@ use RuntimeException;
  * compartido solo cubre login + creación. Los de abajo son un patrón
  * provisional sobre /proprietarios/internos/{id}
  */
-class AdagioService extends BaseSubsystemService implements IdentityProviderInterface, SubsystemConnectionInterface
+class AdagioService extends BaseSubsystemService implements IdentityProviderInterface, SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     private const ENTIDAD_CONTEXTO = [
         'klios' => '64',
@@ -75,6 +77,55 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
         if ($response->failed()) {
             return false;
+        }
+
+        $usuario = $this->extraerUsuario($response);
+
+        return ! empty($usuario['id']) || ! empty($usuario['email']);
+    }
+
+    /**
+     * En Adagio el email ES la credencial (no hay un campo "login" aparte), así
+     * que comprobar el login es comprobar el email con el dominio del
+     * subsistema.
+     *
+     * A diferencia de existsByEmail() —que es una búsqueda de usuario y por eso
+     * devuelve false si falla—, aquí un fallo se devuelve como **null**
+     * ("no se pudo comprobar"). Ver UsernameAvailabilityInterface: leer un 500
+     * como "login libre" haría proponer al generador un login ya ocupado.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        $dominio = $subsystem->api_config['dominio'] ?? null;
+
+        if (blank($dominio)) {
+            // Sin dominio no hay forma de armar el email que Adagio usa como
+            // credencial. No se inventa: se declara no comprobable.
+            return null;
+        }
+
+        $email = Str::of($login)->lower()->ascii()->replace(' ', '')->toString().'@'.$dominio;
+
+        try {
+            $response = $this->request($subsystem, 'GET', 'proprietarios/internos', query: ['email' => $email]);
+        } catch (RuntimeException $exception) {
+            $this->log('No se pudo comprobar la disponibilidad del login en Adagio', [
+                'login' => $login,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        // Un 404 significa "no hay propietario con ese email", no un fallo de
+        // Adagio: tratarlo como no comprobable haría que NINGÚN login llegara
+        // nunca a proponerse y el generador agotaría los 100 intentos.
+        if ($response->status() === 404) {
+            return false;
+        }
+
+        if ($response->failed()) {
+            return null;
         }
 
         $usuario = $this->extraerUsuario($response);

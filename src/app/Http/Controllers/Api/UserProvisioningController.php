@@ -28,6 +28,10 @@ class UserProvisioningController extends Controller
         return response()->json([
             'usuario' => new GestorUserResource($resultado['gestor_user']),
             'subsistemas' => $resultado['resultados'],
+            // Fase 2.8: si el login se propuso sin poder confirmarlo contra
+            // algún subsistema, viaja en la respuesta para que la integración
+            // sepa que debe verificarlo antes de entregar las credenciales.
+            'login_no_verificado' => $resultado['login_no_verificado'],
         ], 201);
     }
 }

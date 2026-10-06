@@ -3,6 +3,7 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -11,7 +12,7 @@ use App\Models\UserSubsystemAccount;
  * Gestiona la casilla de correo corporativa (ej. panel de un proveedor de
  * email, cPanel, Google Workspace, Zimbra, etc. según api_config).
  */
-class EmailService extends BaseSubsystemService implements SubsystemConnectionInterface
+class EmailService extends BaseSubsystemService implements SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     public function testConnection(Subsystem $subsystem): SubsystemOperationResult
     {
@@ -28,8 +29,7 @@ class EmailService extends BaseSubsystemService implements SubsystemConnectionIn
 
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
-        $dominio = $subsystem->api_config['dominio'] ?? ($userData['empresa'] ?? 'empresa').'.com.br';
-        $direccion = $userData['usuario'].'@'.$dominio;
+        $direccion = $userData['usuario'].'@'.$this->dominio($subsystem, $userData['empresa'] ?? null);
 
         $response = $this->http($subsystem)->post('/mailboxes', [
             'address' => $direccion,
@@ -141,5 +141,50 @@ class EmailService extends BaseSubsystemService implements SubsystemConnectionIn
         }
 
         return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+    }
+
+    /**
+     * El dominio con el que se construiría la casilla. Se extrae a un helper
+     * porque ahora lo necesitan tanto createUser() como loginEnUso(): si las
+     * dos rutas calcularan el dominio por su cuenta, la comprobación podría
+     * mirar en un dominio distinto del que luego se crea la casilla, que es
+     * justo el error que esta comprobación existe para evitar.
+     */
+    private function dominio(Subsystem $subsystem, ?string $empresa): string
+    {
+        return $subsystem->api_config['dominio'] ?? ($empresa ?? 'empresa').'.com.br';
+    }
+
+    /**
+     * La dirección del buzón **es** la identidad de la cuenta, igual que en el
+     * alta: se consulta el mismo valor que se crearía, no el login suelto.
+     *
+     * 404 = el buzón no existe = libre; cualquier otro error = null (no
+     * comprobable), no false.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        $direccion = $login.'@'.$this->dominio($subsystem, $empresa);
+
+        try {
+            $response = $this->http($subsystem)->get('/mailboxes/'.rawurlencode($direccion));
+        } catch (\Throwable $exception) {
+            $this->log('No se pudo comprobar la disponibilidad del login en el servicio de email', [
+                'login' => $login,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->status() === 404) {
+            return false;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        return true;
     }
 }

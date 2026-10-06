@@ -3,6 +3,7 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -13,7 +14,7 @@ use App\Models\UserSubsystemAccount;
  * endpoint SCIM si api_config['scim'] está habilitado; si no, deja la
  * invitación como pendiente y registra el intento.
  */
-class SlackService extends BaseSubsystemService implements SubsystemConnectionInterface
+class SlackService extends BaseSubsystemService implements SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     public function testConnection(Subsystem $subsystem): SubsystemOperationResult
     {
@@ -153,5 +154,57 @@ class SlackService extends BaseSubsystemService implements SubsystemConnectionIn
     public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult
     {
         return SubsystemOperationResult::fail('Slack no permite cambiar la contraseña de usuarios vía API');
+    }
+
+    /**
+     * Solo tiene sentido con SCIM habilitado: sin él, createUser() tampoco
+     * escribe nada en Slack (deja la invitación como manual), así que no hay
+     * colisión que comprobar y se devuelve null en vez de un `false` que
+     * fingiría una comprobación que no se ha hecho.
+     *
+     * El userName de SCIM es el email (lo que createUser() envía), no el login
+     * suelto: por eso el dominio es obligatorio aquí para poder construir el
+     * valor que se buscará.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        if (empty($subsystem->api_config['scim_habilitado'])) {
+            return null;
+        }
+
+        $dominio = $subsystem->api_config['dominio'] ?? null;
+
+        if (blank($dominio)) {
+            return null;
+        }
+
+        $userName = $login.'@'.$dominio;
+
+        try {
+            $response = $this->http($subsystem)->get('/scim/v1/Users', [
+                'filter' => 'userName eq "'.$userName.'"',
+                'count' => 1,
+            ]);
+        } catch (\Throwable $exception) {
+            $this->log('No se pudo comprobar la disponibilidad del login en Slack', [
+                'login' => $login,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $resources = $response->json('Resources');
+
+        if (! is_array($resources)) {
+            // SCIM respondería con Resources; si no viene, no se sabe qué hay.
+            return null;
+        }
+
+        return count($resources) > 0;
     }
 }

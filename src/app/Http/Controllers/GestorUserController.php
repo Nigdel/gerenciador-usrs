@@ -109,14 +109,23 @@ class GestorUserController extends Controller
 
         $fallos = collect($resultado['resultados'])->where('exito', false);
 
+        // El login se propuso sin poder confirmarlo contra algún subsistema
+        // (Fase 2.8). El aviso se junta al resto en un único mensaje en vez de
+        // usar dos claves de sesión: los toasts se renderizan todos en la misma
+        // posición fija, así que dos claves a la vez se solaparían.
+        $avisos = array_filter([
+            filled($resultado['login_no_verificado'] ?? null) ? $resultado['login_no_verificado'] : null,
+            $fallos->isNotEmpty() ? 'El usuario fue creado, pero algunas cuentas no pudieron aprovisionarse.' : null,
+        ]);
+
         $redirect = redirect()->route('gestor-users.show', $resultado['gestor_user']);
 
-        if ($fallos->isEmpty()) {
+        if ($avisos === []) {
             return $redirect->with('success', 'Usuario y cuentas creados correctamente.');
         }
 
         return $redirect
-            ->with('warning', 'El usuario fue creado, pero algunas cuentas no pudieron aprovisionarse.')
+            ->with('warning', implode(' ', $avisos))
             ->with('provisioning_results', $resultado['resultados']);
     }
 

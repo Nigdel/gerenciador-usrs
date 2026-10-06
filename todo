@@ -267,8 +267,46 @@ Leyenda de esfuerzo: **S** ≤ 0,5 día · **M** 1–2 días · **L** 3–5 día
   hay que hacer `ldap_rename` y renombrar el `cn`; si el rename falla devuelve éxito **con el aviso** de
   que los datos se actualizaron pero el nombre completo no pudo aplicarse al CN.
   `tests/Feature/UserDataSyncTest.php` (9 tests).
-- [ ] **2.8 Generador de usuario robusto** (S) — más de 2 intentos (sufijo numérico), validar disponibilidad
-  contra todos los subsistemas que implementen `existsByEmail`, no solo Adagio.
+- [x] **2.8 Generador de usuario robusto** (S) — más de 2 intentos (sufijo numérico), validar disponibilidad
+  contra todos los subsistemas, no solo Adagio.
+  El generador tenía tres defectos que solo se veían cuando algo fallaba:
+  - **Solo miraba Adagio.** Pero el login *es* la clave de la cuenta en los siete subsistemas
+    (sAMAccountName en Samba, UPN en Entra, dirección del buzón en el correo, `name` en GLPI,
+    `userName` en Slack SCIM, email del agente en Chatwoot). Un login libre en Adagio puede estar
+    ocupado en el buzón, y el alta falla después con un error mucho más difícil de entender.
+    Además **no miraba la base de datos local**, donde `gestor_users.usuario` es UNIQUE: un homónimo
+    ya dado de alta local no se detectaba hasta que el insert reventaba.
+  - **Confundía "no pude comprobar" con "libre".** `existsByEmail()` devuelve `false` cuando la
+    llamada falla, así que con Adagio caído el generador proponía un login que podía estar ocupado.
+    Por eso el contrato nuevo, `UsernameAvailabilityInterface::loginEnUso()`, devuelve **`?bool`**:
+    `true` ocupado, `false` libre, **`null` no comprobable**. Los drivers que no pueden responder
+    (Slack sin `scim_habilitado`, Adagio sin `dominio`, Entra sin dominio resoluble, Chatwoot sin
+    `account_id`) devuelven `null`, no `false`: decir "libre" sería una afirmación que nadie verificó.
+    - Es un contrato **aparte** de `IdentityProviderInterface`, no un método más: aquel busca un
+      usuario existente para reutilizarlo, este comprueba si un login nuevo está libre. Casi ningún
+      driver es lo segundo sin ser lo primero, así que atarlos habría dejado fuera comprobaciones
+      que hoy sí se hacen.
+  - **El bucle de sufijos devolvía el último candidato sin comprobarlo.** Agotados los intentos
+    proponía un login que ya sabía ocupado, y el alta reventaba con un error de duplicado. Ahora la
+    lista de candidatos termina en un único bucle y, agotada, lanza `RuntimeException` con un mensaje
+    accionable (`GestorUserController::store()` ya la capturaba y vuelve al formulario con
+    `withInput()`).
+  El orden de comprobación es **local primero** (una query frente a N peticiones HTTP) y luego
+  subsistemas. Ante un subsistema caído o que lanza excepción, **se propone el login igualmente y se
+  avisa** en vez de abortar el alta: bloquear un alta porque un servicio externo no responde sería
+  peor que proponer un login con un aviso visible. El aviso se recalcula en cada candidato, de modo
+  que solo menciona los subsistemas que no respondieron *para el login finalmente elegido*.
+  `provisionar()` devuelve `login_no_verificado`; el controlador web lo junta al aviso de fallos
+  parciales en **un único** mensaje `warning` (dos claves de sesión se solaparían: los toasts se
+  renderizan todos en la misma posición) y la API lo expone en el 201.
+  Cada driver comprueba la misma identidad que usaría al crear: GLPI busca con `equals` (un `contains`
+  marcaría ocupado a `jperez` por existir `jperez.gomez`), Entra consulta el UPN exacto, Chatwoot
+  compara los emails en PHP porque su API pública no filtra por agente.
+  **Bug de producción encontrado al escribir los tests**: un 404 de Adagio (propietario no
+  encontrado) caía en `failed()` y se devolvía como `null` — o sea, "libre" nunca se alcanzaba en
+  Adagio y el generador agotaba los 100 intentos siempre. Ahora el 404 se trata como `false` (libre)
+  y solo el resto de fallos como `null`.
+  `tests/Feature/UsernameGeneratorTest.php` (12 tests).
 
 ## Fase 3 — Robustez y trazabilidad
 

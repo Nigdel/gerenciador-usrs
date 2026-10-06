@@ -40,7 +40,7 @@ class UserProvisioningService
      *                          'direccion_particular' => '...', 'empresa' => 'Acme', 'password_general' => '...',
      *                          'subsistemas' => ['adagio', 'glpi', ...], // opcional: si falta, se usan todos los activos
      *                          ]
-     * @return array{gestor_user: GestorUser, resultados: array<int, array>}
+     * @return array{gestor_user: GestorUser, resultados: array<int, array>, login_no_verificado: ?string}
      */
     public function provisionar(array $payload): array
     {
@@ -55,7 +55,14 @@ class UserProvisioningService
             $resultados[] = $this->crearEnSubsistema($gestorUser, $subsystem, $datosResueltos, $payload['subsystem_config'] ?? []);
         }
 
-        return ['gestor_user' => $gestorUser->fresh('subsystemAccounts.subsystem'), 'resultados' => $resultados];
+        return [
+            'gestor_user' => $gestorUser->fresh('subsystemAccounts.subsystem'),
+            'resultados' => $resultados,
+            // Aviso del generador de login (Fase 2.8): si algún subsistema no
+            // pudo responder, el login se eligió sin confirmarlo contra él y el
+            // operador debería saberlo antes de dar el alta por buena.
+            'login_no_verificado' => $datosResueltos['login_no_verificado'] ?? null,
+        ];
     }
 
     private function resolverDatosDesdeAdagio(array $payload): array
@@ -81,15 +88,21 @@ class UserProvisioningService
             throw new \InvalidArgumentException('nombre_completo y empresa son obligatorios cuando el CPF no existe en Adagio');
         }
 
+        $propuesta = $this->proponerUsuario($payload);
+
         return array_merge($payload, [
             'cpf' => $cpf,
-            'usuario' => $payload['usuario'] ?? $this->proponerUsuario($payload),
+            'usuario' => $payload['usuario'] ?? $propuesta['usuario'],
+            'login_no_verificado' => $propuesta['mensaje'],
         ]);
     }
 
-    private function proponerUsuario(array $payload): string
+    /**
+     * @return array{usuario: string, mensaje: ?string}
+     */
+    private function proponerUsuario(array $payload): array
     {
-        return $this->usernameGenerator->proponer($payload['nombre_completo'], $payload['empresa']);
+        return $this->usernameGenerator->proponerConAviso($payload['nombre_completo'], $payload['empresa']);
     }
 
     private function guardarUsuarioLocal(array $datos): GestorUser

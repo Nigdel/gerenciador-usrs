@@ -3,6 +3,7 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -23,7 +24,7 @@ use Throwable;
  * cpf se mapea a employeeId; el login se construye como userPrincipalName.
  * Nota: PATCH en Graph devuelve 204 sin cuerpo -> no depender de $response->json().
  */
-class EntraIdService extends BaseSubsystemService implements SubsystemConnectionInterface
+class EntraIdService extends BaseSubsystemService implements SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     private const GRAPH_URL = 'https://graph.microsoft.com';
 
@@ -377,5 +378,58 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
         }
 
         return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+    }
+
+    /**
+     * El userPrincipalName es la identidad de la cuenta, así que se consulta
+     * exactamente el UPN que crearía createUser(): mismo dominio, misma
+     * resolución de configuración por empresa.
+     *
+     * 404 = libre, que es el mismo criterio que usa createUser() para no
+     * duplicar. Cualquier otro fallo devuelve null.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        try {
+            [$config] = $this->configuracionDeEmpresa($subsystem, $empresa);
+        } catch (RuntimeException $exception) {
+            $this->log('No se pudo resolver la configuración de Entra ID para comprobar el login', [
+                'login' => $login,
+                'empresa' => $empresa,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $dominio = $config['dominio'] ?? null;
+
+        if (blank($dominio)) {
+            return null;
+        }
+
+        try {
+            $response = $this->http($subsystem, $empresa)->get(
+                '/v1.0/users/'.rawurlencode($login.'@'.$dominio),
+                ['$select' => 'id'],
+            );
+        } catch (Throwable $exception) {
+            $this->log('No se pudo comprobar la disponibilidad del login en Entra ID', [
+                'login' => $login,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->status() === 404) {
+            return false;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        return true;
     }
 }

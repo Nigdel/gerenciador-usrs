@@ -3,6 +3,7 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -23,7 +24,7 @@ use RuntimeException;
  * GestorUser dueño de esa cuenta ($account->user->empresa) — así no hace
  * falta guardar el account_id por separado en cada fila.
  */
-class ChatwootService extends BaseSubsystemService implements SubsystemConnectionInterface
+class ChatwootService extends BaseSubsystemService implements SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     public function testConnection(Subsystem $subsystem): SubsystemOperationResult
     {
@@ -344,6 +345,71 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         unset($raw['access_token'], $raw['password']);
 
         return $raw;
+    }
+
+    /**
+     * En Chatwoot lo que debe ser único es el **email** del agente, no el login
+     * (el nombre puede repetirse sin problema). La comprobación usa el mismo
+     * email que construiría createUser(), porque es contra ese valor contra el
+     * que únicos.
+     *
+     * Chatwoot no tiene filtro de búsqueda de agentes en la API pública de
+     * cuenta, así que se listan y se comparan en local. Si la empresa no tiene
+     * account configurado se devuelve null: createUser() fallaría con
+     * RuntimeException en ese caso, así que no es una comprobación que el
+     * generador pueda hacer por sí solo.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        try {
+            $accountId = $this->resolverAccountId($subsystem, $empresa);
+        } catch (RuntimeException $exception) {
+            $this->log('No se pudo resolver el account_id de Chatwoot para comprobar el login', [
+                'login' => $login,
+                'empresa' => $empresa,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $email = strtolower($login.'@'.($subsystem->api_config['dominio'] ?? ($empresa ?? 'empresa').'.com.br'));
+
+        try {
+            $response = $this->http($subsystem)->get("/api/v1/accounts/{$accountId}/agents", ['page' => 1]);
+        } catch (\Throwable $exception) {
+            $this->log('No se pudo comprobar la disponibilidad del login en Chatwoot', [
+                'login' => $login,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        $agentes = $payload['payload'] ?? $payload['data'] ?? $payload ?? [];
+
+        if (! is_array($agentes)) {
+            return null;
+        }
+
+        foreach ($agentes as $agente) {
+            if (! is_array($agente)) {
+                continue;
+            }
+
+            $emailAgente = $agente['email'] ?? null;
+
+            if (is_string($emailAgente) && strcasecmp(trim($emailAgente), $email) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

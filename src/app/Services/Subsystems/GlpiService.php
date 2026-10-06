@@ -3,6 +3,7 @@
 namespace App\Services\Subsystems;
 
 use App\Contracts\SubsystemConnectionInterface;
+use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
-class GlpiService extends BaseSubsystemService implements SubsystemConnectionInterface
+class GlpiService extends BaseSubsystemService implements SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
     public function testConnection(Subsystem $subsystem): SubsystemOperationResult
     {
@@ -264,5 +265,57 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
         }
 
         return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+    }
+
+    /**
+     * En GLPI el login es el campo 'name'. La búsqueda del driver es
+     * 'contains', así que devuelve también "jperez" para "jperez.gomez": los
+     * resultados se comparan por igualdad aquí, porque de lo contrario el
+     * generador creería ocupado un login que está libre y saltaría al sufijo
+     * numérico sin necesidad.
+     */
+    public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
+    {
+        try {
+            $response = $this->http($subsystem)->get('/search/User', [
+                'criteria[0][field]' => 1,
+                'criteria[0][searchtype]' => 'equals',
+                'criteria[0][value]' => $login,
+                'forcedisplay[0]' => 2,
+                'range' => '0-20',
+            ]);
+        } catch (\Throwable $exception) {
+            $this->log('No se pudo comprobar la disponibilidad del login en GLPI', [
+                'login' => $login,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $data = $response->json('data');
+
+        if (! is_array($data)) {
+            return null;
+        }
+
+        // Cada fila trae los forcedisplay: 0 = id, 1 = nombre, 2 = login.
+        foreach ($data as $fila) {
+            if (! is_array($fila)) {
+                continue;
+            }
+
+            $nombreEnGlpi = $fila[1] ?? null;
+
+            if (is_string($nombreEnGlpi) && strcasecmp(trim($nombreEnGlpi), $login) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
