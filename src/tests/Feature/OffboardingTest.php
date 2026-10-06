@@ -2,13 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OperationAccountStatus;
+use App\Enums\OperationType;
 use App\Enums\SubsystemAccountStatus;
 use App\Models\AccountStateLog;
 use App\Models\GestorUser;
+use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
 use App\Models\User;
 use App\Models\UserSubsystemAccount;
+use App\Services\ProvisioningOperationService;
 use App\Services\UserOffboardingService;
+use App\Services\UserProvisioningService;
+use App\Services\UserSuspensionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -17,6 +23,11 @@ use Tests\TestCase;
  * Fase 2.6 — Baja completa (offboarding).
  *
  * La baja deshabilita las cuentas, no las borra: es reversible y deja rastro.
+ *
+ * Desde la Fase 3.2 la baja sale de la petición: se crea una operación con una
+ * fila por cuenta y la ejecuta un job cada una. Estos tests invocan los jobs a
+ * mano con la cadena real de servicios, así que lo que se comprueba sigue siendo
+ * el efecto por cuenta y no cuándo se ejecuta.
  */
 class OffboardingTest extends TestCase
 {
@@ -55,6 +66,39 @@ class OffboardingTest extends TestCase
         ]);
     }
 
+    /**
+     * @return array{resultados: array<int, array>}
+     */
+    private function darDeBaja(GestorUser $gestorUser, string $motivo): array
+    {
+        $servicio = app(UserOffboardingService::class);
+
+        $operacion = app(ProvisioningOperationService::class)->describir(
+            OperationType::Baja,
+            $gestorUser,
+            $servicio->cuentasABajas($gestorUser),
+            ['motivo_baja' => $motivo],
+        );
+
+        return ['resultados' => $this->procesarOperacion($operacion)];
+    }
+
+    /**
+     * @return array{resultados: array<int, array>}
+     */
+    private function reactivar(GestorUser $gestorUser): array
+    {
+        $servicio = app(UserOffboardingService::class);
+
+        $operacion = app(ProvisioningOperationService::class)->describir(
+            OperationType::Reactivacion,
+            $gestorUser,
+            $servicio->cuentasAReactivar($gestorUser),
+        );
+
+        return ['resultados' => $this->procesarOperacion($operacion)];
+    }
+
     public function test_la_baja_deshabilita_las_cuentas_y_marca_el_usuario(): void
     {
         $gestorUser = $this->gestor();
@@ -62,7 +106,7 @@ class OffboardingTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://email.test/*' => Http::response(['id' => 'email-42', 'active' => false])]);
 
-        $resultado = app(UserOffboardingService::class)->darDeBaja($gestorUser, 'Renuncia');
+        $resultado = $this->darDeBaja($gestorUser, 'Renuncia');
 
         $this->assertTrue($resultado['resultados'][0]['exito']);
         $this->assertSame(SubsystemAccountStatus::Borrado, $cuenta->fresh()->estado);
@@ -80,7 +124,7 @@ class OffboardingTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://email.test/*' => Http::response(['id' => 'email-42', 'active' => false])]);
 
-        app(UserOffboardingService::class)->darDeBaja($gestorUser, 'Renuncia');
+        $this->darDeBaja($gestorUser, 'Renuncia');
 
         // Nunca se llama a deleteUser(): la baja es reversible y la cuenta
         // tiene que seguir existiendo en el subsistema.
@@ -98,7 +142,7 @@ class OffboardingTest extends TestCase
             'https://glpi.test/*' => Http::response(['error' => 'boom'], 500),
         ]);
 
-        $resultado = app(UserOffboardingService::class)->darDeBaja($gestorUser, 'Renuncia');
+        $resultado = $this->darDeBaja($gestorUser, 'Renuncia');
 
         $porSubsistema = collect($resultado['resultados'])->keyBy('subsistema');
         $this->assertTrue($porSubsistema['email']['exito']);
@@ -118,7 +162,7 @@ class OffboardingTest extends TestCase
             'https://email.test/*' => Http::response(['id' => 'email-42', 'active' => true]),
         ]);
 
-        $resultado = app(UserOffboardingService::class)->darDeBaja($gestorUser, 'Renuncia');
+        $resultado = $this->darDeBaja($gestorUser, 'Renuncia');
 
         $this->assertFalse($resultado['resultados'][0]['exito']);
         $this->assertFalse($gestorUser->fresh()->estaDadoDeBaja());
@@ -137,9 +181,8 @@ class OffboardingTest extends TestCase
                 ->push(['id' => 'email-42', 'active' => true]),  // reactivación: confirma
         ]);
 
-        $servicio = app(UserOffboardingService::class);
-        $servicio->darDeBaja($gestorUser, 'Renuncia');
-        $resultado = $servicio->reactivar($gestorUser->fresh());
+        $this->darDeBaja($gestorUser, 'Renuncia');
+        $resultado = $this->reactivar($gestorUser->fresh());
 
         $this->assertTrue($resultado['resultados'][0]['exito']);
         $this->assertSame(SubsystemAccountStatus::Activo, $cuenta->fresh()->estado);
@@ -158,10 +201,12 @@ class OffboardingTest extends TestCase
         Http::fake(['https://email.test/*' => Http::response(['id' => 'email-42', 'active' => false])]);
 
         $servicio = app(UserOffboardingService::class);
-        $servicio->darDeBaja($gestorUser, 'Renuncia');
+        $this->darDeBaja($gestorUser, 'Renuncia');
 
+        // La precondición ya no la comprueba el servicio al ejecutar, sino el
+        // controlador antes de encolar: es donde el operador puede verla.
         $this->expectException(\RuntimeException::class);
-        $servicio->darDeBaja($gestorUser->fresh(), 'Otra vez');
+        $servicio->validarBaja($gestorUser->fresh());
     }
 
     public function test_la_baja_exige_admin(): void
@@ -231,9 +276,8 @@ class OffboardingTest extends TestCase
             'https://chatwoot.test/api/v1/accounts/77/agents/99' => Http::response(['id' => 99, 'availability' => 'online']),
         ]);
 
-        $servicio = app(UserOffboardingService::class);
-        $servicio->darDeBaja($gestorUser, 'Renuncia');
-        $resultado = $servicio->reactivar($gestorUser->fresh());
+        $this->darDeBaja($gestorUser, 'Renuncia');
+        $resultado = $this->reactivar($gestorUser->fresh());
 
         $this->assertTrue($resultado['resultados'][0]['exito']);
 
@@ -251,7 +295,7 @@ class OffboardingTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://email.test/*' => Http::response(['id' => 'email-42', 'active' => false])]);
 
-        app(UserOffboardingService::class)->darDeBaja($gestorUser, 'Renuncia');
+        $this->darDeBaja($gestorUser, 'Renuncia');
 
         $entrada = AccountStateLog::query()->latest('id')->first();
 

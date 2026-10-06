@@ -51,6 +51,15 @@ Route::middleware('auth')->group(function () {
         [GestorUserController::class, 'syncSubsystems']
     )->name('gestor-users.sync-subsystems');
 
+    // Consulta el estado de una operación para el polling del panel (Fase
+    // 3.2). Va dentro de {gestorUser} a propósito: comprobar que la operación
+    // es de ese usuario es una condición de la ruta, no algo que se pueda
+    // dejar para el controlador.
+    Route::get(
+        'gestor-users/{gestorUser}/operaciones/{operacion}',
+        [GestorUserController::class, 'operacion']
+    )->name('gestor-users.operaciones.show');
+
     Route::resource('gestor-users', GestorUserController::class)
         ->parameters(['gestor-users' => 'gestorUser']);
 

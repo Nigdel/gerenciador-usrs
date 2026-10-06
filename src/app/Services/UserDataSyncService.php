@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\SubsystemServiceInterface;
 use App\Models\GestorUser;
 use App\Models\UserSubsystemAccount;
+use Illuminate\Support\Collection;
 use Throwable;
 
 /**
@@ -27,6 +28,10 @@ use Throwable;
  * heredan el de la base, que devuelve un fallo. Se distinguen de un fallo real
  * con supportsUpdateUser(), para poder informar "no lo admite" en vez de
  * "falló".
+ *
+ * Desde la Fase 3.2 ya **no itera cuentas**: eso lo hace un job por cuenta.
+ * Aquí quedan cuentasASincronizar(), que dice a quién hay que actualizar, y
+ * sincronizarCuenta(), que el job llama una vez por cada una.
  */
 class UserDataSyncService
 {
@@ -50,9 +55,11 @@ class UserDataSyncService
     ) {}
 
     /**
-     * @return array{usuario: GestorUser, resultados: array<int, array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}>}
+     * Cuentas a actualizar, ya filtradas por subsistema.
+     *
+     * @return Collection<int, UserSubsystemAccount>
      */
-    public function sincronizar(GestorUser $gestorUser, ?array $subsistemas = null): array
+    public function cuentasASincronizar(GestorUser $gestorUser, ?array $subsistemas = null): Collection
     {
         $query = $gestorUser->subsystemAccounts()->with('subsystem');
 
@@ -60,17 +67,13 @@ class UserDataSyncService
             $query->whereHas('subsystem', fn ($q) => $q->whereIn('slug', $subsistemas));
         }
 
-        $resultados = $query->get()
-            ->map(fn (UserSubsystemAccount $cuenta) => $this->sincronizarCuenta($cuenta, $gestorUser))
-            ->all();
-
-        return ['usuario' => $gestorUser, 'resultados' => $resultados];
+        return $query->get();
     }
 
     /**
      * @return array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}
      */
-    private function sincronizarCuenta(UserSubsystemAccount $cuenta, GestorUser $gestorUser): array
+    public function sincronizarCuenta(UserSubsystemAccount $cuenta, GestorUser $gestorUser): array
     {
         $subsistema = $cuenta->subsystem;
 

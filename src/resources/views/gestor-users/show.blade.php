@@ -234,6 +234,101 @@
             @endif
         </div>
 
+        {{--
+            Operaciones (Fase 3.2).
+
+            El panel se refresca solo con fetch nativo contra la ruta de polling:
+            Alpine ya está cargado en el layout, así que no hace falta axios ni
+            reconstruir assets. Cuando una operación termina se recarga la página
+            una sola vez, para que la tabla de cuentas y el histórico de arriba
+            muestren ya el estado final en lugar de parcheados a mano.
+        --}}
+        <div class="mt-8"
+             @php($abiertas = $operaciones
+                 ->filter(fn ($o) => ! $o->estaTerminada())
+                 ->map(fn ($o) => ['url' => route('gestor-users.operaciones.show', [$gestorUser, $o->uuid])])
+                 ->values())
+             x-data="{
+                 abiertas: @js($abiertas),
+                 async consultar() {
+                     if (this.abiertas.length === 0) {
+                         return;
+                     }
+
+                     let quedan = 0;
+
+                     for (const abierta of this.abiertas) {
+                         const respuesta = await fetch(abierta.url);
+
+                         // Un 404 o un error de red no se distingue aquí del
+                         // final: se reintenta en el siguiente turno. Parar del
+                         // todo dejaría la ficha congelada sin avisar.
+                         if (! respuesta.ok) {
+                             quedan++;
+
+                             continue;
+                         }
+
+                         if (!(await respuesta.json()).terminado) {
+                             quedan++;
+                         }
+                     }
+
+                     // Cuando no queda ninguna, se recarga una sola vez para que
+                     // las cuentas y el histórico muestren el estado final.
+                     if (quedan === 0) {
+                         location.reload();
+
+                         return;
+                     }
+
+                     setTimeout(() => this.consultar(), 3000);
+                 },
+             }"
+             x-init="consultar()">
+            <h2 class="mb-4 text-xl font-bold text-[#17211b]">Operaciones</h2>
+            <p class="mb-4 text-sm text-[#68756d]">
+                Últimas acciones enviadas a los subsistemas. Mientras haya alguna en curso, esta tabla se actualiza sola.
+            </p>
+
+            @if ($operaciones->isEmpty())
+                <div class="border border-dashed border-[#d9e2dc] px-5 py-6 text-[#68756d]">Aún no se ha enviado ninguna operación a los subsistemas.</div>
+            @else
+                <ol class="border border-[#d9e2dc]">
+                    @foreach ($operaciones as $operacion)
+                        <li class="border-t border-[#e8eee9] px-4 py-3.5 first:border-t-0">
+                            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                <span class="font-bold text-[#17211b]">{{ $operacion->tipo->etiqueta() }}</span>
+                                <span class="text-sm {{ $operacion->estaTerminada() ? 'text-[#68756d]' : 'font-bold text-amber-700' }}">
+                                    {{ $operacion->estado->etiqueta() }} · {{ $operacion->resumen() }}
+                                </span>
+                            </div>
+                            <div class="mt-1 text-sm text-[#68756d]">
+                                {{ $operacion->iniciada_at?->format('d/m/Y H:i') ?: $operacion->created_at->format('d/m/Y H:i') }}
+                                · por {{ $operacion->autor() }}
+                                · <span class="uppercase">{{ $operacion->origen }}</span>
+                            </div>
+
+                            <ul class="mt-2 space-y-1">
+                                @foreach ($operacion->cuentas as $cuenta)
+                                    <li class="flex flex-wrap items-baseline gap-2 text-sm">
+                                        <span class="inline-flex items-center gap-1 font-bold {{ $cuenta->estado->clase() }}">
+                                            <svg class="h-4 w-4" aria-hidden="true"><use href="#{{ $cuenta->estado->icono() }}"></use></svg>
+                                            {{ $cuenta->subsistema ?: 'Subsistema no disponible' }}
+                                        </span>
+                                        <span class="text-[#68756d]">{{ $cuenta->estado->etiqueta() }}</span>
+                                        @if ($cuenta->mensaje)
+                                            <span class="text-[#68756d]">— {{ $cuenta->mensaje }}</span>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </li>
+                    @endforeach
+                </ol>
+            @endif
+        </div>
+
         <div class="mt-8">
             <h2 class="mb-4 text-xl font-bold text-[#17211b]">Histórico</h2>
             <p class="mb-4 text-sm text-[#68756d]">Altas, cambios de estado y eliminaciones de sus cuentas en subsistemas.</p>

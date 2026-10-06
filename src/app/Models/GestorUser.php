@@ -68,6 +68,19 @@ class GestorUser extends Model
     }
 
     /**
+     * Operaciones que le han salido a los subsistemas (Fase 3.2), del más
+     * reciente al más antiguo. Es lo que pinta el panel de la ficha.
+     *
+     * Va por gestor_user_id y no por la relación de cuentas a propósito: la
+     * columna está desnormalizada para que la operación sobreviva al borrado
+     * de una cuenta, igual que en el histórico.
+     */
+    public function operaciones(): HasMany
+    {
+        return $this->hasMany(ProvisioningOperation::class, 'gestor_user_id')->latest();
+    }
+
+    /**
      * Histórico de sus cuentas, del más reciente al más antiguo.
      *
      * Va por gestor_user_id y no por la relación de cuentas a propósito: la

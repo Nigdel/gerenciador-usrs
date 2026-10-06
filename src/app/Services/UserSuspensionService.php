@@ -7,11 +7,16 @@ use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
 /**
  * Orquesta la suspensión de un usuario en uno, varios, o todos los
  * subsistemas donde tenga cuenta. Si el usuario ya estaba suspendido en un
  * subsistema, simplemente se actualizan inicio/fin/motivo de la suspensión.
+ *
+ * Desde la Fase 3.2 ya **no itera cuentas**: eso lo hace un job por cuenta.
+ * Aquí quedan cuentasASuspender(), que dice a quién hay que suspensionar, y
+ * suspenderCuenta(), que el job llama una vez por cada una.
  */
 class UserSuspensionService
 {
@@ -20,38 +25,63 @@ class UserSuspensionService
     ) {}
 
     /**
-     * @param  array  $payload  Formato esperado:
-     *                          [
-     *                          'cpf' => '...', // o 'usuario' => '...' para identificar al GestorUser
-     *                          'subsistemas' => ['glpi', 'entraid'], // opcional: si falta, se suspende en todos donde tenga cuenta
-     *                          'motivo_suspension' => '...',
-     *                          'inicio_suspension' => '2026-09-21', // opcional, default: ahora
-     *                          'fin_suspension' => '2026-10-05',     // opcional
-     *                          ]
-     * @return array<int, array>
+     * Localiza al usuario por CPF o por login, que es como llega desde la API.
+     *
+     * firstOrFail() a propósito: si no existe, la API responde 404, que es
+     * más útil que un 500.
+     *
+     * @param  array{cpf?: ?string, usuario?: ?string}  $payload
      */
-    public function suspender(array $payload): array
+    public function localizarUsuario(array $payload): GestorUser
     {
-        $gestorUser = $this->localizarUsuario($payload);
-
-        $cuentas = $this->resolverCuentas($gestorUser, $payload['subsistemas'] ?? null);
-
-        $datosSuspension = [
-            'motivo_suspension' => $payload['motivo_suspension'] ?? null,
-            'inicio_suspension' => isset($payload['inicio_suspension'])
-                ? Carbon::parse($payload['inicio_suspension'])
-                : now(),
-            'fin_suspension' => isset($payload['fin_suspension'])
-                ? Carbon::parse($payload['fin_suspension'])
-                : null,
-        ];
-
-        $resultados = [];
-        foreach ($cuentas as $account) {
-            $resultados[] = $this->suspenderCuenta($account, $datosSuspension);
+        if (! empty($payload['cpf'])) {
+            return GestorUser::query()->where('cpf', $payload['cpf'])->firstOrFail();
         }
 
-        return $resultados;
+        if (! empty($payload['usuario'])) {
+            return GestorUser::query()->where('usuario', $payload['usuario'])->firstOrFail();
+        }
+
+        throw new InvalidArgumentException('Se requiere "cpf" o "usuario" para identificar al usuario a suspender');
+    }
+
+    /**
+     * Cuentas sobre las que hay que actuar, ya filtradas por subsistema.
+     *
+     * @return Collection<int, UserSubsystemAccount>
+     */
+    public function cuentasASuspender(GestorUser $gestorUser, ?array $slugs = null): Collection
+    {
+        $query = $gestorUser->subsystemAccounts()->with('subsystem');
+
+        if (! empty($slugs)) {
+            $query->whereHas('subsystem', fn ($q) => $q->whereIn('slug', $slugs));
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Datos de suspensión en la forma en que se guardan en el payload de la
+     * operación y se leen en el job.
+     *
+     * Las fechas se guardan como texto ISO y no como Carbon porque el payload
+     * se serializa a JSON para la base de datos: un Carbon dentro del json
+     * saldría como un objeto y al releerlo no volvería a ser una fecha.
+     *
+     * @return array{motivo_suspension: ?string, inicio_suspension: string|null, fin_suspension: string|null}
+     */
+    public function datosDeSuspension(array $payload): array
+    {
+        return [
+            'motivo_suspension' => $payload['motivo_suspension'] ?? null,
+            'inicio_suspension' => isset($payload['inicio_suspension'])
+                ? Carbon::parse($payload['inicio_suspension'])->toIso8601String()
+                : null,
+            'fin_suspension' => isset($payload['fin_suspension'])
+                ? Carbon::parse($payload['fin_suspension'])->toIso8601String()
+                : null,
+        ];
     }
 
     /**
@@ -61,19 +91,15 @@ class UserSuspensionService
      * inicio_suspension en el futuro la cuenta queda en estado 'pendiente' y
      * sin tocar el subsistema; aquí se ejecuta.
      *
+     * Sigue siendo síncrono a propósito: lo llama el scheduler desde el
+     * contenedor `scheduler`, que ya está fuera de la petición. Encolar desde
+     * aquí no aportaría nada y partiría la confirmación en dos sitios.
+     *
      * @return array<int, array>
      */
     public function suspenderPendientesVencidas(): array
     {
-        $cuentas = UserSubsystemAccount::query()
-            ->with('subsystem')
-            ->where('estado', 'pendiente')
-            ->whereNotNull('inicio_suspension')
-            ->where('inicio_suspension', '<=', now())
-            ->orderBy('id')
-            ->get();
-
-        return $cuentas
+        return $this->cuentasPendientesVencidas()
             ->map(fn (UserSubsystemAccount $account) => $this->suspenderCuenta($account, [
                 'motivo_suspension' => $account->motivo_suspension,
                 'inicio_suspension' => $account->inicio_suspension,
@@ -99,37 +125,24 @@ class UserSuspensionService
             ->get();
     }
 
-    private function localizarUsuario(array $payload): GestorUser
-    {
-        if (! empty($payload['cpf'])) {
-            return GestorUser::where('cpf', $payload['cpf'])->firstOrFail();
-        }
-
-        if (! empty($payload['usuario'])) {
-            return GestorUser::where('usuario', $payload['usuario'])->firstOrFail();
-        }
-
-        throw new \InvalidArgumentException('Se requiere "cpf" o "usuario" para identificar al usuario a suspender');
-    }
-
-    /**
-     * @return Collection<int, UserSubsystemAccount>
-     */
-    private function resolverCuentas(GestorUser $gestorUser, ?array $slugs)
-    {
-        $query = $gestorUser->subsystemAccounts()->with('subsystem');
-
-        if (! empty($slugs)) {
-            $query->whereHas('subsystem', fn ($q) => $q->whereIn('slug', $slugs));
-        }
-
-        return $query->get();
-    }
-
-    private function suspenderCuenta(UserSubsystemAccount $account, array $datosSuspension): array
+    public function suspenderCuenta(UserSubsystemAccount $account, array $datosSuspension): array
     {
         /** @var Subsystem $subsystem */
         $subsystem = $account->subsystem;
+
+        // Sin fecha de inicio explícita se suspende ahora mismo. El job la
+        // manda siempre como ISO o como null, de ahí el default.
+        $inicio = isset($datosSuspension['inicio_suspension'])
+            ? Carbon::parse($datosSuspension['inicio_suspension'])
+            : now();
+
+        $fin = isset($datosSuspension['fin_suspension'])
+            ? Carbon::parse($datosSuspension['fin_suspension'])
+            : null;
+
+        $datosSuspension['motivo_suspension'] ??= null;
+        $datosSuspension['inicio_suspension'] = $inicio;
+        $datosSuspension['fin_suspension'] = $fin;
 
         // Suspensión programada (Fase 2.3): si la fecha de inicio aún no llega,
         // se agenda y no se toca el subsistema. La aplica

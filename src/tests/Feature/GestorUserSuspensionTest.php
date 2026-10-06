@@ -97,7 +97,13 @@ class GestorUserSuspensionTest extends TestCase
         $this->post(route('gestor-users.suspend', $email->user), [
             'motivo_suspension' => 'Fin de contrato',
         ])->assertRedirect(route('gestor-users.show', $email->user))
-            ->assertSessionHas('success', 'Cuentas suspendidas correctamente.');
+            // Desde la Fase 3.2 la respuesta habla de lo encolado, no de lo
+            // hecho: en este punto los jobs ya han corrido en línea por
+            // QUEUE_CONNECTION=sync, pero en producción no lo han hecho todavía.
+            ->assertSessionHas('success', 'La suspensión está en curso (2 cuenta(s) en cola). El resultado aparecerá en esta misma ficha.');
+
+        $this->assertSame(1, $email->user->operaciones()->count());
+        $this->assertSame(OperationStatus::Completada, $email->user->operaciones()->sole()->estado);
 
         $this->assertSame(SubsystemAccountStatus::Suspendido, $email->fresh()->estado);
         $this->assertSame('Fin de contrato', $email->fresh()->motivo_suspension);
@@ -185,10 +191,24 @@ class GestorUserSuspensionTest extends TestCase
         $this->post(route('gestor-users.suspend', $email->user), [
             'motivo_suspension' => 'Fin de contrato',
         ])->assertRedirect(route('gestor-users.show', $email->user))
-            ->assertSessionHas('warning', 'Algunas cuentas no pudieron suspenderse.');
+            // El aviso ya no va en la respuesta: la petición solo encola. El
+            // operador lo ve en el panel de operaciones, y el botón de
+            // reintentar del 3.3 sale de esa misma tabla persistida.
+            ->assertSessionHas('success');
 
         // Sin confirmación remota no se marca como suspendida en la BD.
         $this->assertSame(SubsystemAccountStatus::Activo, $email->fresh()->estado);
+
+        // Y la operación queda 'fallida' con el motivo del subsistema, que es
+        // donde el operador va a mirar a partir de ahora.
+        $operacion = $email->user->operaciones()->sole();
+
+        $this->assertSame(OperationStatus::Fallida, $operacion->estado);
+        $this->assertSame(1, $operacion->errores);
+        $this->assertStringContainsString(
+            'no confirmó',
+            $operacion->cuentas()->sole()->mensaje,
+        );
     }
 
     public function test_la_ficha_muestra_las_cuentas_suspendidas(): void

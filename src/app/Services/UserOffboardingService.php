@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Contracts\SubsystemServiceInterface;
-use App\Enums\GestorUserStatus;
 use App\Enums\SubsystemAccountStatus;
 use App\Models\GestorUser;
 use App\Models\UserSubsystemAccount;
+use Illuminate\Support\Collection;
 use RuntimeException;
 use Throwable;
 
@@ -27,9 +27,19 @@ use Throwable;
  *
  * Cada cuenta se confirma contra el subsistema (mismo patrón confirm-before-
  * persist que la suspensión): si el subsistema no confirma que la cuenta está
- * deshabilitada, la fila local no se toca. El estado 'baja' del GestorUser se
- * escribe **después** y solo si no hubo ningún fallo, para no dejar a un
- * usuario marcado como de baja con accesos vivos.
+ * deshabilitada, la fila local no se toca.
+ *
+ * Desde la Fase 3.2 este servicio ya **no itera cuentas**: eso lo hace un job
+ * por cuenta. Aquí quedan solo dos cosas, y ambas por lo que no se puede
+ * hacer desde un job:
+ *
+ *  - las precondiciones (validarBaja()), que el controlador comprueba antes de
+ *    encolar para que el operador siga viendo el error en el momento, y
+ *  - el método por cuenta, que el job llama una vez por cada una.
+ *
+ * El estado 'baja' del GestorUser lo escribe ProvisioningOperationService::cerrar(),
+ * porque depende de que TODAS las cuentas hayan salido bien y un job por
+ * cuenta no puede saberlo.
  */
 class UserOffboardingService
 {
@@ -38,77 +48,56 @@ class UserOffboardingService
     ) {}
 
     /**
-     * @return array{usuario: GestorUser, resultados: array<int, array>}
+     * Precondición de la baja. Se comprueba antes de encolar, no en el job: si
+     * el usuario ya está dado de baja, el operador tiene que enterarse con el
+     * formulario delante, no horas después en un job que falla.
      */
-    public function darDeBaja(GestorUser $gestorUser, string $motivo): array
+    public function validarBaja(GestorUser $gestorUser): void
     {
         if ($gestorUser->estaDadoDeBaja()) {
             throw new RuntimeException('El usuario ya está dado de baja.');
         }
-
-        $cuentas = $gestorUser->subsystemAccounts()->with('subsystem')->get();
-
-        $resultados = $cuentas
-            ->map(fn (UserSubsystemAccount $cuenta) => $this->darDeBajaCuenta($cuenta))
-            ->all();
-
-        // El usuario solo se marca de baja si todas sus cuentas quedaron
-        // efectivamente deshabilitadas. A medias es peor que no hacer nada:
-        // el listado prometería un estado que no se cumple.
-        $fallos = array_filter($resultados, fn (array $resultado) => ! $resultado['exito']);
-
-        if ($fallos !== []) {
-            return ['usuario' => $gestorUser->fresh(), 'resultados' => $resultados];
-        }
-
-        $gestorUser->update([
-            'estado' => GestorUserStatus::Baja,
-            'baja_at' => now(),
-            'motivo_baja' => $motivo,
-        ]);
-
-        return ['usuario' => $gestorUser->fresh(), 'resultados' => $resultados];
     }
 
     /**
-     * Devuelve al usuario a activo y reactiva sus cuentas.
-     *
-     * Es el camino inverso, y existe por la misma razón que la baja es
-     * reversible: una baja equivocada no debería obligar a rehacer el alta.
-     *
-     * @return array{usuario: GestorUser, resultados: array<int, array>}
+     * Precondición de la reactivación, simétrica a validarBaja().
      */
-    public function reactivar(GestorUser $gestorUser): array
+    public function validarReactivacion(GestorUser $gestorUser): void
     {
         if (! $gestorUser->estaDadoDeBaja()) {
             throw new RuntimeException('El usuario no está dado de baja.');
         }
+    }
 
-        $resultados = $gestorUser->subsystemAccounts()
+    /**
+     * Cuentas a deshabilitar: todas las que tenga, sin importar el slug. La
+     * baja no se puede limitar a un subconjunto de subsistemas.
+     *
+     * @return Collection<int, UserSubsystemAccount>
+     */
+    public function cuentasABajas(GestorUser $gestorUser): Collection
+    {
+        return $gestorUser->subsystemAccounts()->with('subsystem')->get();
+    }
+
+    /**
+     * Cuentas a reactivar: solo las que están marcadas como eliminadas. Las
+     * demás no necesitan nada y reactivarlas sería una llamada de más.
+     *
+     * @return Collection<int, UserSubsystemAccount>
+     */
+    public function cuentasAReactivar(GestorUser $gestorUser): Collection
+    {
+        return $gestorUser->subsystemAccounts()
             ->with('subsystem')
-            ->get()
-            ->map(fn (UserSubsystemAccount $cuenta) => $this->reactivarCuenta($cuenta))
-            ->all();
-
-        $fallos = array_filter($resultados, fn (array $resultado) => ! $resultado['exito']);
-
-        if ($fallos !== []) {
-            return ['usuario' => $gestorUser->fresh(), 'resultados' => $resultados];
-        }
-
-        $gestorUser->update([
-            'estado' => GestorUserStatus::Activo,
-            'baja_at' => null,
-            'motivo_baja' => null,
-        ]);
-
-        return ['usuario' => $gestorUser->fresh(), 'resultados' => $resultados];
+            ->where('estado', SubsystemAccountStatus::Borrado)
+            ->get();
     }
 
     /**
      * @return array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}
      */
-    private function darDeBajaCuenta(UserSubsystemAccount $cuenta): array
+    public function darDeBajaCuenta(UserSubsystemAccount $cuenta): array
     {
         $subsistema = $cuenta->subsystem;
 
@@ -159,7 +148,7 @@ class UserOffboardingService
     /**
      * @return array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}
      */
-    private function reactivarCuenta(UserSubsystemAccount $cuenta): array
+    public function reactivarCuenta(UserSubsystemAccount $cuenta): array
     {
         $subsistema = $cuenta->subsystem;
 

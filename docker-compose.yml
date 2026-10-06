@@ -40,6 +40,27 @@ services:
     networks:
       - gerenciador-usrs
 
+  # Worker de la cola (Fase 3.2): procesa el alta, suspensión, baja,
+  # reactivación y sincronización que salen a los subsistemas.
+  #
+  # --tries=3 es el respaldo por si algún job se despacha sin su propio $tries.
+  # --queue=subsistemas primero porque es donde va el trabajo lento con
+  # llamadas salientes; 'default' detrás para que no quede sin procesar nada de
+  # lo que se encole más adelante.
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: gerenciador-usrs-queue
+    working_dir: /var/www
+    extra_hosts:
+      - "dc1.klios.br:10.1.2.2"
+    command: php artisan queue:work --queue=subsistemas,default --tries=3 --verbose
+    volumes:
+      - ./src:/var/www
+    networks:
+      - gerenciador-usrs
+
   nginx:
     image: nginx:alpine
     container_name: gerenciador-usrs-nginx

@@ -89,7 +89,7 @@ class AccountStateLogTest extends TestCase
             'inicio_suspension' => now()->toDateString(),
         ])->assertRedirect();
 
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Licencia',
             'inicio_suspension' => now()->toDateString(),
@@ -148,7 +148,7 @@ class AccountStateLogTest extends TestCase
     {
         $email = $this->cuentaActiva();
 
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Fin de contrato',
             'inicio_suspension' => now()->addMonth()->toDateString(),

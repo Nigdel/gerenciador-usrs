@@ -19,9 +19,13 @@ use RuntimeException;
  *     - Si no existe: usa los datos del payload y propone un "usuario"
  *       (login) validado contra Adagio (ver UsernameGeneratorService).
  *  2. Crea/actualiza el GestorUser local.
- *  3. Crea el usuario en cada subsistema solicitado (o en todos los activos
- *     si el payload no especifica "subsistemas"), a través del contrato
- *     universal SubsystemServiceInterface.
+ *  3. Devuelve los subsistemas donde hay que darlo de alta, ya resueltos.
+ *
+ * Desde la Fase 3.2 el paso 3 **no se ejecuta aquí**: provisionar() se queda
+ * en el camino síncrono (una consulta a Adagio, un INSERT local y la propuesta
+ * de login, que además necesita el nombre para salir bien) y devuelve la lista
+ * de subsistemas para que el paso 3 se encole, un job por subsistema. El alta
+ * en sí vive en crearEnSubsistema(), que es lo que el job llama.
  */
 class UserProvisioningService
 {
@@ -40,7 +44,7 @@ class UserProvisioningService
      *                          'direccion_particular' => '...', 'empresa' => 'Acme', 'password_general' => '...',
      *                          'subsistemas' => ['adagio', 'glpi', ...], // opcional: si falta, se usan todos los activos
      *                          ]
-     * @return array{gestor_user: GestorUser, resultados: array<int, array>, login_no_verificado: ?string}
+     * @return array{gestor_user: GestorUser, subsistemas: Collection<int, Subsystem>, datos: array, login_no_verificado: ?string}
      */
     public function provisionar(array $payload): array
     {
@@ -48,16 +52,17 @@ class UserProvisioningService
 
         $gestorUser = DB::transaction(fn () => $this->guardarUsuarioLocal($datosResueltos));
 
-        $subsistemas = $this->resolverSubsistemas($payload['subsistemas'] ?? null);
-
-        $resultados = [];
-        foreach ($subsistemas as $subsystem) {
-            $resultados[] = $this->crearEnSubsistema($gestorUser, $subsystem, $datosResueltos, $payload['subsystem_config'] ?? []);
-        }
-
         return [
             'gestor_user' => $gestorUser->fresh('subsystemAccounts.subsystem'),
-            'resultados' => $resultados,
+            // Los subsistemas donde hay que dar de alta, ya resueltos. No se
+            // da de alta nada aquí: eso lo hace un job por subsistema (Fase
+            // 3.2), para que la respuesta al operador no espere a N llamadas
+            // salientes.
+            'subsistemas' => $this->resolverSubsistemas($payload['subsistemas'] ?? null),
+            // Los datos ya resueltos, porque el job los necesita y no puede
+            // volver a preguntar a Adagio: hacerlo lo haría pedir un login
+            // distinto al que se eligió en su momento.
+            'datos' => $datosResueltos,
             // Aviso del generador de login (Fase 2.8): si algún subsistema no
             // pudo responder, el login se eligió sin confirmarlo contra él y el
             // operador debería saberlo antes de dar el alta por buena.
@@ -136,7 +141,13 @@ class UserProvisioningService
         return $query->get();
     }
 
-    private function crearEnSubsistema(GestorUser $gestorUser, Subsystem $subsystem, array $datos, array $subsystemConfig = []): array
+    /**
+     * Da de alta al usuario en un subsistema concreto. Es la unidad de trabajo
+     * que el job ProcessOperationAccount ejecuta (Fase 3.2).
+     *
+     * @return array{subsistema: string, exito: bool, mensaje: ?string, cuenta: UserSubsystemAccount}
+     */
+    public function crearEnSubsistema(GestorUser $gestorUser, Subsystem $subsystem, array $datos, array $subsystemConfig = []): array
     {
         $datosParaSubsistema = $this->mergeSubsystemConfig($datos, $subsystem, $subsystemConfig);
         $servicio = $this->registry->resolve($subsystem->slug);

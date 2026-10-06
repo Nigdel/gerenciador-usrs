@@ -2,11 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OperationAccountStatus;
+use App\Enums\OperationType;
 use App\Models\GestorUser;
+use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
 use App\Models\User;
 use App\Models\UserSubsystemAccount;
+use App\Services\ProvisioningOperationService;
 use App\Services\UserDataSyncService;
+use App\Services\UserOffboardingService;
+use App\Services\UserProvisioningService;
+use App\Services\UserSuspensionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -16,6 +23,11 @@ use Tests\TestCase;
  *
  * Sincroniza solo atributos de contacto. El login, la empresa y el CPF son la
  * clave con la que se creó la cuenta en cada subsistema y no se tocan.
+ *
+ * Desde la Fase 3.2 la sincronización sale de la petición. Estos tests
+ * ejecutan los jobs a mano (procesarOperacion(), en Tests\TestCase) en vez de
+ * apoyarse en QUEUE_CONNECTION=sync, porque lo que interesa comprobar aquí es
+ * el efecto por cuenta, no cuándo se ejecuta.
  */
 class UserDataSyncTest extends TestCase
 {
@@ -55,6 +67,29 @@ class UserDataSyncTest extends TestCase
         ]);
     }
 
+    /**
+     * Monta una operación de sincronización para las cuentas dadas y ejecuta
+     * sus jobs, que es el camino que sigue el controlador desde el 3.2.
+     *
+     * Devuelve la misma forma que devolvía sincronizar() —{'resultados': …}—
+     * para que las aserciones de estos tests no cambien solo por el refactor.
+     *
+     * @return array{resultados: array<int, array>}
+     */
+    private function sincronizar(GestorUser $gestorUser, ?array $subsistemas = null): array
+    {
+        $servicio = app(UserDataSyncService::class);
+
+        $operacion = app(ProvisioningOperationService::class)->describir(
+            OperationType::Sincronizacion,
+            $gestorUser,
+            $servicio->cuentasASincronizar($gestorUser, $subsistemas),
+        );
+
+        return ['resultados' => $this->procesarOperacion($operacion)];
+    }
+
+
     public function test_propaga_el_nombre_a_las_cuentas_de_cada_subsistema(): void
     {
         $gestorUser = $this->gestor(['nombre_completo' => 'Ana María Silva']);
@@ -66,7 +101,7 @@ class UserDataSyncTest extends TestCase
             'https://glpi.test/*' => Http::response(['id' => 42]),
         ]);
 
-        $resultado = app(UserDataSyncService::class)->sincronizar($gestorUser);
+        $resultado = $this->sincronizar($gestorUser);
 
         $this->assertCount(2, $resultado['resultados']);
         $this->assertTrue(collect($resultado['resultados'])->every(fn ($r) => $r['exito']));
@@ -84,7 +119,7 @@ class UserDataSyncTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://glpi.test/*' => Http::response(['id' => 42])]);
 
-        app(UserDataSyncService::class)->sincronizar($gestorUser);
+        $this->sincronizar($gestorUser);
 
         // El login, la empresa y el CPF son la clave con la que se creó la
         // cuenta (name, dominio del UPN, employeeId). Propagarlos sería
@@ -109,7 +144,7 @@ class UserDataSyncTest extends TestCase
             'https://glpi.test/*' => Http::response(['error' => 'boom'], 500),
         ]);
 
-        $resultado = app(UserDataSyncService::class)->sincronizar($gestorUser);
+        $resultado = $this->sincronizar($gestorUser);
 
         $porSubsistema = collect($resultado['resultados'])->keyBy('subsistema');
         $this->assertTrue($porSubsistema['email']['exito']);
@@ -124,7 +159,7 @@ class UserDataSyncTest extends TestCase
         $this->cuenta($gestorUser, $this->subsistema('desconocido'));
         Http::preventStrayRequests();
 
-        $resultado = app(UserDataSyncService::class)->sincronizar($gestorUser);
+        $resultado = $this->sincronizar($gestorUser);
 
         $this->assertFalse($resultado['resultados'][0]['exito']);
         $this->assertStringContainsString('driver registrado', $resultado['resultados'][0]['mensaje']);
@@ -138,7 +173,7 @@ class UserDataSyncTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['*' => Http::response(['id' => 42])]);
 
-        $resultado = app(UserDataSyncService::class)->sincronizar($gestorUser, ['email']);
+        $resultado = $this->sincronizar($gestorUser, ['email']);
 
         $this->assertCount(1, $resultado['resultados']);
         $this->assertSame('email', $resultado['resultados'][0]['subsistema']);
@@ -190,7 +225,7 @@ class UserDataSyncTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://email.test/*' => Http::response(['id' => 'email-42'])]);
 
-        app(UserDataSyncService::class)->sincronizar($gestorUser);
+        $this->sincronizar($gestorUser);
 
         Http::assertNotSent(fn ($request) => $request['password'] ?? null);
     }

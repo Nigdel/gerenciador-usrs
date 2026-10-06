@@ -64,7 +64,7 @@ class PendingSuspensionTest extends TestCase
         $email = $this->cuentaActiva('email');
         Http::preventStrayRequests();
 
-        $resultados = app(UserSuspensionService::class)->suspender([
+        $resultados = $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Fin de contrato',
             'inicio_suspension' => now()->addMonth()->toDateString(),
@@ -87,7 +87,7 @@ class PendingSuspensionTest extends TestCase
         $email = $this->cuentaActiva('email');
         $this->fakeEmail(false);
 
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Licencia',
             'inicio_suspension' => now()->subDay()->toDateString(),
@@ -102,7 +102,7 @@ class PendingSuspensionTest extends TestCase
         $this->fakeEmail(false);
 
         // Se agenda para dentro de un mes...
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Fin de contrato',
             'inicio_suspension' => now()->addMonth()->toDateString(),
@@ -130,7 +130,7 @@ class PendingSuspensionTest extends TestCase
         $email = $this->cuentaActiva('email');
         Http::preventStrayRequests();
 
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Fin de contrato',
             'inicio_suspension' => now()->addMonth()->toDateString(),
@@ -147,7 +147,7 @@ class PendingSuspensionTest extends TestCase
     public function test_una_suspension_pendiente_vencida_no_se_toca_si_el_subsistema_falla(): void
     {
         $email = $this->cuentaActiva('email');
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Fin de contrato',
             'inicio_suspension' => now()->addMonth()->toDateString(),
@@ -176,7 +176,7 @@ class PendingSuspensionTest extends TestCase
     {
         $email = $this->cuentaActiva('email');
 
-        app(UserSuspensionService::class)->suspender([
+        $this->suspender([
             'usuario' => $email->user->usuario,
             'motivo_suspension' => 'Licencia estacional',
             'inicio_suspension' => now()->addDay()->toDateString(),
