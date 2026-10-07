@@ -121,6 +121,19 @@ class ProcessOperationAccount implements ShouldQueue
                 $fila,
                 fn (UserSubsystemAccount $cuenta) => $sync->sincronizarCuenta($cuenta, $usuario),
             ),
+            // Rama imposible a propósito, y por eso está escrita en vez de
+            // dejar que el match la resuelva por defecto. El restablecimiento
+            // de contraseña se registra como operación ya cerrada (Sprint 2.2),
+            // nunca se encola: hay que entregar la contraseña temporal al
+            // operador, y eso no se puede hacer desde un worker. Si algún día
+            // se encola una de estas, esta rama lo dirá en vez de dejar la fila
+            // pendiente para siempre.
+            OperationType::ResetPassword => [
+                'subsistema' => $fila->subsistema,
+                'exito' => false,
+                'mensaje' => 'El restablecimiento de contraseña no se ejecuta desde la cola.',
+                'cuenta' => null,
+            ],
         };
 
         $operaciones->registrarResultado($fila, $resultado);

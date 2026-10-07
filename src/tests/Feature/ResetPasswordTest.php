@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OperationAccountStatus;
+use App\Enums\OperationStatus;
+use App\Enums\OperationType;
 use App\Models\GestorUser;
+use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
 use App\Models\User;
 use App\Models\UserSubsystemAccount;
@@ -11,6 +15,7 @@ use App\Services\UserProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -211,5 +216,124 @@ class ResetPasswordTest extends TestCase
         $this->assertCount(2, $porSubsistema);
         $this->assertTrue($porSubsistema['glpi']['exito']);
         $this->assertNotEmpty($porSubsistema['inexistente']['mensaje']);
+    }
+
+    /**
+     * Sprint 2.2 — El restablecimiento queda registrado.
+     *
+     * Hasta aquí no dejaba rastro: no había fila en provisioning_operations ni
+     * aparecía en el listado, y un cambio de contraseña es de las cosas que
+     * más hace falta poder auditar. Se registra como operación ya cerrada,
+     * sin encolar nada, porque la contraseña temporal hay que entregársela al
+     * operador y un worker no tiene a quién.
+     */
+    public function test_el_restablecimiento_queda_registrado_como_operacion(): void
+    {
+        $gestorUser = $this->gestor();
+        $this->cuenta($gestorUser, $this->subsistema('email'));
+
+        Http::preventStrayRequests();
+        Http::fake(['https://email.test/*' => Http::response([])]);
+
+        app(UserProvisioningService::class)->resetAllPasswords($gestorUser->fresh());
+
+        $operacion = ProvisioningOperation::query()->sole();
+
+        $this->assertSame(OperationType::ResetPassword, $operacion->tipo);
+        $this->assertSame(OperationStatus::Completada, $operacion->estado);
+        $this->assertSame(1, $operacion->exitos);
+        $this->assertSame(0, $operacion->errores);
+        $this->assertNotNull($operacion->terminada_at);
+        $this->assertSame('email', $operacion->cuentas()->sole()->subsistema);
+    }
+
+    public function test_la_operacion_de_reset_no_guarda_la_contrasena(): void
+    {
+        $gestorUser = $this->gestor();
+        $this->cuenta($gestorUser, $this->subsistema('email'));
+
+        Http::preventStrayRequests();
+        Http::fake(['https://email.test/*' => Http::response([])]);
+
+        $resultado = app(UserProvisioningService::class)->resetAllPasswords($gestorUser->fresh());
+
+        $operacion = ProvisioningOperation::query()->sole();
+
+        // El payload va cifrado, pero no tiene por qué guardar el secreto: la
+        // contraseña ya está en el flash del operador y no hay ninguna razón
+        // para dejar una copia más en la base.
+        $this->assertArrayNotHasKey('password_general', $operacion->payload ?? []);
+        $this->assertStringNotContainsString(
+            $resultado['contrasena'],
+            json_encode($operacion->payload ?? [], JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function test_no_se_encola_nada_para_el_reset(): void
+    {
+        $gestorUser = $this->gestor();
+        $this->cuenta($gestorUser, $this->subsistema('email'));
+
+        Queue::fake();
+
+        Http::preventStrayRequests();
+        Http::fake(['https://email.test/*' => Http::response([])]);
+
+        app(UserProvisioningService::class)->resetAllPasswords($gestorUser->fresh());
+
+        // Encolar aquí significaría que el passwordGeneral se queda en el
+        // payload hasta que el worker pase, con la entrega al operador sin
+        // resolver por el camino.
+        Queue::assertNothingPushed();
+    }
+
+    public function test_el_reset_fallido_registra_cada_cuenta_con_su_mensaje(): void
+    {
+        $gestorUser = $this->gestor();
+        $ok = $this->cuenta($gestorUser, $this->subsistema('email'));
+        $roto = $this->cuenta($gestorUser, $this->subsistema('glpi'));
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://email.test/*' => Http::response([]),
+            'https://glpi.test/*' => Http::response(['message' => 'Credenciales rechazadas'], 403),
+        ]);
+
+        app(UserProvisioningService::class)->resetAllPasswords($gestorUser->fresh());
+
+        $operacion = ProvisioningOperation::query()->sole();
+        $filas = $operacion->cuentas()->get()->keyBy('user_subsystem_account_id');
+
+        // Una cuenta que salió bien y otra que no: la operación tiene que
+        // reflejar las dos, no solo decir que hubo un fallo.
+        $this->assertSame(OperationAccountStatus::Ok, $filas[$ok->id]->estado);
+        $this->assertSame(OperationAccountStatus::Error, $filas[$roto->id]->estado);
+        $this->assertSame(OperationStatus::Fallida, $operacion->refresh()->estado);
+        $this->assertSame(1, $operacion->errores);
+        $this->assertSame(1, $operacion->exitos);
+    }
+
+    public function test_el_reset_no_bloquea_el_usuario_para_otras_operaciones(): void
+    {
+        $gestorUser = $this->gestor();
+        $cuenta = $this->cuenta($gestorUser, $this->subsistema('email'));
+
+        Http::preventStrayRequests();
+        Http::fake(['https://email.test/*' => Http::response([])]);
+
+        app(UserProvisioningService::class)->resetAllPasswords($gestorUser->fresh());
+
+        // La operación del reset nace cerrada, así que no puede estar
+        // bloqueando al usuario (Sprint 1.4). Dos resets seguidos tienen que
+        // poder hacerse, que es justo lo que hace un operador que no lee bien
+        // la contraseña que le sale en pantalla.
+        $servicio = app(UserProvisioningService::class);
+        $servicio->resetAllPasswords($gestorUser->fresh());
+
+        $this->assertSame(2, ProvisioningOperation::query()->count());
+        $this->assertSame(
+            [OperationStatus::Completada, OperationStatus::Completada],
+            ProvisioningOperation::query()->orderBy('id')->get()->map(fn ($o) => $o->estado)->all(),
+        );
     }
 }

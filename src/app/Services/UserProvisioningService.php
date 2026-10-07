@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Contracts\IdentityProviderInterface;
 use App\DTO\SubsystemOperationResult;
+use App\Enums\OperationAccountStatus;
+use App\Enums\OperationType;
 use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
@@ -34,6 +36,7 @@ class UserProvisioningService
         private readonly SubsystemServiceRegistry $registry,
         private readonly UsernameGeneratorService $usernameGenerator,
         private readonly TemporaryPasswordGenerator $passwordGenerator,
+        private readonly ProvisioningOperationService $operations,
     ) {}
 
     /**
@@ -227,7 +230,67 @@ class UserProvisioningService
             ];
         }
 
+        $this->registrarOperacionDeReset($gestorUser, $results);
+
         return ['contrasena' => $nuevaContrasena, 'resultados' => $results];
+    }
+
+    /**
+     * Deja el restablecimiento registrado como una operación ya cerrada
+     * (Sprint 2.2).
+     *
+     * Sigue siendo síncrono a propósito. La contraseña temporal hay que
+     * entregársela al operador, y un worker no tiene a quién entregársela: el
+     * resultado del restablecimiento vive en un flash que se consume en la
+     * siguiente pantalla. Moverlo a la cola obligaría a inventar un canal
+     * seguro de entrega antes de poder hacerlo, y ese canal es trabajo de una
+     * fase posterior, no de aquí.
+     *
+     * Lo que sí se hace es registrarlo, que es lo que faltaba: hasta ahora el
+     * reset no dejaba ninguna fila y no aparecía en el listado de operaciones.
+     * Una restablecimiento de contraseña es justo el tipo de cosa que hace falta
+     * poder auditar.
+     *
+     * El payload va sin contraseña a propósito, y no por descuido: `describir()`
+     * escribe el payload cifrado, pero no hay ninguna razón para guardar el
+     * secreto un segundo más de lo que ya vive en el flash. La cuenta es lo
+     * que se necesita para saber a quién se le cambió y cuándo.
+     *
+     * @param  array<int, array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: UserSubsystemAccount}>  $resultados
+     */
+    private function registrarOperacionDeReset(GestorUser $gestorUser, array $resultados): void
+    {
+        $operacion = $this->operations->describir(
+            OperationType::ResetPassword,
+            $gestorUser,
+            collect($resultados)->pluck('cuenta')->filter(),
+            ['motivo' => 'Restablecimiento de contraseña solicitado por el operador'],
+        );
+
+        // El trabajo ya está hecho: no se encola nada y las filas nacen
+        // 'pendiente' solo porque es lo que hace describir(). Escribirlas con
+        // el resultado que acaba de devolver cada driver es lo que convierte
+        // un registro decorativo en un registro fiel —y cierra la operación,
+        // que si no se quedaría 'pendiente' hasta que la recogiera el
+        // expire-stuck del Sprint 1.4, con un resultado obsoleto.
+        foreach ($resultados as $resultado) {
+            $fila = $operacion->cuentas()
+                ->where('user_subsystem_account_id', $resultado['cuenta']?->getKey())
+                ->first();
+
+            if ($fila === null) {
+                continue;
+            }
+
+            $fila->update([
+                'estado' => $resultado['exito']
+                    ? OperationAccountStatus::Ok
+                    : OperationAccountStatus::Error,
+                'mensaje' => $resultado['mensaje'],
+            ]);
+        }
+
+        $this->operations->cerrar($operacion);
     }
 
     /**

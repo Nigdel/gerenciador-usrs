@@ -17,6 +17,7 @@ enum OperationType: string
     case Baja = 'baja';
     case Reactivacion = 'reactivacion';
     case Sincronizacion = 'sincronizacion';
+    case ResetPassword = 'reset_password';
 
     /**
      * Texto para el operador, en el panel de operaciones de la ficha.
@@ -29,6 +30,12 @@ enum OperationType: string
             self::Baja => 'Baja',
             self::Reactivacion => 'Reactivación',
             self::Sincronizacion => 'Sincronización de datos',
+            // En minúsculas y con guion a propósito: a diferencia de los otros
+            // cinco, este nunca lo ve un operador en un botón —nace ya
+            // cerrada— sino en el listado de operaciones, que es texto en
+            // Spanish y donde 'Restablecimiento de contraseña' pesa más que el
+            // resto.
+            self::ResetPassword => 'Restablecimiento de contraseña',
         };
     }
 
@@ -47,6 +54,8 @@ enum OperationType: string
             self::Baja => 'La baja está en curso',
             self::Reactivacion => 'La reactivación está en curso',
             self::Sincronizacion => 'La sincronización está en curso',
+            // No hay aviso porque nunca se encola: ver el docblock.
+            self::ResetPassword => 'El restablecimiento está en curso',
         };
     }
 
@@ -67,6 +76,7 @@ enum OperationType: string
             self::Suspension => 'suspend',
             self::Baja => 'offboard',
             self::Reactivacion, self::Sincronizacion => 'update',
+            self::ResetPassword => 'resetPassword',
         };
     }
 
