@@ -346,7 +346,7 @@ docker compose exec app php artisan api:token {integracion} \
 | Código | Cuándo | Cuerpo |
 | --- | --- | --- |
 | `401` / `403` | sin token, o sin la ability que exige la ruta | — |
-| `422` | los datos llegaron bien formados pero la situación no lo permite (el nombre no da para un login, no hay `cpf` ni `usuario`…) | `{ "message": "…" }` con el motivo |
+| `422` | los datos llegaron bien formados pero la situación no lo permite (el nombre no da para un login, no hay `cpf` ni `usuario`, el usuario no existe…) | `{ "message": "…" }` con el motivo |
 | `409` | el usuario ya tiene una operación sin terminar | `{ "message", "operacion_id" }` |
 | `502` | algo se rompió por dentro: Adagio o un subsistema no responden, falta la extensión `ldap`, error de programación | `{ "message": "…" }` genérico |
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use App\Exceptions\OperationInProgressException;
 use App\Exceptions\ProvisioningException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Throwable;
 
@@ -52,6 +53,19 @@ trait RespondeErroresDeProvisionado
             // identificador de la operación que bloquea. Aquí solo se evita que
             // caiga en el 500 genérico de abajo.
             throw $exception;
+        } catch (ModelNotFoundException $exception) {
+            // Un usuario que no está en la base no es un problema de
+            // infraestructura. Localizarlo usa firstOrFail(), así que sin esto
+            // caía en el 502 de abajo y la integración leía «el servicio no
+            // está disponible» cuando lo único que pasa es que el CPF no
+            // existe — que además no se puede arreglar reintentando.
+            //
+            // Solo aquí: en OperationController, un firstOrFail() sí debe
+            // seguir siendo 404, porque una operación que no existe no se
+            // distingue de una que es de otro.
+            return response()->json([
+                'message' => 'No se encontró ningún usuario con el identificador indicado.',
+            ], 422);
         } catch (ProvisioningException $exception) {
             // Los datos eran válidos pero la situación no lo permite: es un
             // 422 y no un 400, porque el mismo payload puede aceptarse más

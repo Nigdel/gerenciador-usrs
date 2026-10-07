@@ -154,6 +154,18 @@ Usar `Queue::fake()` para encolado y `dispatchSync`/ejecución directa del job p
 Extender `Api/`: 201 con `operacion_id` y filas `pendiente`, 422 de validación, 401/403, 409 (Sprint 1),
 `login_no_verificado` presente en la respuesta.
 
+**Estado:** hecho. `Api/ProvisioningContractTest.php` cubre el cuerpo del 201 (una fila por subsistema,
+`operacion_id` real, la contraseña general fuera de la respuesta), el 422 (validación de campos, el
+`nombre_completo`/`empresa` que exige un CPF nuevo, el usuario inexistente), el 409 y el 502 sin detalle.
+`login_no_verificado` se comprueba presente-aunque-sea-null, que es lo que evita que una integración se
+lo lea con `??` y nunca se entere de que faltó. Los 401/403 ya estaban en `ApiAuthenticationTest` y el
+409 en `ConcurrentOperationsTest`; aquí solo se repite el código desde el punto de vista del endpoint.
+
+Al hacerlo apareció un fallo: `localizarUsuario()` usa `firstOrFail()`, y esa excepción caía en el
+`Throwable` del trait y se respondía 502 —«servicio caído, reintenta»— para un CPF que no existe.
+Reintentar eso no funciona nunca, así que ahora es un 422. El 502 queda para lo que sí es
+infraestructura, y `ErrorHandlingTest` comprueba las dos mitades.
+
 ### 3.3 Tests por driver (M)
 Contrato completo por subsistema con `Http::fake` (y LDAP simulado para Samba): `createUser`, `suspendUser`,
 `reactivateUser`, `disableUser`, `getUserStatus`, `resetPassword`, `updateUser`, `loginEnUso`.

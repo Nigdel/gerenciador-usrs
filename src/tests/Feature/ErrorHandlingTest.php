@@ -172,16 +172,37 @@ class ErrorHandlingTest extends TestCase
         $this->assertStringNotContainsString('10.0.0.5', $respuesta->getContent());
     }
 
-    public function test_un_error_de_infraestructura_responde_502_en_la_api(): void
+    public function test_un_usuario_inexistente_responde_422_y_no_502(): void
     {
         $this->token([ApiAbility::Suspender])
             ->postJson('/api/usuarios/suspender', [
                 'cpf' => '99999999999',
                 'motivo_suspension' => 'Licença médica',
             ])
-            // El usuario no existe: firstOrFail lanza y no es de dominio, así
-            // que se responde 502 —servicio caído— y no un 404. Es lo que
-            // decide este mapeo y merece quedar dicho.
+            // Localizarlo usa firstOrFail(), así que la excepción no es de
+            // dominio. Antes caía en el 502 genérico, que le decía a la
+            // integración «reinténtalo más tarde» — y reintentar un CPF que no
+            // existe no va a funcionar nunca. Es un 422: los datos eran
+            // válidos y la situación no lo permite.
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'No se encontró ningún usuario con el identificador indicado.');
+    }
+
+    public function test_un_error_de_infraestructura_responde_502_en_la_api(): void
+    {
+        // La mitad complementaria: un fallo que sí es de infraestructura —un
+        // LDAP que no contesta, un driver caído— sigue siendo 502 y sigue sin
+        // filtrar nada. Lo que cambia arriba no arrastra a este caso.
+        $this->mock(UserSuspensionService::class, function ($mock): void {
+            $mock->shouldReceive('localizarUsuario')
+                ->andThrow(new Exception('Connection refused to https://ldap://10.0.0.5:389 (bind DN=cn=admin)'));
+        });
+
+        $this->token([ApiAbility::Suspender])
+            ->postJson('/api/usuarios/suspender', [
+                'cpf' => '99999999999',
+                'motivo_suspension' => 'Licença médica',
+            ])
             ->assertStatus(502);
     }
 
