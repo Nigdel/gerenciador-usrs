@@ -1,3 +1,23 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Tailwind 4 lee las fuentes desde aquí en vez de desde el `content` del
+   config. `storage/framework/views` es la vista Blade compilada: sin esto, las
+   clases que solo existen dentro de @if o de un include no se generarían. */
+@source '../../storage/framework/views/*.php';
+@source '../views/**/*.blade.php';
+
+/* Las vistas de paginación de Laravel viven en el framework, no en el
+   proyecto. Sin esta línea, los `Previous`/`Next` de `{{ $users->links() }}`
+   salen sin estilo. */
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+/* El plugin de formularios pasa a declararse aquí; en v3 vivía en el array
+   `plugins` de tailwind.config.js. */
+@plugin '@tailwindcss/forms';
+
+/* Sustituye al bloque `theme.extend` del config: en v4, la fuente por defecto se
+   declara en `@theme` y las utilidades `font-sans` / `font-display` salen de ahí.
+   `defaultTheme` ya no es necesario: la pila del sistema la pone el preflight. */
+@theme {
+    --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+}
