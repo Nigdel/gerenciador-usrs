@@ -87,9 +87,28 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 ## CI
 
 `.github/workflows/ci.yml` (en la raíz del repo, no en `src/`) corre en cada `push`
-y cada `pull_request`: `pint --test`, `phpunit` y Larastan.
+y cada `pull_request`: `pint --test`, `phpunit`, cobertura y Larastan.
 Corre sobre **PHP 8.5**, la misma versión del `Dockerfile`, para que un verde en CI
 signifique lo mismo que un verde en el contenedor.
+
+## Cobertura
+
+`php artisan test --coverage --min=80` es puerta en CI. Hoy está en **80,1 %**
+global, y por directorio: `Http` 89,6 %, `Jobs` 90,0 %, `Services` 80,0 %.
+
+Requiere **PCOV**, que no viene en la imagen de propósito: un driver de cobertura
+en el contenedor que además sirve peticiones es peso que no se necesita. En local
+hay que instalarlo antes de medir:
+
+    docker compose exec app sh -c 'yes "" | pecl install pcov && echo "extension=pcov.so" > /usr/local/etc/php/conf.d/docker-php-ext-pcov.ini'
+
+Eso toca el contenedor en marcha, no el `Dockerfile`, así que se pierde al
+reconstruir. PCOV antes que Xdebug: la suite tarda unos 10 s con PCOV y varios
+minutos con Xdebug, y para contar líneas dan lo mismo.
+
+`--min` mide la **media global**, no por directorio: es lo que permite el
+formato de `php artisan test`. El desglose por directorio hay que sacarlo a mano
+con `--coverage` y es el que de verdad dice si algo está sin cubrir.
 
 ## Análisis estático (Larastan)
 

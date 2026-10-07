@@ -49,6 +49,16 @@ class FakeLdapDirectory
     /** Function name => bool, for the calls that answer success or failure. */
     public static array $succeeds = [];
 
+    /**
+     * Function name => 1-based position, for the nth call to fail.
+     *
+     * Needed where one function is called twice with different consequences and
+     * only the second one has a rollback: $succeeds can only answer once per
+     * function, so breaking ldap_mod_replace through it would take out the
+     * password step and leave the enable step untested.
+     */
+    public static array $failsOnNth = [];
+
     /** DN renames requested, as [from, to]. */
     public static array $renames = [];
 
@@ -62,6 +72,7 @@ class FakeLdapDirectory
         self::$users = [];
         self::$lastEntries = ['count' => 0];
         self::$succeeds = [];
+        self::$failsOnNth = [];
         self::$renames = [];
         self::$currentDn = [];
     }
@@ -148,6 +159,8 @@ function ldap_bind(mixed $link, ?string $dn = null, ?string $password = null): b
 
 function ldap_unbind(mixed $link): bool
 {
+    FakeLdapDirectory::record('ldap_unbind', []);
+
     return true;
 }
 
@@ -206,6 +219,19 @@ function ldap_add(mixed $link, string $dn, array $entry): bool
 function ldap_mod_replace(mixed $link, string $dn, array $entry): bool
 {
     FakeLdapDirectory::record('ldap_mod_replace', [$dn, $entry]);
+
+    // $succeeds solo admite un valor por función, y createUser() la llama dos
+    // veces —primero la contraseña, luego la habilitación— con caminos
+    // distintos: fijar la contraseña exige LDAPS y puede fallar con la cuenta ya
+    // creada. $failsOnNth permite romper solo la segunda, que es la forma de
+    // llegar al rollback del paso 3 sin tocar el paso 2.
+    if (isset(FakeLdapDirectory::$failsOnNth['ldap_mod_replace'])) {
+        $posicion = count(FakeLdapDirectory::callsTo('ldap_mod_replace'));
+
+        if ($posicion === FakeLdapDirectory::$failsOnNth['ldap_mod_replace']) {
+            return false;
+        }
+    }
 
     return FakeLdapDirectory::$succeeds['ldap_mod_replace'] ?? true;
 }

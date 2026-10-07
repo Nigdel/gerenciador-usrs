@@ -224,8 +224,21 @@ Lo que costó descubrir:
 - `pint --test` fallaba en 5 ficheros heredados; se corrigieron en 3.4, porque un
   gate de estilo rojo desde el primer día bloquea todos los PR.
 
-Pendiente del Sprint 3: medir cobertura ≥ 80 % en `app/Services`, `app/Jobs` y
-`app/Http`, que exige Xdebug o PCOV en la imagen.
+Pendiente del Sprint 3, cerrado: cobertura ≥ 80 % medida con **PCOV** (78,1 % →
+**80,1 %**). `Http` 89,6 %, `Jobs` 90,0 %, `Services` 80,0 %.
+
+El hueco era uno solo y grande: `SambaAdService::createUser()` tenía 100 líneas
+sin cubrir —crear, fijar contraseña, habilitar, con rollback en los dos últimos
+pasos— porque su `CreateUserTest` solo comprobaba la guarda de validación. Cubierto
+con 15 tests, el servicio pasa de 52,6 % a 73,1 %.
+
+Dos cosas que hacen falta para poder medirlo dos veces:
+
+- **PCOV no va en la imagen.** Va en el job de CI, que ya instala sus extensiones.
+  En local se instala a mano en el contenedor; se pierde al reconstruir, y da
+  igual porque solo se usa para medir.
+- **`--min` mide la media global**, no por directorio, que es lo que permite el
+  formato de `php artisan test`. El desglose hay que sacarlo a mano.
 
 **Hecho cuando:** CI verde en `main`; cobertura ≥ 80 % en `app/Services`, `app/Jobs` y `app/Http`
 (medir con `php artisan test --coverage`, requiere Xdebug/PCOV en la imagen).

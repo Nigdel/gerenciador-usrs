@@ -25,7 +25,7 @@ jobs:
           # SambaAdService llama a ldap_* sin condición (los tests de Samba
           # las sustituyen por funciones del mismo namespace); gd, intl y
           # zip las exige laravel/framework.
-          extensions: bcmath, curl, exif, gd, intl, ldap, mbstring, pcntl, pdo_mysql, pdo_sqlite, zip
+          extensions: bcmath, curl, exif, gd, intl, ldap, mbstring, pcntl, pdo_mysql, pdo_sqlite, zip, pcov
 
       - name: Cache Composer
         uses: actions/cache@v4
@@ -61,6 +61,17 @@ jobs:
         # nada ahora. Tampoco hay servicio de MySQL: phpunit.xml fija
         # DB_CONNECTION=sqlite con :memory:.
         run: php artisan test
+
+      - name: Cobertura
+        working-directory: src
+        # PCOV y no Xdebug: la suite tarda 10 s con PCOV y varios minutos con
+        # Xdebug, y para medir líneas da lo mismo. Va en el job de CI y no en la
+        # imagen de producción: un driver de cobertura en un contenedor que
+        # además sirve peticiones es peso y superficie que no se necesitan.
+        # El umbral es el que pide el plan para app/Services, app/Jobs y
+        # app/Http. --min mide la media global, no por directorio: por eso el
+        # desglose está en el README y se revisa a mano.
+        run: php artisan test --coverage --min=80
 
       - name: Larastan
         working-directory: src
