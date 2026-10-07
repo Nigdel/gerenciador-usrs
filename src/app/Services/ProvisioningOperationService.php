@@ -168,6 +168,14 @@ class ProvisioningOperationService
         ])->save();
 
         $this->aplicarEstadoDelUsuario($operacion, $errores);
+
+        // Una operación completada no tiene a nadie a quien darle de alta, así
+        // que su contraseña general ya no hace falta: se va en el mismo
+        // momento en que se cierra y no espera al prune. Las fallidas la
+        // conservan, porque un reintento aún la necesita.
+        if ($errores === 0) {
+            $operacion->podarSecretos();
+        }
     }
 
     /**

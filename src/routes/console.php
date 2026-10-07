@@ -30,3 +30,17 @@ Schedule::command('accounts:apply-pending-suspensions')
     ->everyTenMinutes()
     ->withoutOverlapping()
     ->onOneServer();
+
+/*
+ * Caducidad de los secretos del payload (Sprint 1.1): el payload cifrado de
+ * una operación guarda la contraseña general, y `cerrar()` ya la borra al
+ * completarse. Este comando cubre lo que queda —fallidas que nadie reintentó y
+ * completadas anteriores a la poda— pasado `operations.secret_ttl_hours`.
+ *
+ * Cada hora basta: el TTL por defecto está en días, así que hacerlo más a
+ * menudo solo consumiría consultas.
+ */
+Schedule::command('operations:prune-secrets')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();

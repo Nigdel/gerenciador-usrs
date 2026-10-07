@@ -85,6 +85,37 @@ class ProvisioningOperation extends Model
     }
 
     /**
+     * Borra del payload cifrado la contraseña general.
+     *
+     * El payload existe porque el alta necesita la contraseña en claro para
+     * dársela a cada subsistema, pero conservarla para siempre en la base deja
+     * un secreto útil mucho después de que dejó de serlo. Solo se quita cuando
+     * la operación ya no puede volver a necesitarlo:
+     *
+     * - Completada: no hay nada que reintentar, se va ya.
+     * - Fallida: se conserva hasta que se reintente o hasta que pase el TTL
+     *   (lo hace `operations:prune-secrets`). Podarla antes dejaría el reintento
+     *   sin contraseña y obligaría a resetearla a mano.
+     *
+     * @return bool Si se ha modificado algo.
+     */
+    public function podarSecretos(): bool
+    {
+        $payload = $this->payload ?? [];
+
+        if (! array_key_exists('password_general', $payload)) {
+            return false;
+        }
+
+        unset($payload['password_general']);
+
+        $this->payload = $payload === [] ? null : $payload;
+        $this->save();
+
+        return true;
+    }
+
+    /**
      * Resumen de una línea para el panel: «2 correctas, 1 con error».
      */
     public function resumen(): string
