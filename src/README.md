@@ -77,6 +77,82 @@ Después de borrar el volumen, repite los comandos de migración y seeder de la
 primera instalación. Para recompilar los estilos después de cambiar dependencias
 o configuración frontend, ejecuta `docker compose up -d --force-recreate assets`.
 
+## Operación del worker
+
+El servicio `queue` corre `queue:work --queue=subsistemas,default --tries=3`, y
+`scheduler` corre `schedule:work` (reacturación automática y `expire-stuck`).
+
+### Tras cada despliegue
+
+```bash
+docker compose exec app php artisan queue:restart
+```
+
+**Hay que ejecutarla en cuanto se despliega**, no es opcional. El worker tiene el
+código viejo cargado en memoria: `queue:restart` no mata el proceso, escribe una
+marca de tiempo en la caché y el worker la ve al terminar el job que tiene entre
+manos y se reinicia solo. Sin esto, un despliegue deja ejecutando la versión
+anterior hasta que alguien reinicie el contenedor a mano — y como los jobs se
+ejecutan dentro de peticiones que escriben en base de datos, el síntoma no es
+un error visible, sino un alta a medias con el esquema nuevo.
+
+La orden funciona entre contenedores porque `queue` y `app` comparten la
+misma caché en MySQL. Si algún día la caché pasa a un Redis con un store por
+contenedor, esta instrucción deja de propagarse silenciosamente y habría que
+reiniciar el worker de otra forma.
+
+El worker corre con `restart: unless-stopped`, y eso es lo que hace que la
+orden sirva: al recibir la señal, `queue:work` sale, y Docker lo vuelve a
+levantar con el código nuevo. Sin esa política, `queue:restart` lo dejaba
+parado para siempre y la web seguía aceptando altas que nadie ejecutaba —
+un fallo que no se ve en ningún log de la aplicación.
+
+`queue:restart` no espera a que termine: el job en curso se completa con el
+código viejo y el siguiente ya sale con el nuevo. Para una operación que no
+puede esperar, mira antes el tamaño de las colas:
+
+```bash
+docker compose exec app php artisan queue:monitor database:default:1000
+docker compose exec app php artisan queue:monitor database:subsistemas:1000
+```
+
+El formato es `conexión:cola:máximo`, y la conexión aquí se llama `database`
+porque es la de `.env`. Ojo: si se escribe `default:1000` a secas, Laravel lo
+interpreta como el nombre de una conexión y falla.
+
+### Jobs fallidos
+
+Un job que agota sus tres intentos (esperando 30 s, 2 min y 10 min entre
+intentos) se guarda en `failed_jobs`, y su operación se queda `fallida` con el
+motivo por cuenta:
+
+```bash
+docker compose exec app php artisan queue:failed                 # listar
+docker compose exec app php artisan queue:failed 42              # ver el detalle de uno
+docker compose exec app php artisan queue:retry 42               # reintentarlo
+docker compose exec app php artisan queue:forget 42              # descartarlo
+docker compose exec app php artisan queue:flush                  # vaciar la tabla
+```
+
+El ciclo está comprobado de punta a punta: la excepción se reintenta con el
+backoff declarado, al tercer intento la fila pasa a `error` con el mensaje del
+driver y la operación se cierra como `fallida`. Lo que hay que mirar no es el
+job fallido —eso ya avisó— sino las operaciones `fallida` en el panel, que
+son las que requieren que alguien pulse «Reintentar».
+
+Desde el panel, la operación se puede reintentar entera desde la ficha del
+usuario, que además vuelve a encolar solo las cuentas que fallaron.
+
+`queue:flush` borra la tabla entera sin preguntar, así que úsalo solo cuando
+ya se revisó qué había: es la única forma de perder el rastro de un fallo sin
+haber mirado el mensaje.
+
+Los servicios `queue` y `scheduler` arrancan a la vez que MySQL, así que en un
+`docker compose up` recién hecho pueden morir alguna vez con
+`Connection refused` hasta que la base esté lista. Con `restart:
+unless-stopped` se levantan solos; sin esa política, esa carrera mataba el
+worker para el resto de la sesión.
+
 ## Redis: por qué no hay servicio `redis` en Compose
 
 La cola, la caché y las sesiones van a MySQL (`QUEUE_CONNECTION`,

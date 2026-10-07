@@ -113,6 +113,14 @@ Hoy es síncrono y no deja rastro en `provisioning_operations`.
 - Documentar `docker compose exec app php artisan queue:restart` tras cada despliegue.
 - Vigilar `failed_jobs`: comando/consulta en el runbook (`php artisan queue:failed`).
 
+**Estado:** hecho. Runbook en el README. Al verificarlo se encontró que **ningún
+servicio tenía política `restart`**: `queue:restart` deja el worker parado y sin
+nadie que lo levante, así que la web seguía aceptando altas que nadie
+ejecutaba. Añadido `restart: unless-stopped` a app, nginx, mysql, queue y
+scheduler (no a `assets`, que es un job de un solo uso). Verificado el ciclo
+completo: 3 intentos con backoff → `failed_jobs` → fila en `error` con el
+mensaje → operación `fallida`.
+
 ### 2.5 Higiene del repositorio y configuración (S)
 - Borrar `update_tests.php`.
 - Mover el plan a `to-do/` (`README.md`, `plan-implementacion.md`, estado) y arreglar el `README.md` raíz.
