@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ApiAbility;
+use App\Http\Controllers\Api\OperationController;
 use App\Http\Controllers\Api\UserProvisioningController;
 use App\Http\Controllers\Api\UserSuspensionController;
 use Illuminate\Support\Facades\Route;
@@ -25,4 +26,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/suspender', [UserSuspensionController::class, 'store'])
             ->middleware('abilities:'.ApiAbility::Suspender->value);
     });
+
+    /*
+     * Consulta de una operación por su uuid (Sprint 1.3). Cierra el circuito
+     * del alta: el POST devuelve el `operacion_id` y encola el trabajo, así que
+     * sin esto la integración no puede saber si las cuentas se crearon.
+     *
+     * Ability aparte de las de escritura a propósito: consultar es de sobra
+     * más seguro que dar de alta, y una integración que solo informa del estado
+     * no debería poder crear usuarios por el mismo token.
+     */
+    Route::get('/operaciones/{uuid}', [OperationController::class, 'show'])
+        ->middleware('abilities:'.ApiAbility::Consultar->value)
+        ->name('api.operaciones.show');
 });

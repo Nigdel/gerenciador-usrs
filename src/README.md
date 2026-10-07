@@ -182,6 +182,46 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 - Si ya estaba suspendido en un subsistema, esta llamada solo actualiza
   `inicio_suspension`, `fin_suspension` y `motivo_suspension`.
 
+### `GET /api/operaciones/{uuid}`
+
+Ambos `POST` de arriba responden `201` con un `operacion_id`: el trabajo real
+sale a los subsistemas en segundo plano, así que en ese momento las cuentas
+todavía **no** están creadas. Para saber si lo quedaron, hay que consultar
+esta ruta con ese `operacion_id` hasta que `terminado` sea `true`.
+
+```json
+{
+  "uuid": "0f8b...",
+  "tipo": "alta",
+  "estado": "en_curso",
+  "terminado": false,
+  "resumen": "Sin procesar",
+  "cuentas": [
+    { "subsistema": "email", "estado": "ok", "mensaje": "Cuenta creada", "intentos": 1 },
+    { "subsistema": "glpi",  "estado": "error", "mensaje": "Timeout", "intentos": 3 }
+  ]
+}
+```
+
+- `terminado` pasa a `true` cuando no queda ninguna cuenta pendiente. Es el
+  único bucle que necesita la integración; no hay que interpretar `estado`.
+- Los estados terminales son `completada` (todas las cuentas salieron bien) y
+  `fallida` (alguna tuvo error). En `failida`, `cuentas[].mensaje` dice por qué.
+- Requiere la ability `operaciones:consultar`, independiente de las de
+  escritura: un token que solo informa del estado no puede crear usuarios.
+- Un token **solo ve las operaciones que él mismo originó** por la API. Las
+  hechas desde la web responden `404`, igual que las inexistentes: que la
+  operación exista ya es información de otro.
+- Nunca devuelve el `payload` de la operación, que lleva la contraseña general
+  en claro.
+
+Para emitir un token con esa ability:
+
+```
+docker compose exec app php artisan api:token {integracion} \
+  --abilities=usuarios:provisionar,usuarios:suspender,operaciones:consultar
+```
+
 ## Agregar un subsistema nuevo
 
 1. Crear `app/Services/Subsystems/NuevoService.php` implementando
