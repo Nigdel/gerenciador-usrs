@@ -15,6 +15,7 @@ use App\Models\UserSubsystemAccount;
 use App\Support\ActorContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -116,6 +117,47 @@ class ProvisioningOperationService
             ->orderBy('id')
             ->pluck('id')
             ->each(fn (int $filaId) => ProcessOperationAccount::dispatch($filaId)->onQueue(self::COLA));
+    }
+
+    /**
+     * Vuelve a poner en cola una cuenta que había fallado (Sprint 1.2).
+     *
+     * Solo se acepta una fila en 'error' de una operación ya terminada. Las
+     * demás quedarían en un estado inconsistente: una fila correcta ya hizo su
+     * trabajo y repetirla tocaría el subsistema por segunda vez, y una operación
+     * en curso ya tiene su propia cola —meter una fila dentro alteraría
+     * el orden con el que se resolveu y su resultado.
+     *
+     * `intentos` no se pone a cero a propósito: es el número de veces que se
+     * intentó, y ponerlo a cero perdería el rastro de que esta cuenta ya costó
+     * tres intentos antes. El job lo incrementa solo al ejecutarse.
+     *
+     * @throws RuntimeException Si la fila no está en error o la operación sigue abierta.
+     */
+    public function reintentar(ProvisioningOperationAccount $fila): void
+    {
+        $operacion = $fila->operacion()->first();
+
+        if (! $operacion instanceof ProvisioningOperation) {
+            throw new RuntimeException('La cuenta no pertenece a ninguna operación.');
+        }
+
+        if ($fila->estado !== OperationAccountStatus::Error) {
+            throw new RuntimeException('Solo se puede reintentar una cuenta que terminó con error.');
+        }
+
+        if (! $operacion->estaTerminada()) {
+            throw new RuntimeException('La operación todavía está en curso: no hay nada que reintentar.');
+        }
+
+        $fila->update([
+            'estado' => OperationAccountStatus::Pendiente,
+            'mensaje' => null,
+        ]);
+
+        // Solo esta fila, y no despachar() sobre la operación entera: el resto
+        // de cuentas ya terminó y volver a encolarlas las repetiría.
+        $this->despachar($operacion);
     }
 
     /**

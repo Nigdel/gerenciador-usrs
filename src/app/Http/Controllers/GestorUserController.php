@@ -188,6 +188,45 @@ class GestorUserController extends Controller
     }
 
     /**
+     * Reintenta una cuenta que terminó con error (Sprint 1.2).
+     *
+     * Autorizar con la ability del tipo de operación y no con una propia: el
+     * reintento repite la acción original, así que no puede autorizar a más
+     * gente que la que podía hacerla la primera vez.
+     */
+    public function reintentar(
+        GestorUser $gestorUser,
+        string $operacion,
+        int $cuenta,
+        ProvisioningOperationService $operaciones,
+    ): RedirectResponse {
+        $fila = $gestorUser->operaciones()
+            ->where('uuid', $operacion)
+            ->firstOrFail()
+            ->cuentas()
+            ->findOrFail($cuenta);
+
+        $this->authorize($fila->operacion->tipo->ability(), $gestorUser);
+
+        try {
+            $operaciones->reintentar($fila);
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('gestor-users.show', $gestorUser)
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('gestor-users.show', $gestorUser)
+            ->with('success', sprintf(
+                'Reintento en curso para %s. El resultado aparecerá en esta misma ficha.',
+                $fila->subsistema ?: 'el subsistema',
+            ));
+    }
+
+    /**
      * Baja completa (Fase 2.6): deshabilita la cuenta en todos los subsistemas
      * y marca al usuario como dado de baja.
      *

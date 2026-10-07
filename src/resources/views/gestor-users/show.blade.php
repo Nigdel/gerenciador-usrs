@@ -320,6 +320,22 @@
                                         @if ($cuenta->mensaje)
                                             <span class="text-[#68756d]">— {{ $cuenta->mensaje }}</span>
                                         @endif
+                                        @if ($cuenta->estado->value === 'error' && $operacion->estaTerminada())
+                                            {{-- Se autoriza con la ability del tipo de operación, igual
+                                                 que el POST: el botón y el controlador no pueden
+                                                 discrepar. --}}
+                                            @can($operacion->tipo->ability(), $gestorUser)
+                                                <form method="POST"
+                                                      action="{{ route('gestor-users.operaciones.retry', [$gestorUser, $operacion->uuid, $cuenta->id]) }}"
+                                                      class="ml-auto">
+                                                    @csrf
+                                                    <button type="submit"
+                                                            class="text-sm font-bold text-[#17211b] underline hover:text-emerald-800">
+                                                        Reintentar
+                                                    </button>
+                                                </form>
+                                            @endcan
+                                        @endif
                                     </li>
                                 @endforeach
                             </ul>

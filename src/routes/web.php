@@ -60,6 +60,15 @@ Route::middleware('auth')->group(function () {
         [GestorUserController::class, 'operacion']
     )->name('gestor-users.operaciones.show');
 
+    // Reintenta una cuenta que falló (Sprint 1.2). El alcance por usuario es
+    // la misma condición de ruta que en el polling, y por el mismo motivo: que
+    // la fila sea de una operación de esta persona no es algo que pueda
+    // comprobar el controlador con datos fiables si no viene en la URL.
+    Route::post(
+        'gestor-users/{gestorUser}/operaciones/{operacion}/cuentas/{cuenta}/retry',
+        [GestorUserController::class, 'reintentar']
+    )->name('gestor-users.operaciones.retry');
+
     Route::resource('gestor-users', GestorUserController::class)
         ->parameters(['gestor-users' => 'gestorUser']);
 

@@ -51,6 +51,26 @@ enum OperationType: string
     }
 
     /**
+     * Ability de la policy que autoriza reintentar una cuenta de este tipo.
+     *
+     * Reintentar es repetir la acción original, así que se autoriza con la
+     * misma regla que la autorizó la primera vez y no con una propia: un
+     * reintento de una baja no puede poder hacer quien no puede dar de baja.
+     *
+     * Se resuelve con match y no por convención de nombres a propósito: un
+     * caso nuevo sin resolver aquí sale corriendo en vez de autorizar de más.
+     */
+    public function ability(): string
+    {
+        return match ($this) {
+            self::Alta => 'create',
+            self::Suspension => 'suspend',
+            self::Baja => 'offboard',
+            self::Reactivacion, self::Sincronizacion => 'update',
+        };
+    }
+
+    /**
      * Los dos tipos cuyo desenlace cambia además el estado del GestorUser.
      *
      * El alta, la suspensión y la sincronización no lo tocan: suspender una
