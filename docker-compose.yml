@@ -92,13 +92,11 @@ services:
     networks:
       - gerenciador-usrs
 
-  redis:
-    image: redis:alpine
-    container_name: gerenciador-usrs-redis
-    volumes:
-      - redis_data:/data
-    networks:
-      - gerenciador-usrs
+  # Redis se retiró en el Sprint 2.3: cola, caché y sesión van a `database`, así
+  # que el contenedor no lo usaba nadie y soloocupaba memoria. Si algún día hace
+  # falta (un caché compartido entre contenedores, locks de cola), hay que
+  # volver a añadirlo *y* instalar la extensión phpredis en docker/php/Dockerfile,
+  # que hoy no está. Sin las dos cosas, `REDIS_HOST=redis` falla en runtime.
 
 networks:
   gerenciador-usrs:
@@ -106,4 +104,3 @@ networks:
 
 volumes:
   mysql_data:
-  redis_data:

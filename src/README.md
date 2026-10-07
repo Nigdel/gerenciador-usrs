@@ -77,6 +77,19 @@ Después de borrar el volumen, repite los comandos de migración y seeder de la
 primera instalación. Para recompilar los estilos después de cambiar dependencias
 o configuración frontend, ejecuta `docker compose up -d --force-recreate assets`.
 
+## Redis: por qué no hay servicio `redis` en Compose
+
+La cola, la caché y las sesiones van a MySQL (`QUEUE_CONNECTION`,
+`CACHE_STORE` y `SESSION_DRIVER` están en `database`), y ningún driver usa
+`Redis::` directamente. El contenedor no hacía nada, así que se quitó en el
+Sprint 2.3.
+
+Si alguna vez hace falta —un caché compartido entre contenedores, locks de cola
+para un worker con varias réplicas—, hay que **añadir las dos cosas**: el
+servicio en `docker-compose.yml` y la extensión `phpredis` en
+`docker/php/Dockerfile`. Hoy la imagen solo compila `gd` y `ldap`; poner
+`REDIS_HOST=redis` sin la extensión falla en runtime, no al arrancar.
+
 ## Integrar en otro proyecto Laravel
 
 1. Copia estas carpetas dentro de un proyecto Laravel existente (11.x o
