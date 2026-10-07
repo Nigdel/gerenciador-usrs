@@ -275,7 +275,19 @@ unique con dos formatos mezclados no puede funcionar de forma fiable antes de fi
   Al validar esto destapó que el CPF de ejemplo de los tests (`12345678901`) no era válido — falla sus
   propios dígitos verificadores. Se corrigió a `12345678909` en 34 ficheros de test.
 - `SuspendGestorUserRequest`: `fin_suspension` con `after_or_equal:inicio_suspension`.
-- Unicidad de `usuario` en edición.
+  `after_or_equal` ya estaba, pero solo compara si el inicio viene en el request: si el gestor
+  rellenaba solo la fecha de fin, la validación pasaba y el servicio asumía `inicio = now()`, dejando
+  la suspensión con un fin anterior a su propio inicio. Se añade `required_with:fin_suspension`.
+  **Sin `sometimes` delante a propósito**: ese modificador solo aplica las reglas si la clave viene en
+  el request, que es justo el caso que hay que detectar. Con él, `required_with` no se dispara nunca.
+  Lo mismo con `nullable`, que cortocircuita la regla.
+- Unicidad de `usuario` en edición: `Rule::unique()->ignore()`. La columna era UNIQUE en base de datos
+  desde la migración inicial pero no se validaba, así que editar a un login ya usado por otro usuario
+  reventaba con `QueryException` en vez de volver al formulario con un error.
+  `ProvisionUserRequest` **no** lleva la regla: allí el servicio reutiliza un usuario ya existente
+  buscado por CPF o genera el login, y un `unique` sobre el payload rechazaría el caso de reutilización.
+
+**Estado (4.2):** cerrado.
 
 ### 4.3 Listado general de operaciones (M)
 Pantalla `operaciones.index` (solo `admin`/`operador`/`auditor` según policy): filtro por estado, tipo, usuario
