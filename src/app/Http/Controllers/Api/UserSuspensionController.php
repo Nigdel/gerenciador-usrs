@@ -34,6 +34,10 @@ class UserSuspensionController extends Controller
 
         $gestorUser = $this->suspensionService->localizarUsuario($payload);
 
+        // Antes de resolver cuentas: es lo único que puede fallar sin haber
+        // tocado nada, y el error debe ser el del bloqueo y no el de un
+        // usuario sin cuentas en el subsistema pedido.
+
         $cuentas = $this->suspensionService->cuentasASuspender(
             $gestorUser,
             $payload['subsistemas'] ?? null,

@@ -80,6 +80,8 @@ no re-encola filas `Ok`).
 **Hecho cuando:** ver, reintentar y consultar por API cualquier operación; ningún secreto persiste más
 del TTL; no hay operaciones solapadas. Marcar 3.3 como `[x]`.
 
+**Estado:** Sprint 1 cerrado (1.1, 1.2, 1.3 y 1.4 completados; 275 tests, 896 aserciones).
+
 ---
 
 ## Sprint 2 — Robustez y decisiones pendientes

@@ -182,6 +182,29 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 - Si ya estaba suspendido en un subsistema, esta llamada solo actualiza
   `inicio_suspension`, `fin_suspension` y `motivo_suspension`.
 
+Los dos `POST` responden **`409`** si el usuario ya tiene una operación sin
+terminar. No es un error de la petición —el alta está bien formada— sino un
+conflicto con el trabajo anterior, y encadenar operaciones sobre la misma
+persona haría que dos jobs tocaran la misma cuenta a la vez:
+
+```json
+{
+  "message": "Ya hay una operación en curso para este usuario (Alta, iniciada el 21/09/2026 14:32).",
+  "operacion_id": "0f8b..."
+}
+```
+
+`operacion_id` es el `uuid` de la operación que bloquea: se consulta con el
+endpoint siguiente hasta que termine y se repite la llamada. Desde el panel el
+mismo caso sale como un aviso y la operación en curso se ve en la ficha del
+usuario.
+
+Una operación cuyo worker muere se quedaría 'en curso' para siempre y seguiría
+bloqueando al usuario, así que `operations:expire-stuck` —cada 15 minutos—
+cierra como `fallida` las que llevan más de `OPERATIONS_STUCK_MINUTES` (30 por
+defecto) sin actividad, y sus cuentas pendientes quedan en `error` con el
+motivo a la vista para poder reintentarlas.
+
 ### `GET /api/operaciones/{uuid}`
 
 Ambos `POST` de arriba responden `201` con un `operacion_id`: el trabajo real

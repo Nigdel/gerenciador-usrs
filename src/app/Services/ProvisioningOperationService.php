@@ -6,6 +6,7 @@ use App\Enums\GestorUserStatus;
 use App\Enums\OperationAccountStatus;
 use App\Enums\OperationStatus;
 use App\Enums\OperationType;
+use App\Exceptions\OperationInProgressException;
 use App\Jobs\ProcessOperationAccount;
 use App\Models\GestorUser;
 use App\Models\ProvisioningOperation;
@@ -66,6 +67,8 @@ class ProvisioningOperationService
         $actor = ActorContext::actual();
 
         return DB::transaction(function () use ($tipo, $usuario, $trabajo, $payload, $payloadPorCuenta, $actor) {
+            $this->comprobarSinOperacionActiva($usuario);
+
             $operacion = ProvisioningOperation::create([
                 'gestor_user_id' => $usuario?->id,
                 'tipo' => $tipo,
@@ -95,6 +98,43 @@ class ProvisioningOperationService
 
             return $operacion;
         });
+    }
+
+    /**
+     * Rechaza una segunda operación sobre el mismo usuario mientras la
+     * anterior no haya terminado (Sprint 1.4).
+     *
+     * El bloqueo de la fila del usuario es lo que hace que la comprobación sea
+     * fiable: dos peticiones simultáneas pasan las dos por un SELECT normal y
+     * luego las dos crean su operación, que es justo el caso que se quiere
+     * impedir. Con `lockForUpdate` la segunda espera a que la primera cierre su
+     * transacción, y al despertar ya ve la operación que acaba de escribirse.
+     *
+     * Solo se mira `pendiente`/`en_curso`, que son los estados con trabajo sin
+     * hacer. Una `completada` o `fallida` deja reintentar sus cuentas (1.2), así
+     * que tratarla como bloqueante impediría justo lo que se acaba de
+     * construir.
+     *
+     * @throws OperationInProgressException
+     */
+    private function comprobarSinOperacionActiva(?GestorUser $usuario): void
+    {
+        if ($usuario === null) {
+            return;
+        }
+
+        // Sin usuario no hay nada que bloquear: el bloqueo va sobre GestorUser.
+        GestorUser::query()->whereKey($usuario->getKey())->lockForUpdate()->first();
+
+        $activa = ProvisioningOperation::query()
+            ->where('gestor_user_id', $usuario->getKey())
+            ->whereIn('estado', [OperationStatus::Pendiente, OperationStatus::EnCurso])
+            ->latest()
+            ->first();
+
+        if ($activa instanceof ProvisioningOperation) {
+            throw new OperationInProgressException($activa);
+        }
     }
 
     /**

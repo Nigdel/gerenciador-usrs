@@ -128,6 +128,14 @@ class OperationSecretsTest extends TestCase
         Carbon::setTestNow('2026-10-07 12:00:00');
 
         [$reciente] = $this->alta();
+
+        // Dos altas seguidas sobre el mismo usuario no conviven (Sprint 1.4),
+        // así que la primera se termina antes de abrir la segunda.
+        $reciente->forceFill([
+            'estado' => OperationStatus::Completada,
+            'terminada_at' => now(),
+        ])->save();
+
         [$vieja] = $this->alta();
 
         // La vieja se terminó hace 100 h: el TTL de 72 h ya venció.
