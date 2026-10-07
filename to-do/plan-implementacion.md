@@ -172,6 +172,26 @@ Contrato completo por subsistema con `Http::fake` (y LDAP simulado para Samba): 
 Casos con regla propia: Chatwoot (DELETE y 404/410 = `deshabilitado`, reactivar = recrear), Adagio (404 = login libre),
 Samba (`ldap_rename` fallido devuelve éxito con aviso).
 
+**Estado:** hecho. Los ocho métodos quedan cubiertos en los siete drivers (425 tests, 1247 aserciones).
+Las tres reglas con regla propia del plan ya estaban cubiertas de antes: Chatwoot en `DisableUserTest` /
+`EnableUserTest` / `GetUserStatusTest`, Adagio en `Adagio/LoginAvailabilityTest`, y el `ldap_rename`
+fallido en `SambaAd/UpdateUserTest`. Lo que faltaba de verdad eran `updateUser()` y `loginEnUso()`.
+
+- **Samba era el agujero grande**: ningún test había pasado nunca del guard de configuración, así que
+  el enmascarado de `userAccountControl`, la resolución de DN y el `ldap_rename` no tenían cobertura.
+  `SambaAd/fakes-ldap.php` declara las funciones `ldap_*()` en `namespace App\Services\Subsystems`, que es
+  como PHP las resuelve antes que las globales, y `SambaAdTestCase` las carga con `require_once`.
+  No se pueden poner como métodos estáticos de una clase: PHP nunca consulta ahí.
+- **Adagio tenía dos fallos de producción**, ahora cubiertos por tests de regresión:
+  `send()` no tenía brazo `PUT` en su `match` por método, así que `updateUser()` —que es un PUT— lanzaba
+  `RuntimeException` siempre y la actualización del propietario nunca funcionó (siempre 502); y
+  `loginEnUso()` capturaba `RuntimeException`, que no puede casar con `HttpClient\ConnectionException`
+  (hereda de `HttpClientException`), así que la caída de red se escapaba al controlador en vez de
+  devolverse el `null` de «no comprobable». El `catch` ahora es `\Throwable`.
+- Un caso que salió mal por partida propia: `Http::fake()` con array **no registra `PUT`**, así que el
+  PUT de `updateUser()` se escapa a la red real y en CI eso es un timeout de DNS, no un fallo claro.
+  Los fakes de Adagio y Entra ID son closures, que sí interceptan todos los verbos.
+
 ### 3.4 CI con GitHub Actions (M)
 `.github/workflows/ci.yml` en `push` y `pull_request`:
 1. `shivammathur/setup-php` (PHP 8.3, extensiones `ldap`, `pdo_mysql`, `redis` si aplica).

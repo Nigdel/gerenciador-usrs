@@ -108,7 +108,12 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
         try {
             $response = $this->request($subsystem, 'GET', 'proprietarios/internos', query: ['email' => $email]);
-        } catch (RuntimeException $exception) {
+            // Throwable y no RuntimeException: la caída de red de Adagio llega
+            // como HttpClient\ConnectionException, que hereda de
+            // HttpClientException y no de RuntimeException, así que con
+            // RuntimeException se escapaba hacia el controlador en vez de
+            // devolverse el null de «no comprobable» que promete el contrato.
+        } catch (\Throwable $exception) {
             $this->log('No se pudo comprobar la disponibilidad del login en Adagio', [
                 'login' => $login,
                 'error' => $exception->getMessage(),
@@ -303,6 +308,11 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         return match (strtoupper($method)) {
             'GET' => $client->get($url, $query ?? []),
             'POST' => $client->post($url),
+            // PUT y no PATCH: es lo que manda updateUser(). Faltaba en el match
+            // y el `default` lo convertía en RuntimeException, así que la
+            // actualización del propietario en Adagio nunca funcionó — siempre
+            // 502. El Sprint 3.3 lo cubren los tests de Adagio\UpdateUserTest.
+            'PUT' => $client->put($url),
             'PATCH' => $client->patch($url),
             'DELETE' => $client->delete($url),
             default => throw new RuntimeException("Método HTTP no soportado por AdagioService: {$method}"),
