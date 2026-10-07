@@ -143,7 +143,10 @@ class GestorUserTest extends TestCase
             'nombre_completo' => 'Ana Silva',
             'cpf' => '99999999999',
             'password_general' => 'Password123!',
-            'usuario' => 'ana.silva',
+            // Login distinto del que se envía en el POST: usuario es UNIQUE y
+            // ya está validado, así que reutilizar 'ana.silva' en ambos lados
+            // haría que el alta se rechazara contra sí misma.
+            'usuario' => 'ana.silva.previa',
             'empresa' => 'Empresa Teste',
         ]);
 
@@ -412,5 +415,72 @@ class GestorUserTest extends TestCase
         // general local sí se cambió y el gestor puede dársela al usuario para
         // que la cambie él mismo.
         $response->assertSessionHas('contrasena_temporal');
+    }
+
+    public function test_editar_rechaza_un_usuario_que_ya_pertenece_a_otro(): void
+    {
+        Subsystem::create(['nombre' => 'GLPI', 'slug' => 'glpi', 'activo' => true]);
+
+        GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678909',
+            'password_general' => 'Password123!',
+            'usuario' => 'anasilva',
+            'empresa' => 'Empresa Teste',
+        ]);
+
+        $otro = GestorUser::create([
+            'nombre_completo' => 'Bruno Costa',
+            'cpf' => '98765432100',
+            'password_general' => 'Password123!',
+            'usuario' => 'brunocosta',
+            'empresa' => 'Empresa Teste',
+        ]);
+
+        // La columna es UNIQUE en base de datos pero no estaba validada: sin la
+        // regla esto reventaba con un QueryException en vez de volver al
+        // formulario con un error.
+        $response = $this->from(route('gestor-users.edit', $otro))
+            ->put(route('gestor-users.update', $otro), [
+                'nombre_completo' => 'Bruno Costa',
+                'cpf' => '98765432100',
+                'usuario' => 'anasilva',
+                'empresa' => 'Empresa Teste',
+                'subsistemas' => ['glpi'],
+            ]);
+
+        $response
+            ->assertRedirect(route('gestor-users.edit', $otro))
+            ->assertSessionHasErrors('usuario');
+
+        $this->assertSame('brunocosta', $otro->fresh()->usuario);
+    }
+
+    public function test_editar_puede_guardar_su_propio_usuario(): void
+    {
+        Subsystem::create(['nombre' => 'GLPI', 'slug' => 'glpi', 'activo' => true]);
+
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678909',
+            'password_general' => 'Password123!',
+            'usuario' => 'anasilva',
+            'empresa' => 'Empresa Teste',
+        ]);
+
+        // El ignore() del unique tiene que excluirse a sí mismo: si no, el
+        // usuario no podría editar su ficha ni cambiando un solo campo.
+        $response = $this->from(route('gestor-users.edit', $gestorUser))
+            ->put(route('gestor-users.update', $gestorUser), [
+                'nombre_completo' => 'Ana Silva Costa',
+                'cpf' => '12345678909',
+                'usuario' => 'anasilva',
+                'empresa' => 'Empresa Teste',
+                'subsistemas' => ['glpi'],
+            ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $this->assertSame('Ana Silva Costa', $gestorUser->fresh()->nombre_completo);
     }
 }

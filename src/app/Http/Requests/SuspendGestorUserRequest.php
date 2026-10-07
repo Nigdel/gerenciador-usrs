@@ -32,7 +32,12 @@ class SuspendGestorUserRequest extends FormRequest
             'subsistemas' => ['sometimes', 'nullable', 'array'],
             'subsistemas.*' => ['string', $this->slugDeCuentaPropia()],
             'motivo_suspension' => ['required', 'string', 'max:500'],
-            'inicio_suspension' => ['sometimes', 'nullable', 'date'],
+            // Sin 'sometimes' a propósito: ese modificador solo aplica las reglas si la
+            // clave viene en el request, y un inicio ausente es justo el caso
+            // que hay que detectar. required_with mira entonces el fin. Si no
+            // hay ninguna de las dos fechas, required_with no se dispara y la
+            // suspensión indefinida sigue siendo válida.
+            'inicio_suspension' => ['required_with:fin_suspension', 'date'],
             'fin_suspension' => ['sometimes', 'nullable', 'date', 'after_or_equal:inicio_suspension'],
         ];
     }
@@ -60,6 +65,7 @@ class SuspendGestorUserRequest extends FormRequest
     {
         return [
             'motivo_suspension.required' => 'Indica el motivo de la suspensión.',
+            'inicio_suspension.required_with' => 'Indica la fecha de inicio para que la suspensión tenga fin.',
             'fin_suspension.after_or_equal' => 'El fin no puede ser anterior al inicio.',
         ];
     }

@@ -167,6 +167,24 @@ class GestorUserSuspensionTest extends TestCase
         $this->assertSame(SubsystemAccountStatus::Activo, $email->fresh()->estado);
     }
 
+    /**
+     * Sin fecha de inicio el servicio asume now(), así que un fin en el pasado
+     * se guardaría con un fin anterior a su propio inicio. after_or_equal no lo
+     * coge porque no hay contra qué comparar.
+     */
+    public function test_rechaza_un_fin_sin_fecha_de_inicio(): void
+    {
+        ['email' => $email] = $this->crearCuentas('email');
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->post(route('gestor-users.suspend', $email->user), [
+            'motivo_suspension' => 'Licencia',
+            'fin_suspension' => '2020-01-01',
+        ])->assertSessionHasErrors('inicio_suspension');
+
+        $this->assertSame(SubsystemAccountStatus::Activo, $email->fresh()->estado);
+    }
+
     public function test_rechaza_un_subsistema_que_no_corresponde_al_usuario(): void
     {
         ['email' => $email] = $this->crearCuentas('email');

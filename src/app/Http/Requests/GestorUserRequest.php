@@ -48,7 +48,15 @@ class GestorUserRequest extends FormRequest
             'telefono_trabajo' => ['nullable', 'string', 'max:30'],
             'email_personal' => ['nullable', 'email', 'max:255'],
             'direccion_particular' => ['nullable', 'string', 'max:255'],
-            'usuario' => ['nullable', 'string', 'max:255'],
+            // La columna es UNIQUE en base de datos pero no estaba validada: editar a un
+            // usuario duplicado reventaba con un QueryException en vez de volver al
+            // formulario con un error. ignore() deja que guarde su propio login.
+            'usuario' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('gestor_users', 'usuario')->ignore($gestorUser?->id),
+            ],
             'empresa' => ['required', 'string', 'max:255'],
             'subsistemas' => [$gestorUser ? 'nullable' : 'required', 'array', 'min:1'],
             'subsistemas.*' => [
