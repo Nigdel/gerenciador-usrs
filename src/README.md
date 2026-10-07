@@ -58,6 +58,13 @@ la aplicación se conecta a `mysql:3306`.
 Los valores de MySQL incluidos en Compose son únicamente para desarrollo local;
 no expongas esos valores ni `APP_DEBUG=true` en un entorno público.
 
+`.env.example` viene con `APP_DEBUG=false` a propósito, y conviene no tocarlo:
+con `true`, cualquier error inesperado devuelve al navegador la excepción
+completa —traza, rutas de fichero y valores del entorno— en lugar de una página
+de error. Para depurar en local se sube a `true` y, al terminar, se vuelve a
+bajar; el detalle siempre está en `storage/logs/laravel.log`, que funciona con
+las dos opciones.
+
 ### Uso diario y reinicio
 
 ```bash

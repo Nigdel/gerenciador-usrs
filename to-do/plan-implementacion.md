@@ -127,7 +127,14 @@ mensaje → operación `fallida`.
 - `.env.example`: `APP_DEBUG=false`, `APP_LOCALE=es`/`pt_BR` según el idioma de la UI, dejar los IDs de
   tenant/cliente de Entra ID sin valor por defecto.
 
-**Hecho cuando:** ningún error inesperado llega al usuario como 500/traza; decisiones 2.2 y 2.3 documentadas.
+**Estado:** hecho. `update_tests.php` borrado (era un script de un solo uso que
+ya no hacía falta y que además metía un `actingAs` global en tests que no lo
+pedían); el plan y el análisis movidos a `to-do/`; README raíz reescrito —estaba
+roto, empezaba por un enlace a una imagen de GitHub y el índice apuntaba a un
+fichero llamado `todo` sin extensión—; `.env.example` con `APP_DEBUG=false`,
+locale `es` (la UI está en español literal, sin carpeta `lang/`) y los tenant y
+client_id de Entra ID sin valor por defecto. El `.env` local se ajustó igual, para
+que no quedara más privilegiado que el ejemplo que se copia.
 
 ---
 
