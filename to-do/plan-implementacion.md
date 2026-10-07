@@ -206,6 +206,27 @@ Cachear Composer. Protección de rama: exigir CI en verde para `main`.
 `docker compose exec app composer require --dev larastan/larastan`; `phpstan.neon` con nivel 5, `paths: [app]`,
 baseline inicial para no bloquear; subir un nivel por sprint.
 
+**Estado (3.4 + 3.5):** hechos. `larastan/larastan ^3.13` (PHPStan 2.3.0); `phpstan.neon`
+en nivel 5 y `phpstan-baseline.neon` con los 116 errores heredados. Tres desviaciones
+del plan, por no encajar con el repo: PHP 8.5 en vez de 8.3 (el `Dockerfile` es
+`php:8.5-fpm`), sin servicio MySQL (`phpunit.xml` fija sqlite `:memory:`) y sin
+`--parallel` (falta ParaTest y la suite tarda 8 s).
+
+Lo que costó descubrir:
+- **La suite no corre sin `.env`**: sin él, 394 de 425 tests mueren por `APP_KEY`
+  ausente. La CI copia `.env.example` e inyecta una `APP_KEY` nueva.
+- **El baseline va en `includes:`, no en `parameters.baselineFile`** — PHPStan 2.x
+  rechaza ese parámetro. Con él, el código heredado no bloquea y la puerta solo
+  vigila errores nuevos.
+- Los 116 errores del baseline se revisaron antes de aceptarlos y ninguno era un
+  defecto: sobre todo tipado de `Collection` (que no es covariante) y `Model::$slug`,
+  que es inferencia genérica de Larastan — las relaciones existen.
+- `pint --test` fallaba en 5 ficheros heredados; se corrigieron en 3.4, porque un
+  gate de estilo rojo desde el primer día bloquea todos los PR.
+
+Pendiente del Sprint 3: medir cobertura ≥ 80 % en `app/Services`, `app/Jobs` y
+`app/Http`, que exige Xdebug o PCOV en la imagen.
+
 **Hecho cuando:** CI verde en `main`; cobertura ≥ 80 % en `app/Services`, `app/Jobs` y `app/Http`
 (medir con `php artisan test --coverage`, requiere Xdebug/PCOV en la imagen).
 

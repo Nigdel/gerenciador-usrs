@@ -1,0 +1,27 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    # Nivel 5, el que fija el plan para este sprint. Los siguientes sprints
+    # suben uno a uno; el baseline es lo que permite subirlos sin tener que
+    # arreglar de golpe todo el código heredado.
+    level: 5
+
+    paths:
+        - app
+
+    # Lo que ya estaba roto antes de que existiera este fichero, y que no se
+    # arregla en este sprint. Lo que se vigila son los errores **nuevos**: el
+    # baseline solo se regenera a mano, nunca se acepta en automático.
+    #
+    # La mayor parte son de tipado de Collection, que no es covariante:
+    # Collection<int, Subsystem|UserSubsystemAccount> no encaja en un parámetro
+    # anotado Collection<int, Subsystem>. El código funciona igual; PHPStan lo
+    # señala en ~62 sitios y ninguna de esas señales dice algo del dominio.
+    #
+    # Sin esto, un ignoreErrors que ya no coincide (porque alguien arregló el
+    # código de verdad) hace que PHPStan falle. Con el baseline presente sería
+    # ruido; mientras tanto, se deja en false para no tener que理发ar el
+    # baseline en cada commit.
+    reportUnmatchedIgnoredErrors: false

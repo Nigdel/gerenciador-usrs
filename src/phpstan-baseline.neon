@@ -1,0 +1,415 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Console/Commands/ApplyPendingSuspensionsCommand.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: /var/www/app/Console/Commands/ApplyPendingSuspensionsCommand.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Console/Commands/ReactivateExpiredAccountsCommand.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: /var/www/app/Console/Commands/ReactivateExpiredAccountsCommand.php
+
+		-
+			message: '#^Parameter \#3 \$trabajo of method App\\Services\\ProvisioningOperationService\:\:describir\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Subsystem\|App\\Models\\UserSubsystemAccount\>, Illuminate\\Support\\Collection\<int, App\\Models\\Subsystem\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Http/Controllers/Api/UserProvisioningController.php
+
+		-
+			message: '#^Parameter \#3 \$trabajo of method App\\Services\\ProvisioningOperationService\:\:describir\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Subsystem\|App\\Models\\UserSubsystemAccount\>, Illuminate\\Support\\Collection\<int, App\\Models\\UserSubsystemAccount\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Http/Controllers/Api/UserSuspensionController.php
+
+		-
+			message: '#^Parameter \#1 \$user of class Illuminate\\Auth\\Events\\Verified constructor expects Illuminate\\Contracts\\Auth\\MustVerifyEmail, App\\Models\\User\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Http/Controllers/Auth/VerifyEmailController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:cuentas\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: /var/www/app/Http/Controllers/GestorUserController.php
+
+		-
+			message: '#^Instanceof between App\\Contracts\\IdentityProviderInterface and App\\Contracts\\IdentityProviderInterface will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: /var/www/app/Http/Controllers/GestorUserController.php
+
+		-
+			message: '#^Parameter \#1 \$operacion of method App\\Services\\ProvisioningOperationService\:\:serializar\(\) expects App\\Models\\ProvisioningOperation, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Http/Controllers/GestorUserController.php
+
+		-
+			message: '#^Parameter \#3 \$trabajo of method App\\Services\\ProvisioningOperationService\:\:describir\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Subsystem\|App\\Models\\UserSubsystemAccount\>, Illuminate\\Support\\Collection\<int, App\\Models\\Subsystem\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Http/Controllers/GestorUserController.php
+
+		-
+			message: '#^Parameter \#3 \$trabajo of method App\\Services\\ProvisioningOperationService\:\:describir\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Subsystem\|App\\Models\\UserSubsystemAccount\>, Illuminate\\Support\\Collection\<int, App\\Models\\UserSubsystemAccount\> given\.$#'
+			identifier: argument.type
+			count: 4
+			path: /var/www/app/Http/Controllers/GestorUserController.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: /var/www/app/Http/Controllers/SubsystemController.php
+
+		-
+			message: '#^Relation ''encarregado'' is not found in App\\Models\\User model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: /var/www/app/Http/Controllers/UserController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>role" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: /var/www/app/Http/Controllers/UserController.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$cpf\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$direccion_particular\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$email_personal\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$empresa\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$nombre_completo\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$subsystemAccounts\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$telefono_personal\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$telefono_trabajo\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\GestorUserResource\:\:\$usuario\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Http/Resources/GestorUserResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$gestor_user_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Jobs/ProcessOperationAccount.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tipo\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Jobs/ProcessOperationAccount.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: /var/www/app/Jobs/ProcessOperationAccount.php
+
+		-
+			message: '#^Parameter \#3 \$operacion of method App\\Jobs\\ProcessOperationAccount\:\:darDeAlta\(\) expects App\\Models\\ProvisioningOperation, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Jobs/ProcessOperationAccount.php
+
+		-
+			message: '#^Cannot cast App\\Enums\\SubsystemAccountStatus to string\.$#'
+			identifier: cast.string
+			count: 1
+			path: /var/www/app/Observers/AccountStateLogObserver.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: /var/www/app/Observers/AccountStateLogObserver.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: /var/www/app/Services/AccountReactivationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/ProvisioningOperationService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{subsistema\: string, estado\: ''error''\|''ok''\|''pendiente'', mensaje\: string\|null, intentos\: int\<0, max\>\}, Closure\(App\\Models\\ProvisioningOperationAccount\)\: array\{subsistema\: string, estado\: ''error''\|''ok''\|''pendiente'', mensaje\: string\|null, intentos\: int\<0, max\>\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/ProvisioningOperationService.php
+
+		-
+			message: '#^Parameter \#1 \$operacion of method App\\Services\\ProvisioningOperationService\:\:cerrar\(\) expects App\\Models\\ProvisioningOperation, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: /var/www/app/Services/ProvisioningOperationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$api_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/Subsystems/AdagioService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\AdagioService\:\:request\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 5
+			path: /var/www/app/Services/Subsystems/AdagioService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email_personal\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$empresa\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$nombre_completo\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$usuario\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\BaseSubsystemService\:\:http\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 3
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\ChatwootService\:\:platformHttp\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\ChatwootService\:\:resolverAccountId\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Parameter \#2 \$subsystem of method App\\Services\\Subsystems\\ChatwootService\:\:createUser\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/Subsystems/ChatwootService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\BaseSubsystemService\:\:http\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 6
+			path: /var/www/app/Services/Subsystems/EmailService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\EntraIdService\:\:http\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 7
+			path: /var/www/app/Services/Subsystems/EntraIdService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\GlpiService\:\:http\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 7
+			path: /var/www/app/Services/Subsystems/GlpiService.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: /var/www/app/Services/Subsystems/SambaAdService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\SambaAdService\:\:connectAndBind\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 5
+			path: /var/www/app/Services/Subsystems/SambaAdService.php
+
+		-
+			message: '#^Parameter \#3 \$subsystem of method App\\Services\\Subsystems\\SambaAdService\:\:resolveUserDn\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 5
+			path: /var/www/app/Services/Subsystems/SambaAdService.php
+
+		-
+			message: '#^Parameter \#4 \$new_parent of function ldap_rename expects string, null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/Subsystems/SambaAdService.php
+
+		-
+			message: '#^Parameter \#1 \$subsystem of method App\\Services\\Subsystems\\BaseSubsystemService\:\:http\(\) expects App\\Models\\Subsystem, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 4
+			path: /var/www/app/Services/Subsystems/SlackService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 3
+			path: /var/www/app/Services/UserDataSyncService.php
+
+		-
+			message: '#^Method App\\Services\\UserDataSyncService\:\:cuentasASincronizar\(\) should return Illuminate\\Support\\Collection\<int, App\\Models\\UserSubsystemAccount\> but returns Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
+			identifier: return.type
+			count: 1
+			path: /var/www/app/Services/UserDataSyncService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 4
+			path: /var/www/app/Services/UserOffboardingService.php
+
+		-
+			message: '#^Method App\\Services\\UserOffboardingService\:\:cuentasABajas\(\) should return Illuminate\\Support\\Collection\<int, App\\Models\\UserSubsystemAccount\> but returns Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
+			identifier: return.type
+			count: 1
+			path: /var/www/app/Services/UserOffboardingService.php
+
+		-
+			message: '#^Method App\\Services\\UserOffboardingService\:\:cuentasAReactivar\(\) should return Illuminate\\Support\\Collection\<int, App\\Models\\UserSubsystemAccount\> but returns Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
+			identifier: return.type
+			count: 1
+			path: /var/www/app/Services/UserOffboardingService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 2
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$subsystem\.$#'
+			identifier: property.notFound
+			count: 1
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Method App\\Services\\UserProvisioningService\:\:resetAllPasswords\(\) should return array\{contrasena\: string, resultados\: array\<int, array\{subsistema\: string\|null, exito\: bool, mensaje\: string\|null, cuenta\: App\\Models\\UserSubsystemAccount\}\>\} but returns array\{contrasena\: string, resultados\: list\<array\{subsistema\: mixed, exito\: bool, mensaje\: string\|null, cuenta\: Illuminate\\Database\\Eloquent\\Model\}\>\}\.$#'
+			identifier: return.type
+			count: 1
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Parameter \#2 \$resultados of method App\\Services\\UserProvisioningService\:\:registrarOperacionDeReset\(\) expects array\<int, array\{subsistema\: string\|null, exito\: bool, mensaje\: string\|null, cuenta\: App\\Models\\UserSubsystemAccount\}\>, list\<array\{subsistema\: mixed, exito\: bool, mensaje\: string\|null, cuenta\: Illuminate\\Database\\Eloquent\\Model\}\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Parameter \#2 \$userAccount of method App\\Services\\UserProvisioningService\:\:resetPassword\(\) expects App\\Models\\UserSubsystemAccount, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Property App\\DTO\\SubsystemOperationResult\:\:\$raw \(array\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 2
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type App\\Models\\UserSubsystemAccount\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type App\\Enums\\SubsystemAccountStatus\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: /var/www/app/Services/UserProvisioningService.php
+
+		-
+			message: '#^Method App\\Services\\UserSuspensionService\:\:cuentasASuspender\(\) should return Illuminate\\Support\\Collection\<int, App\\Models\\UserSubsystemAccount\> but returns Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\.$#'
+			identifier: return.type
+			count: 1
+			path: /var/www/app/Services/UserSuspensionService.php
+
+		-
+			message: '#^Parameter \#2 \$consultas of method App\\Services\\UsernameGeneratorService\:\:estaLibre\(\) expects array\<int, array\{subsistema\: App\\Models\\Subsystem, servicio\: App\\Contracts\\UsernameAvailabilityInterface, empresa\: string\}\>, array\<int, array\{subsistema\: App\\Models\\Subsystem, servicio\: App\\Contracts\\UsernameAvailabilityInterface\}\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: /var/www/app/Services/UsernameGeneratorService.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between Illuminate\\Http\\Request and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: /var/www/app/Support/ActorContext.php

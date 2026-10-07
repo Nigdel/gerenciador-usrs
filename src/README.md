@@ -87,9 +87,26 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 ## CI
 
 `.github/workflows/ci.yml` (en la raíz del repo, no en `src/`) corre en cada `push`
-y cada `pull_request`: `pint --test` y `phpunit`.
+y cada `pull_request`: `pint --test`, `phpunit` y Larastan.
 Corre sobre **PHP 8.5**, la misma versión del `Dockerfile`, para que un verde en CI
 signifique lo mismo que un verde en el contenedor.
+
+## Análisis estático (Larastan)
+
+`phpstan.neon` fija **nivel 5** sobre `app`. El código heredado entra en
+`phpstan-baseline.neon` (415 líneas, 116 errores en su mayoría de tipado de
+`Collection`, que no es covariante), así que la puerta vigila **errores nuevos**, no
+los antiguos. Ese baseline se regenera a mano
+(`vendor/bin/phpstan analyse --generate-baseline`), nunca se acepta en automático.
+
+Dos detalles que salen de haberlo montado:
+
+- El baseline va en `includes:` de `phpstan.neon`, no como parámetro: PHPStan 2.x
+  rechaza `parameters.baselineFile` con `Unexpected item`.
+- `reportUnmatchedIgnoredErrors: false`, porque si no cada arreglo real del código
+  deja el baseline con una entrada que ya no coincide y la CI se pone roja sola.
+
+Los siguientes sprints suben un nivel; el baseline es lo que lo hace posible.
 
 Tres cosas que la CI necesita y que no son obvias:
 

@@ -61,3 +61,12 @@ jobs:
         # nada ahora. Tampoco hay servicio de MySQL: phpunit.xml fija
         # DB_CONNECTION=sqlite con :memory:.
         run: php artisan test
+
+      - name: Larastan
+        working-directory: src
+        # --no-progress porque el runner no es interactivo y las barras solo
+        # ensucian el log. El baseline (phpstan-baseline.neon) va en el
+        # includes: de phpstan.neon, no en un parámetro: PHPStan 2.x rechaza
+        # parameters.baselineFile. Por eso un archivo nuevo de código entra
+        # con 0 errores solo si de verdad está limpio.
+        run: ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G
