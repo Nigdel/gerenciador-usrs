@@ -39,7 +39,7 @@ class CreateUserTest extends TestCase
 
         $result = app(AdagioService::class)->createUser([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'usuario' => 'ana.silva',
             'email_personal' => 'ana@klios.test',
             'empresa' => 'klios',

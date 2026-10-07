@@ -83,7 +83,7 @@ class UserTest extends TestCase
             'name' => 'Carlos Rodríguez',
             'email' => 'carlos.rodriguez@example.com',
             'password' => 'Password123!',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'telefone_pessoal' => '62999999999',
             'telefone_servico' => '6233333333',
             'empresa' => 'Empresa Teste',
@@ -109,7 +109,7 @@ class UserTest extends TestCase
         $this->assertDatabaseHas('users', [
             'name' => 'Carlos Rodríguez',
             'email' => 'carlos.rodriguez@example.com',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'telefone_pessoal' => '62999999999',
             'telefone_servico' => '6233333333',
             'empresa' => 'Empresa Teste',

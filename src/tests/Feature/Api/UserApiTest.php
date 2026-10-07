@@ -28,7 +28,7 @@ class UserApiTest extends TestCase
         ]);
 
         $payload = [
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'nombre_completo' => 'Api Test User',
             'empresa' => 'Test Company',
         ];
@@ -52,7 +52,7 @@ class UserApiTest extends TestCase
         ]);
 
         $this->assertDatabaseHas('gestor_users', [
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'nombre_completo' => 'Api Test User',
         ]);
     }
@@ -62,7 +62,7 @@ class UserApiTest extends TestCase
         $this->tokenConAbility(ApiAbility::Suspender);
 
         $user = GestorUser::create([
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'nombre_completo' => 'Suspend User',
             'empresa' => 'Company',
             'password_general' => 'password123',
@@ -88,7 +88,7 @@ class UserApiTest extends TestCase
         Http::fake();
 
         $payload = [
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'motivo_suspension' => 'Suspension por Api',
             'subsistemas' => ['glpi'],
         ];

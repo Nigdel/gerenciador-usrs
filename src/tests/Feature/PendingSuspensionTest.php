@@ -35,7 +35,7 @@ class PendingSuspensionTest extends TestCase
 
         $gestorUser = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.'.$slug,
             'empresa' => 'klios',

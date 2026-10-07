@@ -125,7 +125,7 @@ class DirectoryCreateUserTest extends SambaAdTestCase
     {
         $this->samba()->createUser($this->userData([
             'email_personal' => 'joao.silva@klios.br',
-            'cpf' => '123.456.789-01',
+            'cpf' => '123.456.789-09',
         ]), $this->subsystem());
 
         $entry = FakeLdapDirectory::callsTo('ldap_add')[0][1][1];
@@ -133,7 +133,7 @@ class DirectoryCreateUserTest extends SambaAdTestCase
         $this->assertSame('joao.silva@klios.br', $entry['mail']);
         // Sin puntos ni guiones: se guarda en employeeNumber, que es un
         // atributo numérico y AD no los admite.
-        $this->assertSame('12345678901', $entry['employeeNumber']);
+        $this->assertSame('12345678909', $entry['employeeNumber']);
     }
 
     public function test_omits_the_optional_attributes_when_they_are_not_given(): void

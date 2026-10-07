@@ -49,7 +49,7 @@ class ErrorHandlingTest extends TestCase
 
         $this->usuario = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',
@@ -127,7 +127,7 @@ class ErrorHandlingTest extends TestCase
 
         $this->token([ApiAbility::Suspender])
             ->postJson('/api/usuarios/suspender', [
-                'cpf' => '12345678901',
+                'cpf' => '12345678909',
                 'motivo_suspension' => 'Licença médica',
             ])
             ->assertStatus(409)
@@ -215,7 +215,7 @@ class ErrorHandlingTest extends TestCase
 
         $respuesta = $this->token([ApiAbility::Suspender])
             ->postJson('/api/usuarios/suspender', [
-                'cpf' => '12345678901',
+                'cpf' => '12345678909',
                 'motivo_suspension' => 'Licença médica',
             ])
             ->assertStatus(502);

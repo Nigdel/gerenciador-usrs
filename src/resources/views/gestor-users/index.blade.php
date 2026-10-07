@@ -15,10 +15,46 @@
             @endcan
         </div>
 
+        <form method="GET" action="{{ route('gestor-users.index') }}" class="mb-5 grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]" role="search">
+            <div class="field">
+                <label class="sr-only" for="filtro-q">Buscar usuarios</label>
+                <input id="filtro-q" type="search" name="q" value="{{ $filtros['q'] ?? '' }}" placeholder="Nombre, usuario, empresa o CPF">
+            </div>
+            <div class="field">
+                <label class="sr-only" for="filtro-estado">Estado</label>
+                <select id="filtro-estado" name="estado">
+                    <option value="">Todos los estados</option>
+                    @foreach (\App\Enums\GestorUserStatus::cases() as $caso)
+                        <option value="{{ $caso->value }}" @selected(($filtros['estado'] ?? null) === $caso->value)>{{ ucfirst($caso->value) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field">
+                <label class="sr-only" for="filtro-subsistema">Subsistema</label>
+                <select id="filtro-subsistema" name="subsistema">
+                    <option value="">Todos los subsistemas</option>
+                    @foreach ($subsistemas as $subsistema)
+                        <option value="{{ $subsistema->slug }}" @selected(($filtros['subsistema'] ?? null) === $subsistema->slug)>{{ $subsistema->nombre }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="flex gap-2">
+                <button class="button button-primary" type="submit">Filtrar</button>
+                @if (($filtros['q'] ?? '') !== '' || ($filtros['estado'] ?? '') !== '' || ($filtros['subsistema'] ?? '') !== '')
+                    <a class="button button-secondary" href="{{ route('gestor-users.index') }}">Limpiar</a>
+                @endif
+            </div>
+        </form>
+
         @if ($gestorUsers->isEmpty())
             <div class="border border-dashed border-[#d9e2dc] px-6 py-11 text-center text-[#68756d]">
-                <strong class="block text-[#17211b]">No hay usuarios gestionados.</strong>
-                <span>Agrega el primero y selecciona dónde debe tener una cuenta.</span>
+                @if (request()->filled('q') || request()->filled('estado') || request()->filled('subsistema'))
+                    <strong class="block text-[#17211b]">Ningún usuario coincide con el filtro.</strong>
+                    <span>Prueba con otro texto o quita algún criterio.</span>
+                @else
+                    <strong class="block text-[#17211b]">No hay usuarios gestionados.</strong>
+                    <span>Agrega el primero y selecciona dónde debe tener una cuenta.</span>
+                @endif
             </div>
         @else
             <div class="overflow-x-auto rounded-lg border border-[#d9e2dc]">
@@ -67,6 +103,10 @@
                     </tbody>
                 </table>
             </div>
+
+            @if ($gestorUsers->hasPages())
+                <div class="mt-5">{{ $gestorUsers->links() }}</div>
+            @endif
         @endif
     </section>
 @endsection

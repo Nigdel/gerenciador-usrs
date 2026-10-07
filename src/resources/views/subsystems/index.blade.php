@@ -15,10 +15,28 @@
             @endcan
         </div>
 
+        <form method="GET" action="{{ route('subsystems.index') }}" class="mb-5 grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" role="search">
+            <div class="field">
+                <label class="sr-only" for="filtro-subsistemas">Buscar subsistemas</label>
+                <input id="filtro-subsistemas" type="search" name="q" value="{{ $busqueda }}" placeholder="Nombre o slug del subsistema">
+            </div>
+            <div class="flex gap-2">
+                <button class="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 py-2.5 font-bold text-white no-underline transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-700/20" type="submit">Filtrar</button>
+                @if ($busqueda !== '')
+                    <a class="inline-flex min-h-11 items-center justify-center rounded-md border border-[#d9e2dc] px-5 py-2.5 font-bold text-[#17211b] no-underline transition hover:bg-[#f7faf8]" href="{{ route('subsystems.index') }}">Limpiar</a>
+                @endif
+            </div>
+        </form>
+
         @if ($subsystems->isEmpty())
             <div class="grid gap-2 border border-dashed border-[#d9e2dc] px-6 py-11 text-center text-[#68756d]">
-                <strong class="text-[#17211b]">No hay subsistemas registrados.</strong>
-                <span>Agrega el primero para comenzar a gestionar integraciones.</span>
+                @if ($busqueda !== '')
+                    <strong class="text-[#17211b]">Ningún subsistema coincide con la búsqueda.</strong>
+                    <span>Prueba con otro texto.</span>
+                @else
+                    <strong class="text-[#17211b]">No hay subsistemas registrados.</strong>
+                    <span>Agrega el primero para comenzar a gestionar integraciones.</span>
+                @endif
             </div>
         @else
             <div class="overflow-x-auto rounded-lg border border-[#d9e2dc]">
@@ -80,6 +98,10 @@
                     </tbody>
                 </table>
             </div>
+
+            @if ($subsystems->hasPages())
+                <div class="mt-5">{{ $subsystems->links() }}</div>
+            @endif
         @endif
     </section>
 @endsection

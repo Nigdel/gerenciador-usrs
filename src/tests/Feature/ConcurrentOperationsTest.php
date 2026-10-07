@@ -46,7 +46,7 @@ class ConcurrentOperationsTest extends TestCase
 
         $this->usuario = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',
@@ -189,7 +189,7 @@ class ConcurrentOperationsTest extends TestCase
 
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/usuarios/suspender', [
-                'cpf' => '12345678901',
+                'cpf' => '12345678909',
                 'subsistemas' => ['email'],
                 'motivo_suspension' => 'Licença médica',
             ])
@@ -209,7 +209,7 @@ class ConcurrentOperationsTest extends TestCase
 
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/usuarios/suspender', [
-                'cpf' => '12345678901',
+                'cpf' => '12345678909',
                 'subsistemas' => ['email'],
                 'motivo_suspension' => 'Licença médica',
             ])

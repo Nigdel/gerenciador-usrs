@@ -45,7 +45,7 @@ class AccountStateLogTest extends TestCase
 
         $gestorUser = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.'.$slug,
             'empresa' => 'klios',
@@ -232,7 +232,7 @@ class AccountStateLogTest extends TestCase
         ]);
 
         $this->postJson('/api/usuarios/provisionar', [
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'nombre_completo' => 'Api Test User',
             'empresa' => 'Test Company',
         ])->assertStatus(201);

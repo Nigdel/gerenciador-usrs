@@ -56,7 +56,7 @@ class ProcessOperationAccountTest extends TestCase
 
         $this->usuario = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',
@@ -91,7 +91,7 @@ class ProcessOperationAccountTest extends TestCase
     {
         return [
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'usuario' => 'ana.silva',
             'email_personal' => 'ana.silva@personal.test',
             'empresa' => 'Empresa Teste',

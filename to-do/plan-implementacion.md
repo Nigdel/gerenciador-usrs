@@ -254,10 +254,26 @@ Dos cosas que hacen falta para poder medirlo dos veces:
 - Vistas: barra de búsqueda + selects de estado/subsistema + paginación; conservar filtros al navegar.
 **Tests:** búsqueda por cada campo, combinación de filtros, paginación estable.
 
+**Estado (4.1):** cerrado. Scopes `buscar`/`delEstado`/`enSubsistema`, `GestorUserListRequest` con
+`Rule::enum`, paginación con `withQueryString()` en los dos listados y barra de filtros en las vistas.
+La barra reutiliza las clases existentes (`.field`, `button button-primary`) en vez de inventar un
+estilo de inputs nuevo, porque en este proyecto los inputs se estilizan por su `.field` contenedor.
+El estado vacío distingue "no hay usuarios" de "ninguno coincide con el filtro", para que filtrar a
+cero no parezca pérdida de datos.
+La parte de 4.2 que toca el CPF también se hizo aquí, porque la búsqueda por CPF sobre una columna
+unique con dos formatos mezclados no puede funcionar de forma fiable antes de fijarlo (ver 4.2).
+
 ### 4.2 Validaciones (S)
 - Regla `App\Rules\Cpf` (dígitos verificadores, rechaza secuencias repetidas) y normalización a solo dígitos
   en `prepareForValidation()` de `GestorUserRequest` y `ProvisionUserRequest`. Ojo: el CPF es clave de
   búsqueda en Adagio y `unique` local; decidir un único formato de almacenamiento y migrar los existentes.
+  **Decidido y hecho:** formato único de once dígitos. La migración
+  `2026_10_07_100000_normalize_gestor_users_cpf` quita la puntuación y **aborta con un mensaje que
+  lista los ids en conflicto** antes de escribir nada, en vez de reventar a mitad de la actualización
+  con un error de índice que no dice qué filas son. Su `down()` es no-op a propósito: la puntuación
+  original no se puede recuperar.
+  Al validar esto destapó que el CPF de ejemplo de los tests (`12345678901`) no era válido — falla sus
+  propios dígitos verificadores. Se corrigió a `12345678909` en 34 ficheros de test.
 - `SuspendGestorUserRequest`: `fin_suspension` con `after_or_equal:inicio_suspension`.
 - Unicidad de `usuario` en edición.
 

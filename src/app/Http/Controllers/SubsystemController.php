@@ -20,12 +20,25 @@ class SubsystemController extends Controller
         private readonly SubsystemServiceRegistry $registry,
     ) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Subsystem::class);
 
+        $busqueda = trim((string) $request->query('q'));
+
+        $subsistemas = Subsystem::query()
+            ->withCount('accounts')
+            ->when($busqueda !== '', fn ($query) => $query->where(
+                fn ($query) => $query->where('nombre', 'like', '%'.$busqueda.'%')
+                    ->orWhere('slug', 'like', '%'.$busqueda.'%')
+            ))
+            ->orderBy('nombre')
+            ->paginate(25)
+            ->withQueryString();
+
         return view('subsystems.index', [
-            'subsystems' => Subsystem::query()->withCount('accounts')->orderBy('nombre')->get(),
+            'subsystems' => $subsistemas,
+            'busqueda' => $busqueda,
         ]);
     }
 

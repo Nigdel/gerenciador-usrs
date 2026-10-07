@@ -45,7 +45,7 @@ class RetryOperationAccountTest extends TestCase
 
         $this->usuario = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',
@@ -83,7 +83,7 @@ class RetryOperationAccountTest extends TestCase
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
         ]);
 
         foreach ($operacion->cuentas as $i => $fila) {
@@ -225,7 +225,7 @@ class RetryOperationAccountTest extends TestCase
                 'password_general' => 'Password123!',
                 'usuario' => 'ana.silva',
                 'nombre_completo' => 'Ana Silva',
-                'cpf' => '12345678901',
+                'cpf' => '12345678909',
             ],
         );
 

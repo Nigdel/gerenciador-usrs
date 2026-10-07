@@ -38,7 +38,7 @@ class OperationApiTest extends TestCase
 
         $this->usuario = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',

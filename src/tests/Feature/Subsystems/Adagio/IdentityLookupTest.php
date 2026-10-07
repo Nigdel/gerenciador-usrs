@@ -29,14 +29,14 @@ class IdentityLookupTest extends TestCase
                 'id' => 42,
                 'nome' => 'Ana Silva',
                 'email' => 'ana@example.test',
-                'documento' => '12345678901',
+                'documento' => '12345678909',
             ]));
 
-        $user = app(AdagioService::class)->findByCpf('123.456.789-01');
+        $user = app(AdagioService::class)->findByCpf('123.456.789-09');
 
         $this->assertSame('Ana Silva', $user['nombre_completo']);
-        $this->assertSame('12345678901', $user['cpf']);
-        Http::assertSent(fn ($request) => str_contains($request->url(), 'documento=12345678901'));
+        $this->assertSame('12345678909', $user['cpf']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'documento=12345678909'));
     }
 
     public function test_adagio_checks_whether_an_email_exists(): void

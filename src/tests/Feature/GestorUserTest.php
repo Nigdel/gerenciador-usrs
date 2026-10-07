@@ -56,23 +56,23 @@ class GestorUserTest extends TestCase
                 'id' => 42,
                 'nome' => 'Ana Silva',
                 'email' => 'ana@example.com',
-                'documento' => '12345678901',
+                'documento' => '12345678909',
             ]);
         });
 
-        $this->get(route('gestor-users.lookup-cpf', ['cpf' => '123.456.789-01']))
+        $this->get(route('gestor-users.lookup-cpf', ['cpf' => '123.456.789-09']))
             ->assertOk()
             ->assertJson([
                 'found' => true,
                 'user' => [
-                    'cpf' => '12345678901',
+                    'cpf' => '12345678909',
                     'nombre_completo' => 'Ana Silva',
                     'email_personal' => 'ana@example.com',
                     'usuario' => 'ana',
                 ],
             ]);
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), 'documento=12345678901'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'documento=12345678909'));
     }
 
     public function test_cpf_lookup_returns_not_found_without_blocking_manual_creation(): void
@@ -170,7 +170,7 @@ class GestorUserTest extends TestCase
 
         $response = $this->post(route('gestor-users.store'), [
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',
@@ -206,7 +206,7 @@ class GestorUserTest extends TestCase
 
         $response = $this->from(route('gestor-users.create'))->post(route('gestor-users.store'), [
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'empresa' => 'Empresa Teste',
             'subsistemas' => ['adagio'],
@@ -224,7 +224,7 @@ class GestorUserTest extends TestCase
 
         $gestorUser = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',
@@ -253,7 +253,7 @@ class GestorUserTest extends TestCase
     {
         $gestorUser = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',

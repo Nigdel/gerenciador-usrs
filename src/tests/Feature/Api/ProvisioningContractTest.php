@@ -129,7 +129,7 @@ class ProvisioningContractTest extends TestCase
     private function payloadAlta(array $extra = []): array
     {
         return array_merge([
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'nombre_completo' => 'Ana Silva',
             'empresa' => 'Empresa Teste',
             'password_general' => 'Password123!',
@@ -344,7 +344,7 @@ class ProvisioningContractTest extends TestCase
         $this->adagioSinElUsuario();
 
         $this->conToken([ApiAbility::Provisionar])
-            ->postJson('/api/usuarios/provisionar', ['cpf' => '12345678901'])
+            ->postJson('/api/usuarios/provisionar', ['cpf' => '12345678909'])
             ->assertStatus(422)
             ->assertJsonPath('message', 'nombre_completo y empresa son obligatorios cuando el CPF no existe en Adagio');
     }
@@ -354,10 +354,10 @@ class ProvisioningContractTest extends TestCase
         $this->adagioSinElUsuario();
 
         $this->conToken([ApiAbility::Provisionar])
-            ->postJson('/api/usuarios/provisionar', ['cpf' => '12345678901'])
+            ->postJson('/api/usuarios/provisionar', ['cpf' => '12345678909'])
             ->assertStatus(422);
 
-        $this->assertDatabaseMissing('gestor_users', ['cpf' => '12345678901']);
+        $this->assertDatabaseMissing('gestor_users', ['cpf' => '12345678909']);
     }
 
     // ------------------------------------------------------------------
@@ -503,7 +503,7 @@ class ProvisioningContractTest extends TestCase
     {
         $gestor = GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'usuario' => 'ana.silva',
             'empresa' => 'Empresa Teste',

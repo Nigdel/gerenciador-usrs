@@ -34,7 +34,7 @@ class ApiAuthenticationTest extends TestCase
     private function payloadProvisionar(): array
     {
         return [
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'nombre_completo' => 'Api Test',
             'empresa' => 'Test Company',
         ];
@@ -43,7 +43,7 @@ class ApiAuthenticationTest extends TestCase
     private function payloadSuspender(): array
     {
         return [
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'motivo_suspension' => 'Prueba',
         ];
     }

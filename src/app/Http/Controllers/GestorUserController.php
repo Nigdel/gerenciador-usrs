@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Contracts\IdentityProviderInterface;
 use App\Enums\OperationType;
 use App\Exceptions\ProvisioningException;
+use App\Http\Requests\GestorUserListRequest;
 use App\Http\Requests\GestorUserRequest;
 use App\Http\Requests\OffboardGestorUserRequest;
 use App\Http\Requests\SuspendGestorUserRequest;
@@ -35,15 +36,29 @@ class GestorUserController extends Controller
         private readonly SubsystemServiceRegistry $registry,
     ) {}
 
-    public function index(): View
+    public function index(GestorUserListRequest $request): View
     {
         $this->authorize('viewAny', GestorUser::class);
 
+        $gestorUsers = GestorUser::query()
+            ->withCount('subsystemAccounts')
+            ->buscar($request->busqueda())
+            ->delEstado($request->estado())
+            ->enSubsistema($request->subsistema())
+            ->orderBy('nombre_completo')
+            // withQueryString es lo que mantiene los filtros al ir a la
+            // página 2; sin él el listado vuelve a mostrarlo todo.
+            ->paginate(25)
+            ->withQueryString();
+
+        // El propio listado siempre trae todos los subsistemas: el desplegable
+        // de filtro no puede ofrecerse solo los que ya se está filtrando.
+        $subsistemas = Subsystem::query()->orderBy('nombre')->get();
+
         return view('gestor-users.index', [
-            'gestorUsers' => GestorUser::query()
-                ->withCount('subsystemAccounts')
-                ->orderBy('nombre_completo')
-                ->get(),
+            'gestorUsers' => $gestorUsers,
+            'subsistemas' => $subsistemas,
+            'filtros' => $request->only('q', 'estado', 'subsistema'),
         ]);
     }
 

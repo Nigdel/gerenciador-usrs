@@ -32,7 +32,7 @@ class ResetPasswordTest extends TestCase
     {
         return GestorUser::create([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'PasswordViejo1!',
             'usuario' => $nombre,
             'empresa' => 'klios',

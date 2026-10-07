@@ -261,7 +261,7 @@ class UsernameGeneratorTest extends TestCase
         // Sin 'usuario' a propósito: el alta tiene que pasar por el generador.
         $this->post(route('gestor-users.store'), [
             'nombre_completo' => 'Juan Perez',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
             'empresa' => 'klios',
             'subsistemas' => ['adagio'],

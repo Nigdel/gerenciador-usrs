@@ -29,7 +29,7 @@ class CreateUserTest extends TestCase
             'nombre_completo' => 'Ana Silva',
             'usuario' => 'ana.silva',
             'email_personal' => 'ana@example.test',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'Password123!',
         ], $subsystem);
 
@@ -57,7 +57,7 @@ class CreateUserTest extends TestCase
             'nombre_completo' => 'Ana Silva',
             'usuario' => 'ana.silva',
             'email_personal' => 'ana@example.test',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
         ], $subsystem);
 
         $this->assertTrue($result->success);
@@ -83,7 +83,7 @@ class CreateUserTest extends TestCase
             'nombre_completo' => 'Ana Silva',
             'usuario' => 'ana.silva',
             'email_personal' => 'ana@example.test',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
         ], $subsystem);
 
         $this->assertTrue($result->success);

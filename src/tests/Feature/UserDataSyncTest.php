@@ -32,7 +32,7 @@ class UserDataSyncTest extends TestCase
     {
         return GestorUser::create(array_merge([
             'nombre_completo' => 'Ana Silva',
-            'cpf' => '12345678901',
+            'cpf' => '12345678909',
             'password_general' => 'PasswordViejo1!',
             'usuario' => 'ana.silva',
             'empresa' => 'klios',

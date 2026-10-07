@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\GestorUserStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,6 +34,62 @@ class GestorUser extends Model
         'estado' => GestorUserStatus::class,
         'baja_at' => 'datetime',
     ];
+
+    /**
+     * Búsqueda por texto libre sobre los campos por los que se identifica a
+     * alguien: nombre, usuario, empresa y CPF.
+     *
+     * Los OR van dentro de una closure porque el scope se encadena con otros
+     * filtros: sin el grupo, un AND posterior solo se aplicaría al último
+     * orWhere y el resto de las condiciones dejarían de filtrar en silencio.
+     * El % se escapa para que un texto con % o _ busque literal.
+     */
+    public function scopeBuscar(Builder $query, ?string $q): Builder
+    {
+        $q = trim((string) $q);
+
+        if ($q === '') {
+            return $query;
+        }
+
+        $patron = '%'.addcslashes($q, '%_\\').'%';
+
+        return $query->where(function (Builder $query) use ($patron) {
+            $query->where('nombre_completo', 'like', $patron)
+                ->orWhere('usuario', 'like', $patron)
+                ->orWhere('empresa', 'like', $patron)
+                ->orWhere('cpf', 'like', $patron);
+        });
+    }
+
+    /**
+     * Filtro por estado. El tipo es el enum, no un string: un valor que no sea
+     * 'activo' ni 'baja' no llega a la consulta.
+     */
+    public function scopeDelEstado(Builder $query, ?GestorUserStatus $estado): Builder
+    {
+        if ($estado === null) {
+            return $query;
+        }
+
+        return $query->where('estado', $estado->value);
+    }
+
+    /**
+     * Filtro por subsistema: usuarios con al menos una cuenta en él. whereHas
+     * evita duplicar al usuario cuando tiene varias cuentas en el mismo
+     * subsistema, que es lo normal.
+     */
+    public function scopeEnSubsistema(Builder $query, ?string $slug): Builder
+    {
+        if ($slug === null || $slug === '') {
+            return $query;
+        }
+
+        return $query->whereHas('subsystemAccounts.subsystem', function ($query) use ($slug) {
+            $query->where('subsystems.slug', $slug);
+        });
+    }
 
     /**
      * Está dado de baja si su estado local es 'baja', con independencia de lo
