@@ -84,6 +84,31 @@ Después de borrar el volumen, repite los comandos de migración y seeder de la
 primera instalación. Para recompilar los estilos después de cambiar dependencias
 o configuración frontend, ejecuta `docker compose up -d --force-recreate assets`.
 
+## CI
+
+`.github/workflows/ci.yml` (en la raíz del repo, no en `src/`) corre en cada `push`
+y cada `pull_request`: `pint --test` y `phpunit`.
+Corre sobre **PHP 8.5**, la misma versión del `Dockerfile`, para que un verde en CI
+signifique lo mismo que un verde en el contenedor.
+
+Tres cosas que la CI necesita y que no son obvias:
+
+- **Genera `src/.env` ella misma.** `.env` está en `.gitignore`, así que no llega a
+  la CI, y sin él la suite falla entera: 394 de 425 tests, casi todos, mueren por
+  `APP_KEY` ausente. El paso copia `.env.example` y le inyecta una `APP_KEY` nueva.
+- **`ldap` está en la lista de extensiones.** `SambaAdService` llama a `ldap_*` sin
+  condición. Los tests no usan la extensión de verdad (la sustituyen por funciones
+  declaradas en el mismo namespace, que es como PHP las resuelve antes que las
+  globales), pero sin la extensión cargada el resto de la aplicación tampoco arranca.
+- **No hay servicio de base de datos.** `phpunit.xml` fija `DB_CONNECTION=sqlite`
+  con `DB_DATABASE=:memory:`.
+
+La CI **no corre `php artisan test --parallel`**: eso exige `brianium/paratest`, que
+no es dependencia del proyecto, y la suite tarda unos 8 segundos.
+
+La protección de rama no se configura desde un fichero: para exigir la CI en verde
+antes de mergear hay que activarla en *Settings → Branches → main* dentro de GitHub.
+
 ## Operación del worker
 
 El servicio `queue` corre `queue:work --queue=subsistemas,default --tries=3`, y

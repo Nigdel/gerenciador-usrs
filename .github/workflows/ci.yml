@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Pint + PHPUnit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          # El Dockerfile (docker/php/Dockerfile) es php:8.5-fpm y el
+          # contenedor corre 8.5.x. CI usa la misma versión a propósito: si
+          # aquí sale en verde pero el contenedor no, el fallo aparece en
+          # producción y no donde se podría haber visto.
+          php-version: '8.5'
+          coverage: none
+          # Las que carga el contenedor y hacen falta: ldap porque
+          # SambaAdService llama a ldap_* sin condición (los tests de Samba
+          # las sustituyen por funciones del mismo namespace); gd, intl y
+          # zip las exige laravel/framework.
+          extensions: bcmath, curl, exif, gd, intl, ldap, mbstring, pcntl, pdo_mysql, pdo_sqlite, zip
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('src/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Crear .env
+        run: |
+          # .env está en .gitignore, así que CI no lo recibe. Y no es opcional:
+          # sin él, 394 de 425 tests fallan por APP_KEY ausente. La copia de
+          # .env.example trae el resto de variables ya con valores de ejemplo.
+          cp src/.env.example src/.env
+          key=$(php -r "echo 'base64:'.base64_encode(random_bytes(32));")
+          php -r "\$f = file_put_contents('src/.env', preg_replace('/^APP_KEY=.*$/m', 'APP_KEY=$key', file_get_contents('src/.env')));"
+          grep '^APP_KEY=base64:' src/.env
+
+      - name: Instalar dependencias
+        working-directory: src
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Pint
+        working-directory: src
+        # --test no escribe nada: falla si algo está mal formateado. Es el
+        # motivo de que esto sea un gate y no un formateo automático.
+        run: ./vendor/bin/pint --test
+
+      - name: Tests
+        working-directory: src
+        # Sin --parallel a propósito: exige brianium/paratest, que no es
+        # dependencia. La suite tarda ~8s, así que el paralelismo no aporta
+        # nada ahora. Tampoco hay servicio de MySQL: phpunit.xml fija
+        # DB_CONNECTION=sqlite con :memory:.
+        run: php artisan test
