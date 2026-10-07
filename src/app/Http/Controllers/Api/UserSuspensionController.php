@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\OperationType;
+use App\Http\Controllers\Api\Concerns\RespondeErroresDeProvisionado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SuspendUserRequest;
 use App\Services\ProvisioningOperationService;
@@ -14,7 +15,9 @@ class UserSuspensionController extends Controller
     public function __construct(
         private readonly UserSuspensionService $suspensionService,
         private readonly ProvisioningOperationService $operationService,
-    ) {}
+    ) {
+        $this->usaRespuestasControladas();
+    }
 
     /**
      * POST /api/usuarios/suspender
@@ -28,42 +31,42 @@ class UserSuspensionController extends Controller
      * identificador de la operación y las filas 'pendiente' en vez del
      * resultado final.
      */
+    use RespondeErroresDeProvisionado;
+
     public function store(SuspendUserRequest $request): JsonResponse
     {
-        $payload = $request->validated();
+        return $this->conErroresControlados(function () use ($request): JsonResponse {
+            $payload = $request->validated();
 
-        $gestorUser = $this->suspensionService->localizarUsuario($payload);
+            $gestorUser = $this->suspensionService->localizarUsuario($payload);
 
-        // Antes de resolver cuentas: es lo único que puede fallar sin haber
-        // tocado nada, y el error debe ser el del bloqueo y no el de un
-        // usuario sin cuentas en el subsistema pedido.
+            $cuentas = $this->suspensionService->cuentasASuspender(
+                $gestorUser,
+                $payload['subsistemas'] ?? null,
+            );
 
-        $cuentas = $this->suspensionService->cuentasASuspender(
-            $gestorUser,
-            $payload['subsistemas'] ?? null,
-        );
+            $datos = $this->suspensionService->datosDeSuspension([
+                'motivo_suspension' => $payload['motivo_suspension'] ?? null,
+                'inicio_suspension' => $payload['inicio_suspension'] ?? null,
+                'fin_suspension' => $payload['fin_suspension'] ?? null,
+            ]);
 
-        $datos = $this->suspensionService->datosDeSuspension([
-            'motivo_suspension' => $payload['motivo_suspension'] ?? null,
-            'inicio_suspension' => $payload['inicio_suspension'] ?? null,
-            'fin_suspension' => $payload['fin_suspension'] ?? null,
-        ]);
+            $operacion = $this->operationService->describir(
+                OperationType::Suspension,
+                $gestorUser,
+                $cuentas,
+                ['motivo_suspension' => $datos['motivo_suspension']],
+                array_fill_keys($cuentas->pluck('id')->all(), $datos),
+            );
 
-        $operacion = $this->operationService->describir(
-            OperationType::Suspension,
-            $gestorUser,
-            $cuentas,
-            ['motivo_suspension' => $datos['motivo_suspension']],
-            array_fill_keys($cuentas->pluck('id')->all(), $datos),
-        );
+            $this->operationService->despachar($operacion);
 
-        $this->operationService->despachar($operacion);
-
-        return response()->json([
-            'operacion_id' => $operacion->uuid,
-            'tipo' => $operacion->tipo->value,
-            'estado' => $operacion->estado->value,
-            'subsistemas' => $this->operationService->serializar($operacion)['cuentas'],
-        ]);
+            return response()->json([
+                'operacion_id' => $operacion->uuid,
+                'tipo' => $operacion->tipo->value,
+                'estado' => $operacion->estado->value,
+                'subsistemas' => $this->operationService->serializar($operacion)['cuentas'],
+            ]);
+        });
     }
 }

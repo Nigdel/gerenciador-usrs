@@ -2,12 +2,12 @@
 
 namespace App\Services;
 
+use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use InvalidArgumentException;
 
 /**
  * Orquesta la suspensión de un usuario en uno, varios, o todos los
@@ -42,7 +42,7 @@ class UserSuspensionService
             return GestorUser::query()->where('usuario', $payload['usuario'])->firstOrFail();
         }
 
-        throw new InvalidArgumentException('Se requiere "cpf" o "usuario" para identificar al usuario a suspender');
+        throw new ProvisioningException('Se requiere "cpf" o "usuario" para identificar al usuario a suspender');
     }
 
     /**

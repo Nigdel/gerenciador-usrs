@@ -7,6 +7,7 @@ use App\Enums\OperationAccountStatus;
 use App\Enums\OperationStatus;
 use App\Enums\OperationType;
 use App\Exceptions\OperationInProgressException;
+use App\Exceptions\ProvisioningException;
 use App\Jobs\ProcessOperationAccount;
 use App\Models\GestorUser;
 use App\Models\ProvisioningOperation;
@@ -172,22 +173,22 @@ class ProvisioningOperationService
      * intentó, y ponerlo a cero perdería el rastro de que esta cuenta ya costó
      * tres intentos antes. El job lo incrementa solo al ejecutarse.
      *
-     * @throws RuntimeException Si la fila no está en error o la operación sigue abierta.
+     * @throws ProvisioningException Si la fila no está en error o la operación sigue abierta.
      */
     public function reintentar(ProvisioningOperationAccount $fila): void
     {
         $operacion = $fila->operacion()->first();
 
         if (! $operacion instanceof ProvisioningOperation) {
-            throw new RuntimeException('La cuenta no pertenece a ninguna operación.');
+            throw new ProvisioningException('La cuenta no pertenece a ninguna operación.');
         }
 
         if ($fila->estado !== OperationAccountStatus::Error) {
-            throw new RuntimeException('Solo se puede reintentar una cuenta que terminó con error.');
+            throw new ProvisioningException('Solo se puede reintentar una cuenta que terminó con error.');
         }
 
         if (! $operacion->estaTerminada()) {
-            throw new RuntimeException('La operación todavía está en curso: no hay nada que reintentar.');
+            throw new ProvisioningException('La operación todavía está en curso: no hay nada que reintentar.');
         }
 
         $fila->update([

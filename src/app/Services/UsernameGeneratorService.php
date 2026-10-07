@@ -3,11 +3,11 @@
 namespace App\Services;
 
 use App\Contracts\UsernameAvailabilityInterface;
+use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -39,8 +39,8 @@ class UsernameGeneratorService
     /**
      * @return string Login propuesto, ej: "juan.perez" (sin el dominio de email).
      *
-     * @throws RuntimeException Si no se encuentra ningún login libre tras todos
-     *                          los intentos. El alta no se hace a ciegas.
+     * @throws ProvisioningException Si no se encuentra ningún login libre tras todos
+     *                               los intentos. El alta no se hace a ciegas.
      */
     public function proponer(string $nombreCompleto, string $empresa): string
     {
@@ -79,7 +79,7 @@ class UsernameGeneratorService
             }
         }
 
-        throw new RuntimeException(sprintf(
+        throw new ProvisioningException(sprintf(
             'No se encontró ningún login libre para "%s" tras %d intentos. Revisa los homónimos existentes o indica el usuario manualmente.',
             $nombreCompleto,
             self::MAX_INTENTOS,
@@ -226,7 +226,7 @@ class UsernameGeneratorService
         $partes = array_values(array_filter(explode(' ', trim($nombreCompleto))));
 
         if (count($partes) < 2) {
-            throw new RuntimeException('El nombre completo debe incluir al menos nombre y un apellido');
+            throw new ProvisioningException('El nombre completo debe incluir al menos nombre y un apellido');
         }
 
         if (count($partes) === 2) {

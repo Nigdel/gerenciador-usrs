@@ -245,6 +245,25 @@ docker compose exec app php artisan api:token {integracion} \
   --abilities=usuarios:provisionar,usuarios:suspender,operaciones:consultar
 ```
 
+### Códigos de error
+
+| Código | Cuándo | Cuerpo |
+| --- | --- | --- |
+| `401` / `403` | sin token, o sin la ability que exige la ruta | — |
+| `422` | los datos llegaron bien formados pero la situación no lo permite (el nombre no da para un login, no hay `cpf` ni `usuario`…) | `{ "message": "…" }` con el motivo |
+| `409` | el usuario ya tiene una operación sin terminar | `{ "message", "operacion_id" }` |
+| `502` | algo se rompió por dentro: Adagio o un subsistema no responden, falta la extensión `ldap`, error de programación | `{ "message": "…" }` genérico |
+
+El `422` se distingue del `400` a propósito: es un `422` cuando la misma
+petición puede aceptarse más tarde sin tocar un solo campo, y un `400` cuando
+el payload en sí está mal. Los errores de validación de Laravel ya devuelven
+`422` con el detalle campo a campo.
+
+El `502` nunca incluye el mensaje de la excepción original. Ese texto puede
+llevar un nombre de columna, la URL de un LDAP o un rastro de pila, y quien
+recibe la respuesta no puede hacer nada con eso —pero sí puede aprender mucho
+quien lo lea. El detalle va al log.
+
 ## Agregar un subsistema nuevo
 
 1. Crear `app/Services/Subsystems/NuevoService.php` implementando

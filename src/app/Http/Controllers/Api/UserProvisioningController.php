@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\OperationType;
+use App\Http\Controllers\Api\Concerns\RespondeErroresDeProvisionado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProvisionUserRequest;
 use App\Http\Resources\GestorUserResource;
@@ -15,7 +16,9 @@ class UserProvisioningController extends Controller
     public function __construct(
         private readonly UserProvisioningService $provisioningService,
         private readonly ProvisioningOperationService $operationService,
-    ) {}
+    ) {
+        $this->usaRespuestasControladas();
+    }
 
     /**
      * POST /api/usuarios/provisionar
@@ -31,32 +34,38 @@ class UserProvisioningController extends Controller
      * encolado—, y cambiarlo rompería a las integraciones que ya lo tratan
      * como alta aceptada.
      */
+    use RespondeErroresDeProvisionado;
+
     public function store(ProvisionUserRequest $request): JsonResponse
     {
-        $resultado = $this->provisioningService->provisionar($request->validated());
+        return $this->conErroresControlados(function () use ($request): JsonResponse {
+            $resultado = $this->provisioningService->provisionar($request->validated());
 
-        $operacion = $this->operationService->describir(
-            OperationType::Alta,
-            $resultado['gestor_user'],
-            $resultado['subsistemas'],
-            $resultado['datos'],
-        );
+            $operacion = $this->operationService->describir(
+                OperationType::Alta,
+                $resultado['gestor_user'],
+                $resultado['subsistemas'],
+                $resultado['datos'],
+            );
 
-        $this->operationService->despachar($operacion);
+            $this->operationService->despachar($operacion);
 
-        return response()->json([
-            'usuario' => new GestorUserResource($resultado['gestor_user']),
-            'operacion_id' => $operacion->uuid,
-            'tipo' => $operacion->tipo->value,
-            'estado' => $operacion->estado->value,
-            // Fase 3.2: las filas por cuenta nacen 'pendiente'. Se mantiene el
-            // nombre 'subsistemas' porque es el que ya consume la integración,
-            // aunque ahora sea la vista de la operación y no un resultado.
-            'subsistemas' => $this->operationService->serializar($operacion)['cuentas'],
-            // Fase 2.8: si el login se propuso sin poder confirmarlo contra
-            // algún subsistema, viaja en la respuesta para que la integración
-            // sepa que debe verificarlo antes de entregar las credenciales.
-            'login_no_verificado' => $resultado['login_no_verificado'],
-        ], 201);
+            return response()->json([
+                'usuario' => new GestorUserResource($resultado['gestor_user']),
+                'operacion_id' => $operacion->uuid,
+                'tipo' => $operacion->tipo->value,
+                'estado' => $operacion->estado->value,
+                // Fase 3.2: las filas por cuenta nacen 'pendiente'. Se mantiene
+                // el nombre 'subsistemas' porque es el que ya consume la
+                // integración, aunque ahora sea la vista de la operación y no
+                // un resultado.
+                'subsistemas' => $this->operationService->serializar($operacion)['cuentas'],
+                // Fase 2.8: si el login se propuso sin poder confirmarlo contra
+                // algún subsistema, viaja en la respuesta para que la
+                // integración sepa que debe verificarlo antes de entregar las
+                // credenciales.
+                'login_no_verificado' => $resultado['login_no_verificado'],
+            ], 201);
+        });
     }
 }

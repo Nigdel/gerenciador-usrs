@@ -4,10 +4,10 @@ namespace App\Services;
 
 use App\Contracts\SubsystemServiceInterface;
 use App\Enums\SubsystemAccountStatus;
+use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Collection;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -55,7 +55,7 @@ class UserOffboardingService
     public function validarBaja(GestorUser $gestorUser): void
     {
         if ($gestorUser->estaDadoDeBaja()) {
-            throw new RuntimeException('El usuario ya está dado de baja.');
+            throw new ProvisioningException('El usuario ya está dado de baja.');
         }
     }
 
@@ -65,7 +65,7 @@ class UserOffboardingService
     public function validarReactivacion(GestorUser $gestorUser): void
     {
         if (! $gestorUser->estaDadoDeBaja()) {
-            throw new RuntimeException('El usuario no está dado de baja.');
+            throw new ProvisioningException('El usuario no está dado de baja.');
         }
     }
 

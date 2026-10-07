@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Contracts\IdentityProviderInterface;
 use App\DTO\SubsystemOperationResult;
+use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
@@ -72,7 +73,7 @@ class UserProvisioningService
 
     private function resolverDatosDesdeAdagio(array $payload): array
     {
-        $cpf = $payload['cpf'] ?? throw new \InvalidArgumentException('El CPF es obligatorio para provisionar un usuario');
+        $cpf = $payload['cpf'] ?? throw new ProvisioningException('El CPF es obligatorio para provisionar un usuario');
 
         $adagio = $this->registry->resolve(config('subsystems.proveedor_identidad_slug', 'adagio'));
 
@@ -90,7 +91,7 @@ class UserProvisioningService
 
         // No existe en Adagio: se generan los datos a partir del payload y se propone login.
         if (empty($payload['nombre_completo']) || empty($payload['empresa'])) {
-            throw new \InvalidArgumentException('nombre_completo y empresa son obligatorios cuando el CPF no existe en Adagio');
+            throw new ProvisioningException('nombre_completo y empresa son obligatorios cuando el CPF no existe en Adagio');
         }
 
         $propuesta = $this->proponerUsuario($payload);

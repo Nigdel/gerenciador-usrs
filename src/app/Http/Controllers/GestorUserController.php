@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\IdentityProviderInterface;
 use App\Enums\OperationType;
+use App\Exceptions\ProvisioningException;
 use App\Http\Requests\GestorUserRequest;
 use App\Http\Requests\OffboardGestorUserRequest;
 use App\Http\Requests\SuspendGestorUserRequest;
@@ -21,7 +22,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use RuntimeException;
 use Throwable;
 
 class GestorUserController extends Controller
@@ -68,7 +68,7 @@ class GestorUserController extends Controller
             $identityProvider = $this->registry->resolveIdentityProvider();
 
             if (! $identityProvider instanceof IdentityProviderInterface) {
-                throw new RuntimeException('El proveedor de identidad no admite búsquedas por CPF.');
+                throw new ProvisioningException('El proveedor de identidad no admite búsquedas por CPF.');
             }
 
             $user = $identityProvider->findByCpf($cpf);
@@ -110,13 +110,13 @@ class GestorUserController extends Controller
 
         try {
             $resultado = $this->provisioningService->provisionar($request->validated());
-        } catch (RuntimeException $exception) {
+        } catch (Throwable $exception) {
             report($exception);
 
             return redirect()
                 ->route('gestor-users.create')
                 ->withInput()
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->mensajeAlOperador($exception));
         }
 
         $gestorUser = $resultado['gestor_user'];
@@ -210,9 +210,7 @@ class GestorUserController extends Controller
 
         try {
             $operaciones->reintentar($fila);
-        } catch (RuntimeException $exception) {
-            report($exception);
-
+        } catch (ProvisioningException $exception) {
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
                 ->with('error', $exception->getMessage());
@@ -242,10 +240,12 @@ class GestorUserController extends Controller
 
         try {
             $this->offboardingService->validarBaja($gestorUser);
-        } catch (RuntimeException $exception) {
+        } catch (Throwable $exception) {
+            report($exception);
+
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->mensajeAlOperador($exception));
         }
 
         $cuentas = $this->offboardingService->cuentasABajas($gestorUser);
@@ -280,10 +280,12 @@ class GestorUserController extends Controller
 
         try {
             $this->offboardingService->validarReactivacion($gestorUser);
-        } catch (RuntimeException $exception) {
+        } catch (Throwable $exception) {
+            report($exception);
+
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->mensajeAlOperador($exception));
         }
 
         $cuentas = $this->offboardingService->cuentasAReactivar($gestorUser);
@@ -480,12 +482,31 @@ class GestorUserController extends Controller
                     'warning' => 'Algunas contraseñas no pudieron restablecerse.',
                     'provisioning_results' => $results,
                 ]);
-        } catch (RuntimeException $exception) {
+        } catch (Throwable $exception) {
             report($exception);
 
             return redirect()
                 ->route('gestor-users.show', $gestorUser)
-                ->with('error', 'No se pudieron restablecer las contraseñas: '.$exception->getMessage());
+                ->with('error', $this->mensajeAlOperador($exception, 'No se pudieron restablecer las contraseñas'));
         }
+    }
+
+    /**
+     * Traduce una excepción a lo que ve el operador (Sprint 2.1).
+     *
+     * Solo ProvisioningException —y OperationInProgressException, que hereda de
+     * ella— enseñan su mensaje: describen una situación que un humano entiende
+     * y sobre la que puede actuar. Cualquier otra cosa se reporta en el log y
+     * se muestra como un fallo genérico, porque su texto puede traer un nombre
+     * de columna, una URL o un rastro de pila, que no le sirven de nada al
+     * operador y sí de mucho a quien esté mirando su pantalla.
+     */
+    private function mensajeAlOperador(Throwable $exception, string $prefijo = ''): string
+    {
+        $mensaje = $exception instanceof ProvisioningException
+            ? $exception->getMessage()
+            : 'Ocurrió un error inesperado. Inténtalo de nuevo o avisa a sistemas.';
+
+        return $prefijo === '' ? $mensaje : $prefijo.': '.$mensaje;
     }
 }
