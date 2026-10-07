@@ -147,17 +147,24 @@ class GestorUserTest extends TestCase
             'empresa' => 'Empresa Teste',
         ]);
 
-        $this->mock(UserProvisioningService::class, function ($mock) use ($gestorUser): void {
+        $this->mock(UserProvisioningService::class, function ($mock) use ($gestorUser, $adagio): void {
             $mock->shouldReceive('provisionar')
                 ->once()
                 ->with(Mockery::on(fn (array $payload): bool => $payload['subsistemas'] === ['adagio']))
                 ->andReturn([
                     'gestor_user' => $gestorUser,
-                    'resultados' => [[
-                        'subsistema' => 'adagio',
-                        'exito' => true,
-                        'mensaje' => 'Cuenta creada',
-                    ]],
+                    'subsistemas' => collect([$adagio]),
+                    'datos' => ['usuario' => 'ana.silva'],
+                    'login_no_verificado' => null,
+                ]);
+            // Con QUEUE_CONNECTION=sync el alta se ejecuta dentro de la
+            // petición, así que el job llama también a crearEnSubsistema().
+            $mock->shouldReceive('crearEnSubsistema')
+                ->andReturn([
+                    'subsistema' => 'adagio',
+                    'exito' => true,
+                    'mensaje' => 'Cuenta creada',
+                    'cuenta' => null,
                 ]);
         });
 

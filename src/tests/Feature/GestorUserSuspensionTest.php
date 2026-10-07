@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OperationStatus;
 use App\Enums\SubsystemAccountStatus;
 use App\Models\GestorUser;
 use App\Models\Subsystem;

@@ -54,7 +54,6 @@ class ProvisioningOperationService
      * lo único que se usa de ella es `isEmpty()`, `count()` y recorrerla.
      * @param  array<string, mixed>  $payload  datos de la operación (motivo de baja, motivo y fechas de suspensión...)
      * @param  array<int, array<string, mixed>>  $payloadPorCuenta  lo que cada fila necesita guardar
-     * @return ProvisioningOperation
      */
     public function describir(
         OperationType $tipo,
@@ -106,13 +105,17 @@ class ProvisioningOperationService
      */
     public function despachar(ProvisioningOperation $operacion): void
     {
+        // Antes de despachar, no después: con QUEUE_CONNECTION=sync los jobs
+        // corren dentro de este mismo bucle y cerrar() deja la operación en
+        // Completada/Fallida. Marcarla EnCurso al final pisaría ese resultado
+        // y la operación se quedaría 'en curso' para siempre.
+        $operacion->forceFill(['estado' => OperationStatus::EnCurso])->save();
+
         $operacion->cuentas()
             ->where('estado', OperationAccountStatus::Pendiente)
             ->orderBy('id')
             ->pluck('id')
             ->each(fn (int $filaId) => ProcessOperationAccount::dispatch($filaId)->onQueue(self::COLA));
-
-        $operacion->forceFill(['estado' => OperationStatus::EnCurso])->save();
     }
 
     /**
