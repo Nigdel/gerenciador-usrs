@@ -80,8 +80,14 @@ class ProvisioningOperationService
                 // quedarse sin autor legible.
                 'actor_nombre' => $actor?->name,
                 'origen' => ActorContext::origen(),
-                'pendientes' => $trabajo->count(),
             ]);
+
+            // forceFill y no create() para 'pendientes': es un contador
+            // desnormalizado que no está en $fillable porque no lo edita nadie
+            // desde fuera del servicio, y create() lo descartaría en silencio.
+            // Sin esto, el resumen del panel y de la API decía siempre
+            // «0 pendientes». El resto de la cabecera ya viene en el create().
+            $operacion->forceFill(['pendientes' => $trabajo->count()]);
 
             $operacion->terminada_at = $operacion->estado === OperationStatus::Completada ? now() : null;
             $operacion->save();

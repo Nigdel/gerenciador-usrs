@@ -24,9 +24,9 @@ abstract class TestCase extends BaseTestCase
      * subsistema no se toca si no confirma, que la baja no borre, que el
      * histórico se escriba— no necesitan comprobar el encolado para nada, así
      * que invocan el job directamente con la misma cadena de servicios que la
-     * que inyectaría el contenedor. El encolado en sí, y que la petición no
-     * salga a la red, lo comprueba QueuedSubsystemOperationTest con
-     * Queue::fake().
+     * que inyectaría el contenedor. El encolado en sí lo comprueba
+     * ProvisioningOperationServiceTest con Queue::fake(), y el comportamiento
+     * del job al ejecutarse, ProcessOperationAccountTest.
      *
      * Los jobs se ejecutan uno a uno y no con despachar() a propósito: correrlos
      * en paralelo dentro del test haría que 'exitos' y 'errores' de la
