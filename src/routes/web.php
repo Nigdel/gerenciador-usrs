@@ -87,7 +87,7 @@ Route::middleware('auth')->group(function () {
     Route::post('subsystems/{subsystem}/accounts/{userSubsystemAccount}/action', [SubsystemController::class, 'accountAction'])
         ->name('subsystems.accounts.action');
 
-    Route::resource('subsystems', SubsystemController::class);
+    Route::resource('operaciones', \App\Http\Controllers\ProvisioningOperationController::class)->only(['index', 'show']);
 });
 
 require __DIR__.'/auth.php';

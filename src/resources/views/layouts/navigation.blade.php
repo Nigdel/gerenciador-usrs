@@ -22,6 +22,12 @@
                         </x-nav-link>
                     @endcan
 
+                    @can('viewAny', [App\Models\ProvisioningOperation::class])
+                        <x-nav-link :href="route('operaciones.index')" :active="request()->routeIs('operaciones.*')">
+                            {{ __('Operações') }}
+                        </x-nav-link>
+                    @endcan
+
                     @can('viewAny', [App\Models\User::class])
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             {{ __('Operadores') }}
@@ -92,6 +98,12 @@
             @can('viewAny', [App\Models\GestorUser::class])
                 <x-responsive-nav-link :href="route('gestor-users.index')" :active="request()->routeIs('gestor-users.*')">
                     {{ __('Usuarios') }}
+                </x-responsive-nav-link>
+            @endcan
+
+            @can('viewAny', [App\Models\ProvisioningOperation::class])
+                <x-responsive-nav-link :href="route('operaciones.index')" :active="request()->routeIs('operaciones.*')">
+                    {{ __('Operações') }}
                 </x-responsive-nav-link>
             @endcan
 
