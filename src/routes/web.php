@@ -12,9 +12,8 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->middleware('verified')->name('dashboard');
+    Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->middleware('verified')->name('dashboard');
+
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -87,7 +86,9 @@ Route::middleware('auth')->group(function () {
     Route::post('subsystems/{subsystem}/accounts/{userSubsystemAccount}/action', [SubsystemController::class, 'accountAction'])
         ->name('subsystems.accounts.action');
 
+    Route::resource('subsystems', SubsystemController::class);
     Route::resource('operaciones', \App\Http\Controllers\ProvisioningOperationController::class)->only(['index', 'show']);
+
 });
 
 require __DIR__.'/auth.php';

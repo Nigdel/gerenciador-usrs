@@ -78,7 +78,7 @@
                         @foreach ($operaciones as $operacion)
                             <tr class="border-t border-[#e8eee9] align-middle">
                                 <td class="px-4 py-3.5 text-[#17211b] whitespace-nowrap">
-                                    {{ $operacion->iniciada_at->format('d/m/Y H:i') }}
+                                    {{ $operacion->iniciada_at ? $operacion->iniciada_at->format('d/m/Y H:i') : '—' }}
                                 </td>
                                 <td class="px-4 py-3.5 font-bold text-[#17211b]">
                                     <a href="{{ route('gestor-users.show', $operacion->usuario) }}" title="Ver usuário">
