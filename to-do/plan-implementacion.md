@@ -341,22 +341,22 @@ IP y user-agent del llamante en operaciones y logs de cuenta, e intentos de logi
 
 ## Sprint 6 — Drivers reales y producción
 
-### 6.1 Drivers genéricos (M–L)
+### 6.1 Drivers genéricos (M–L) (pendiente, opcional)
 `EmailService` y `SlackService` apuntan a endpoints de referencia: obtener la API real, ajustar rutas/campos,
 cubrir con tests de contrato (Sprint 3.3). Confirmar `AdagioService::disableUser()` (hoy `DELETE`,
 marcado "endpoint no confirmado").
 
-### 6.2 Aviso de baja irreversible en Chatwoot (S)
+### 6.2 Aviso de baja irreversible en Chatwoot (S) (pendiente, opcional)
 En la ficha, si el usuario tiene cuenta de Chatwoot, mostrar antes de "Dar de baja" que se elimina al agente y
 se pierde su historial; la reactivación lo recrea.
 
-### 6.3 Perfil de producción (M)
+### 6.3 Perfil de producción (M) (hecho)
 `docker-compose.prod.yml`: sin puerto MySQL publicado, credenciales por variables/secretos, `restart:
 unless-stopped`, healthchecks (app, mysql, nginx), `APP_DEBUG=false`, `scheduler` con
 `schedule:run` por cron o `schedule:work` supervisado, `queue:work` bajo supervisor con `--max-time` y
 `queue:restart` en el despliegue. HTTPS delante (proxy).
 
-### 6.4 Secretos (S)
+### 6.4 Secretos (S) (hecho)
 Sin valores por defecto en Compose; procedimiento de rotación. **Aviso:** rotar `APP_KEY` invalida todo lo
 cifrado (`api_config` y `payload`); documentar un procedimiento de re-cifrado antes de hacerlo.
 
