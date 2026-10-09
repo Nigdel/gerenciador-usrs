@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\OperationType;
+use App\Http\Controllers\Api\Concerns\ConservaLaClaveDeIdempotencia;
 use App\Http\Controllers\Api\Concerns\RespondeErroresDeProvisionado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SuspendUserRequest;
@@ -31,6 +32,8 @@ class UserSuspensionController extends Controller
      * identificador de la operación y las filas 'pendiente' en vez del
      * resultado final.
      */
+    use ConservaLaClaveDeIdempotencia;
+
     use RespondeErroresDeProvisionado;
 
     public function store(SuspendUserRequest $request): JsonResponse
@@ -60,6 +63,8 @@ class UserSuspensionController extends Controller
             );
 
             $this->operationService->despachar($operacion);
+
+            $this->enlazaLaClave($operacion);
 
             return response()->json([
                 'operacion_id' => $operacion->uuid,

@@ -53,3 +53,16 @@ Schedule::command('accounts:reconcile')
     ->daily()
     ->withoutOverlapping()
     ->onOneServer();
+
+/*
+ * Claves de idempotencia caducadas (Sprint 5.3)
+ *
+ * El TTL es de horas, así que una pasada al día deja huecos de hasta 24 h
+ * durante los cuales `reservar()` ya trata una clave caducada como nueva y la
+ * borra por su cuenta. Esta tarea es la red que evita que la tabla crezca si
+ * nadie reintenta; con `--limit` se recorre en batches sin bloquear.
+ */
+Schedule::command('idempotency:prune')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -2,7 +2,7 @@
 
 Revisión: 2026-10-09 · Rama `main`.
 
-**Pruebas:** 481 tests / 1398 aserciones pasan dentro de Docker. **Calidad/CI:** Pint, Larastan y la cobertura (81,1 %, umbral 80 %) pasan en verde. Detalle en [análisis del estado actual](./analisis-estado-actual.md).
+**Pruebas:** 491 tests / 1438 aserciones pasan dentro de Docker. **Calidad/CI:** Pint, Larastan y la cobertura (81,4 %, umbral 80 %) pasan en verde. Detalle en [análisis del estado actual](./analisis-estado-actual.md).
 
 ## Estado por área
 
@@ -14,14 +14,14 @@ Revisión: 2026-10-09 · Rama `main`.
 | Sprint 3: cobertura funcional y CI | ✅ Implementado |
 | Sprint 4: listados, filtros, validaciones, operaciones | ✅ Implementado |
 | Dashboard | 🟡 Básico |
-| Sprint 5: conciliación, idempotencia y auditoría | 🟡 Parcial: conciliación implementada y probada; idempotencia con servicio pero desconectada de la API; auditoría incompleta |
+| Sprint 5: conciliación, idempotencia y auditoría | 🟡 Parcial: conciliación e idempotencia implementadas, conectadas a la API y probadas; auditoría incompleta |
 | Sprint 6: producción y secretos | 🔴 Parcial: Compose de producción no funciona con la imagen actual |
 
 ## Pendientes prioritarios
 
-- [x] **Restablecer CI en verde.** Pint y Larastan sin errores; cobertura 81,1 %.
+- [x] **Restablecer CI en verde.** Pint y Larastan sin errores; cobertura 81,4 %.
 - [x] **Implementar conciliación real.** `accounts:reconcile` compara el estado remoto con el guardado y registra la discrepancia. Tests incluidos.
-- [ ] **Conectar idempotencia a la API.** Los middlewares actuales no hacen nada y las rutas no los usan. Definir respuesta repetida y conflicto por payload distinto; cubrir duplicados/concurrencia con tests.
+- [x] **Conectar idempotencia a la API.** Los middlewares actuales no hacen nada y las rutas no los usan. Definir respuesta repetida y conflicto por payload distinto; cubrir duplicados/concurrencia con tests.
 - [ ] **Completar auditoría.** Registrar cambios administrativos, actor, IP y user-agent; probar que no se registran secretos.
 - [ ] **Rehacer y validar `docker-compose.prod.yml`.** Usar el Dockerfile y los paths reales del proyecto; probar build y arranque del stack.
 - [ ] **Asegurar rotación de `APP_KEY`.** No perder `api_config` ni payloads cifrados; usar configuración en lugar de `env()` directo y mover `SecretsRotateTest` a `src/tests`.

@@ -20,11 +20,21 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('usuarios')->group(function () {
+        // Con nombre para que los tests y la documentación puedan referirse a
+        // la ruta sin escribir el path: el prefijo y el verbo ya se ven.
         Route::post('/provisionar', [UserProvisioningController::class, 'store'])
-            ->middleware('abilities:'.ApiAbility::Provisionar->value);
+            ->middleware([
+                'idempotencia',
+                'abilities:'.ApiAbility::Provisionar->value,
+            ])
+            ->name('api.usuarios.provisionar');
 
         Route::post('/suspender', [UserSuspensionController::class, 'store'])
-            ->middleware('abilities:'.ApiAbility::Suspender->value);
+            ->middleware([
+                'idempotencia',
+                'abilities:'.ApiAbility::Suspender->value,
+            ])
+            ->name('api.usuarios.suspender');
     });
 
     /*

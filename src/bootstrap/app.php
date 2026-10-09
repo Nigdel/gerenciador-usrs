@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\OperationInProgressException;
+use App\Http\Middleware\IdempotencyMiddleware;
 use App\Providers\AuthServiceProvider;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -28,6 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'ability' => CheckForAnyAbility::class,
             'abilities' => CheckAbilities::class,
+            // Antes que la validación: una clave repetida con otro cuerpo tiene
+            // que contestar 422 por el conflicto, no por un campo que falte.
+            'idempotencia' => IdempotencyMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

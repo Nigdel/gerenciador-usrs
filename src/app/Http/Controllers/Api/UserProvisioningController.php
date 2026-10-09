@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\OperationType;
+use App\Http\Controllers\Api\Concerns\ConservaLaClaveDeIdempotencia;
 use App\Http\Controllers\Api\Concerns\RespondeErroresDeProvisionado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProvisionUserRequest;
@@ -34,6 +35,8 @@ class UserProvisioningController extends Controller
      * encolado—, y cambiarlo rompería a las integraciones que ya lo tratan
      * como alta aceptada.
      */
+    use ConservaLaClaveDeIdempotencia;
+
     use RespondeErroresDeProvisionado;
 
     public function store(ProvisionUserRequest $request): JsonResponse
@@ -49,6 +52,8 @@ class UserProvisioningController extends Controller
             );
 
             $this->operationService->despachar($operacion);
+
+            $this->enlazaLaClave($operacion);
 
             return response()->json([
                 'usuario' => new GestorUserResource($resultado['gestor_user']),
