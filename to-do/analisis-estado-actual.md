@@ -1,416 +1,63 @@
 # Análisis del estado actual
 
-Fecha del análisis: 2026-10-04 · Base: rama `main`, commit `7a3d572`.
+Revisión: 2026-10-09 · Rama `main` · Base `ded66b5` (`Implement Secrets rotation command and SecretService`).
 
-> Alcance: se revisó la estructura completa, `README.md`, rutas, controladores principales, orquestadores
-> (`UserProvisioningService`, `UserSuspensionService`), contrato de subsistemas, `GestorUser`, `EmailService`,
-> la vista `gestor-users/show` y el listado de migraciones/tests. **No se leyó línea a línea** el código de los
-> drivers Adagio, Glpi, Chatwoot, EntraId, SambaAd y Slack, ni el contenido de los tests; los puntos marcados
-> con *(verificar)* requieren confirmación.
+## Validación ejecutada
 
-## 1. Lo que ya está implementado
+- `docker compose exec app php artisan test --compact`: **458 tests, 1341 aserciones, todos pasan**.
+- `docker compose exec app ./vendor/bin/pint --test`: **falla**, 11 archivos tienen problemas de formato.
+- `docker compose exec app ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G`: **falla con 4 errores**: un tipo `view-string` y tres llamadas a `env()` fuera de configuración.
+- El último [CI de GitHub Actions](https://github.com/Nigdel/gerenciador-usrs/actions/runs/37938577058) falla en Pint; por eso no ejecuta los pasos de tests, cobertura ni Larastan. Los tests sí se ejecutaron localmente dentro del contenedor.
 
-### Infraestructura
-- Entorno Docker Compose (app, nginx, mysql, assets/Vite+Tailwind) y guía de reproducción en `src/README.md`.
-- `CLAUDE.md` con reglas de ejecución dentro del contenedor.
+## Estado funcional
 
-### Modelo de datos
-- `gestor_users` (nombre, cpf, password_general hasheada, teléfonos, email, dirección, usuario, empresa).
-- `subsystems` (nombre, slug, descripción, api_url, api_config JSON, external_subsystem_id, activo,
-  es_proveedor_identidad, `last_connection_test_*`).
-- `user_subsystem_accounts` (credencial, external_account_id, fecha_creacion, estado, inicio/fin/motivo de
-  suspensión, meta).
-- Tabla `users` con campos de perfil (cpf, teléfonos, empresa, cargo, externo, encarregado).
+### Implementado y cubierto por pruebas
 
-### Arquitectura de subsistemas
-- Contrato universal `SubsystemServiceInterface`: `createUser`, `suspendUser`, `reactivateUser`, `disableUser`,
-  `supportsDeleteUser`, `deleteUser`, `getUserStatus`, `resetPassword`.
-- `IdentityProviderInterface` (Adagio: `findByCpf`, `existsByEmail`) y `SubsystemConnectionInterface`
-  (`testConnection`).
-- `BaseSubsystemService` + `SubsystemServiceRegistry` (slug → clase vía `config/subsystems.php`).
-- 7 drivers: Adagio, GLPI, Chatwoot, Email, EntraId, SambaAd, Slack.
-  - `EmailService` y `SlackService` son patrones de referencia genéricos según el propio README (endpoints a
-    ajustar a la API real).
+- Aplicación Laravel en Docker Compose con PHP-FPM, Nginx, MySQL, worker, scheduler y compilación de assets.
+- Login web, roles y Policies; API con Sanctum y abilities.
+- Alta y operaciones por cuenta en cola; suspensión inmediata/programada, reactivación automática, baja, sincronización y restablecimiento de contraseña.
+- Persistencia y consulta web/API de operaciones, bloqueo de operaciones concurrentes, reintento de cuentas fallidas y expiración/poda de secretos.
+- Cifrado de `Subsystem::api_config`, validación/normalización de CPF, disponibilidad de usuario y manejo de errores en web/API.
+- Búsqueda, filtros y paginación de usuarios y subsistemas; listado de operaciones; dashboard básico.
+- Tests de servicios, operaciones y drivers Adagio, GLPI, Chatwoot, Email, Entra ID, Samba AD y Slack.
+- CI configurado con Pint, tests, cobertura y Larastan, aunque el último run está rojo.
 
-### Orquestación
-- `UserProvisioningService`: consulta Adagio por CPF, reutiliza/genera datos, guarda `GestorUser`, crea cuentas
-  en los subsistemas pedidos o en todos los activos.
-- `UsernameGeneratorService`: `nombre.apellido`, con alternativa por segundo apellido.
-- `UserSuspensionService`: suspende en uno/varios/todos los subsistemas, confirma el estado remoto con
-  `getUserStatus` y actualiza inicio/fin/motivo.
+### Parcial, incompleto o no verificado
 
-### Interfaz web (Blade + Tailwind)
-- CRUD de `gestor-users`, `subsystems`, cuentas por usuario (`gestor-users.accounts`) y `users`.
-- Consulta de CPF en Adagio (`lookup-cpf`), equipos de Chatwoot, prueba de conexión por subsistema.
-- Acciones por cuenta (deshabilitar / habilitar / eliminar) con confirmación de estado remoto reintentable
-  (`state_confirmation_attempts`, `state_confirmation_delay_ms`).
+| Área | Estado comprobado |
+|---|---|
+| Auditoría general | Existe tabla/servicio y se registran intentos fallidos de login. El servicio no está integrado en las acciones generales de administración; no equivale a una auditoría completa. |
+| Conciliación | Existen modelo, tabla y tarea diaria, pero `AccountsReconcileCommand::handle()` está vacío. No detecta ni resuelve discrepancias. |
+| Idempotencia API | Hay tabla, modelo y servicio, pero los middlewares actuales solo continúan la petición y no están asociados a las rutas; no protege las operaciones. |
+| Perfil de producción | `docker-compose.prod.yml` no es desplegable tal como está: referencia un `Dockerfile` raíz que no existe y publica el servicio PHP-FPM como si atendiera HTTP. |
+| Gestión/rotación de secretos | Hay un comando de rotación de `APP_KEY`, pero rotarla invalida los datos cifrados existentes y el comando solo actualiza `.env`. `SecretService` usa `env()` directamente y Larastan lo reporta. |
+| Prueba de rotación | `tests/Feature/Console/SecretsRotateTest.php` está fuera de `src/tests`, que es el testsuite de `src/phpunit.xml`; no se ejecuta con `php artisan test` dentro de `app`. |
+| Dashboard | Implementación básica; faltan métricas operativas completas y alertas. |
+| Drivers Email/Slack | Son adaptadores genéricos; falta confirmar y probar sus APIs reales. |
 
-### API
-- `POST /api/usuarios/provisionar` y `POST /api/usuarios/suspender` (FormRequests + Resource).
+## Pendientes prioritarios
 
-### Tests
-- Feature: `GestorUserTest`, `SubsystemTest`, `UserTest`, y carpetas por subsistema
-  (Adagio, Chatwoot, Email, EntraId, Glpi, SambaAd, Slack) + `Accounts` (create/update/delete).
-- Unit: `UserTest`.
+1. Recuperar CI: corregir los 11 hallazgos de Pint y los 4 errores de Larastan; volver a ejecutar workflow completo, incluidos cobertura y tests.
+2. Implementar de verdad conciliación e idempotencia; añadir tests en `src/tests` y eliminar o conectar los middlewares vacíos.
+3. Hacer que auditoría registre las acciones administrativas relevantes y probarlo.
+4. Rehacer el perfil de producción a partir de los servicios e imagen existentes; validar build y arranque reales.
+5. Definir una rotación segura de `APP_KEY` compatible con `api_config` y payloads cifrados; mover su test al testsuite activo y leer secretos desde configuración.
+6. Añadir backup y prueba de restauración, notificaciones y documentación OpenAPI/runbook completa.
+7. Confirmar APIs reales de Email/Slack y el comportamiento de deshabilitación de Adagio antes de producción.
 
-## 2. Problemas detectados (prioridad alta)
-
-| # | Hallazgo | Evidencia |
-|---|---|---|
-| P1 | **Las rutas de la API no están cargadas.** `bootstrap/app.php` solo registra `web`, `commands` y `health`; falta `api:`. Los endpoints `/api/usuarios/*` devuelven 404 tal como está. | `src/bootstrap/app.php` |
-| P2 | **No existe autenticación ni autorización.** Ninguna ruta web ni API tiene middleware; no hay login, roles ni Sanctum (`composer.json`). Cualquiera con acceso a la URL puede crear, suspender o borrar cuentas en Entra/AD/etc. | `routes/web.php`, `routes/api.php`, `composer.json` |
-| P3 | **El restablecimiento de contraseña no funciona.** `UserProvisioningService::resetPassword()` devuelve `fail('Not implemented yet')`; el controlador ignora el resultado y muestra *"Contraseñas restablecidas correctamente"*. Además la ruta es `GET` (acción que cambia estado) y la vista `show` no tiene botón. | `UserProvisioningService`, `GestorUserController::resetPassword`, `routes/web.php` |
-| P4 | **Contraseña aleatoria perdida.** Si el payload no trae `password_general`, se genera una de 16 caracteres, se guarda hasheada y se envía a los subsistemas, pero nadie la recibe ni se muestra. | `UserProvisioningService::guardarUsuarioLocal` |
-| P5 | **La suspensión no tiene interfaz web** y nunca se levanta sola: no hay scheduler (`routes/console.php` vacío) que reactive al llegar `fin_suspension`. Al habilitar manualmente tampoco se limpian `inicio/fin/motivo_suspension`. | `UserSuspensionService`, `SubsystemController::accountAction`, `routes/console.php` |
-
-## 3. Problemas detectados (prioridad media)
-
-- **Dos conceptos de usuario**: `User` (tabla `users`, con cpf/cargo/encarregado y relación a cuentas) y
-  `GestorUser`. Duplican datos y rutas (`users` vs `gestor-users`). Hay que decidir si `User` es el operador
-  del sistema (login) o debe eliminarse.
-- **Alta síncrona y sin compensación**: se crean cuentas una por una dentro de la petición HTTP; si falla una a
-  mitad, queda estado parcial sin reintento, sin cola (la tabla `jobs` existe pero no se usa) y sin idempotencia.
-- **Sin auditoría**: no hay registro de quién hizo qué, cuándo ni con qué resultado.
-- **Sin baja completa (offboarding)**: no hay acción "deshabilitar/dar de baja en todos los subsistemas";
-  `GestorUser` no se puede borrar mientras tenga cuentas.
-- **Sin conciliación**: `getUserStatus` existe pero no hay proceso que detecte divergencias entre el estado local
-  y el real.
-- **Generador de usuario limitado**: solo 2 intentos y solo valida contra Adagio (no contra AD/Entra/Email).
-- **Listados sin paginación, búsqueda ni filtros** (`->get()` en `gestor-users` y `subsystems`).
-- **Secretos**: `api_config` (tokens/credenciales) está en JSON en BD; confirmar si usa `encrypted:array`
-  *(verificar en `Subsystem`)*. El `.env.example` y el seeder dependen de variables por subsistema.
-- **Errores solo como flash**: `provisioning_results` se muestra una vez; no se persiste el resultado por cuenta.
-
-## 4. Calidad y operación
-
-- Sin CI: no hay `.github/workflows` en el repositorio.
-- Archivo de respaldo versionado: `src/tests/Feature/UserT.php.bck`; tests de ejemplo de Laravel sin
-  reemplazar (`ExampleTest`).
-- No se ven tests dedicados a `UserProvisioningService`, `UserSuspensionService` ni a los endpoints API
-  *(verificar `tests/Integration`)*.
-- Docker orientado a desarrollo (README lo indica); falta perfil de producción (healthchecks, `APP_DEBUG=false`,
-  backups de MySQL, cola/scheduler como servicios).
-- Sin documentación de API (OpenAPI) ni de operación/runbook.
-- Pint y Boost instalados, pero sin análisis estático (Larastan) ni verificación en CI.
-
-## 5. Matriz de completitud
+## Matriz resumida
 
 | Capacidad | Estado |
 |---|---|
-| Catálogo de subsistemas y configuración | ✅ Completo (web) |
-| Alta de usuario multi-subsistema | ✅ Web · ⚠️ API inactiva (P1) · ⚠️ síncrono |
-| Reutilización de identidad vía Adagio por CPF | ✅ |
-| Generación de usuario | ⚠️ Parcial (2 intentos, solo Adagio) |
-| Suspensión (API) | ⚠️ Implementada pero inalcanzable (P1) |
-| Suspensión (web) | ❌ |
-| Reactivación automática por fecha fin | ❌ |
-| Habilitar / deshabilitar / eliminar cuenta | ✅ Web |
-| Restablecer contraseña | ❌ (driver sí, orquestación no) |
-| Baja completa de usuario | ❌ |
-| Autenticación / roles | ❌ |
-| Auditoría | ❌ |
-| Reintentos / colas | ❌ |
-| Conciliación de estados | ❌ |
-| Notificaciones (credenciales, suspensión) | ❌ |
-| Búsqueda / paginación / dashboard | ❌ |
-| CI y cobertura de tests de orquestadores | ❌ |
-| Perfil de producción | ❌ |
-
-# Plan de implementación
-
-Objetivo: completar el gestor de usuarios (alta, modificación, suspensión, reactivación, restablecimiento de
-contraseña y baja en todos los subsistemas) con acceso seguro, trazabilidad y operación fiable.
-
-Reglas de trabajo (ver `CLAUDE.md`): comandos siempre con `docker compose exec app ...`; cambios pequeños;
-ejecutar `docker compose exec app php artisan test` antes de cerrar cada tarea; formato con
-`docker compose exec app ./vendor/bin/pint`.
-
-Leyenda de esfuerzo: **S** ≤ 0,5 día · **M** 1–2 días · **L** 3–5 días.
-
----
-
-## Fase 0 — Correcciones críticas (bloqueantes)
-
-- [x] **0.1 Registrar la API** (S) — añadir `api: __DIR__.'/../routes/api.php'` en `bootstrap/app.php`.
-  - Aceptación: `docker compose exec app php artisan route:list --path=api` lista `provisionar` y `suspender`.
-  - Test: feature test que hace `POST /api/usuarios/provisionar` y `/suspender` (con `Http::fake`).
-- [x] **0.2 Arreglar el reset de contraseña** (M) — ver Fase 2.4; mientras tanto, hacer que el controlador
-  muestre error real en lugar de éxito.
-- [x] **0.3 Limpieza** (S) — eliminar `tests/Feature/UserT.php.bck`, sustituir `ExampleTest` por tests reales.
-- [x] **0.4 Decidir el rol de `User` vs `GestorUser`** (S, decisión) — `User` = operador del
-  sistema (login/roles); `GestorUser` = identidad gestionada. Documentado en `README.md`; campos
-  duplicados de `users` se limpiarán en Fase 1.
-
-## Fase 1 — Seguridad: autenticación y autorización
-
-- [x] **1.1 Login para la web** (M) — Laravel Breeze instalado; rutas web protegidas con `auth`; tests autenticados.
-- [x] **1.2 Roles y permisos** (M) — roles mínimos: `admin` (todo), `operador` (alta/suspensión/reset),
-  `auditor` (solo lectura). Implementado con Policies sobre `GestorUser`, `Subsystem`,
-  `UserSubsystemAccount` y `User`; `$this->authorize()` en todos los controladores y `@can` en las
-  vistas. Sin registro público: los operadores los da de alta un `admin` desde el resource `users`.
-  Cubierto por `tests/Feature/AuthorizationTest.php`.
-- [x] **1.3 Autenticación de la API** (M) — Laravel Sanctum con tokens por integración y *abilities*
-  (`usuarios:provisionar`, `usuarios:suspender`); `throttle` en `/api`. Emitir con
-  `php artisan api:token {integracion} --abilities=... --admin` y revocar con `--revoke`.
-  `sanctum.guard` va vacío a propósito: con la sesión web activa, Sanctum asignaba un
-  `TransientToken` que respondía `true` a cualquier ability y las abilities se podían saltar.
-  La API solo acepta tokens de integración; el rol del dueño no amplía lo que el token puede hacer.
-- [x] **1.4 Acciones que cambian estado solo por POST** (S) — `gestor-users/{id}/reset-password` ya es
-  `POST` con CSRF.
-- [x] **1.5 Cifrado de secretos** (S) — cast `encrypted:array` en `Subsystem::api_config`; la columna pasó
-  de `json` a `text` porque el cifrado es base64 y MySQL no lo aceptaba en una columna JSON. La migración
-  re-cifra las 7 filas existentes leyendo el valor crudo con `DB::table` (con el modelo saldría ya
-  descifrado) y es idempotente: si la fila ya está cifrada, la deja como está. `api_config` ya estaba en
-  `$hidden` y la ficha del subsistema no lo renderiza; solo se ve en el formulario de edición, que es
-  donde se escribe. Cubierto por `SubsystemSecretsEncryptionTest`.
-  - Aceptación: usuario sin permiso recibe 403; petición API sin token recibe 401. (Cubierta por 1.2 y 1.3.)
-
-## Fase 2 — Ciclo de vida completo del usuario
-
-- [x] **2.1 Suspensión en la web** (M) — formulario en `gestor-users/show` (motivo, inicio, fin, selección de
-  subsistemas) que reutilice `UserSuspensionService`; mostrar inicio/fin/motivo por cuenta.
-  Hecho: `SuspendGestorUserRequest` (policy `suspend`, no abilities), `GestorUserController::suspend()`,
-  ruta `gestor-users.suspend`, columna «Suspensión» en la tabla de cuentas y
-  `tests/Feature/GestorUserSuspensionTest.php` (10 tests).
-- [x] **2.2 Reactivación automática** (M) — comando `accounts:reactivate-expired` que busque cuentas
-  `suspendido` con `fin_suspension <= now()` y llame a `reactivateUser`; programarlo con el scheduler
-  (`routes/console.php`, cada 5–15 min). Añadir servicio `scheduler` en Docker Compose
-  (`php artisan schedule:work`).
-  Hecho: `AccountReactivationService` (reactiva sólo tras confirmar con `getUserStatus()`),
-  comando `accounts:reactivate-expired` con `--dry-run`, programado cada 10 min con
-  `withoutOverlapping()`+`onOneServer()`, servicio `scheduler` en `docker-compose.yml` y
-  `tests/Feature/ReactivateExpiredAccountsCommandTest.php` (10 tests).
-- [x] **2.3 Suspensión programada** (M) — si `inicio_suspension` está en el futuro, no suspender aún: dejarla
-  `pendiente` y que el scheduler la aplique al llegar la fecha.
-  Hecho: caso `Pendiente` en `SubsystemAccountStatus` (no requiere migración: `estado` es `string`),
-  `UserSuspensionService::suspenderCuenta()` agenda sin tocar el subsistema,
-  `suspenderPendientesVencidas()` + `cuentasPendientesVencidas()`, comando
-  `accounts:apply-pending-suspensions` con `--dry-run`, programado cada 10 min, y
-  `tests/Feature/PendingSuspensionTest.php` (8 tests, incluido el ciclo completo
-  programar → suspender → reactivar). 'pendiente' se excluye del formulario de cuentas: es estado interno.
-- [x] **2.4 Restablecimiento de contraseña** (M) — el reset sobre el subsistema ya estaba implementado en
-  los 8 drivers; lo que faltaba era el orquestador (`UserProvisioningService::resetPassword()` devolvía
-  `Not implemented yet`) y la generación de la contraseña.
-  `TemporaryPasswordGenerator` centraliza el formato (`Klios#` + 8 hex + `!`, el mismo que usaba
-  `SambaAdService` en el alta) para que el alta y el reset no se separen con el tiempo.
-  `resetAllPasswords()` genera **una sola** contraseña para todas las cuentas (mismo login, misma clave:
-  el operador no la repite por subsistema), actualiza `password_general` **antes** de tocar los
-  subsistemas (si fallara, no queda la general cambiada y las cuentas sin tocar) y devuelve un resultado
-  por cuenta con la misma forma de array que `provisionar()`. El controlador la entrega por flash
-  (`contrasena_temporal`), que se ve una vez y no se guarda en ningún sitio.
-  Botón único "todas" en la ficha. `tests/Feature/ResetPasswordTest.php` (16 tests).
-  Nota: se deja preparado el botón por cuenta con el método `resetPassword($gestorUser, $cuenta)`, que ya
-  genera su propia contraseña si no se le pasa una.
-- [x] **2.5 Limpieza de suspensión al habilitar** (S) — al reactivar, poner a `null` `inicio/fin/motivo`.
-  Centralizado en `UserSubsystemAccount::atributosAlReactivar()` y aplicado en los dos caminos de
-  reactivación (automático de 2.2 y manual en la ficha del subsistema). Deshabilitar **no** limpia:
-  no viene de una suspensión nuestra y perdería la trazabilidad.
-- [x] **2.6 Baja completa (offboarding)** (M) — acción "Dar de baja" + su inversa, "Reactivar".
-  `UserOffboardingService::darDeBaja()` recorre todas las cuentas con el mismo patrón
-  confirm-before-persist de la suspensión (acción + `getUserStatus()`) y solo entonces marca
-  `estado = borrado` en cada una. `GestorUser` recibe columna `estado` (`GestorUserStatus`:
-  `activo` / `baja`), más `baja_at` y `motivo_baja` obligatorio (`OffboardGestorUserRequest`).
-  Ability `offboard` en la policy: **solo admin**, igual que eliminar — deshabilitar el acceso de
-  alguien en todos los subsistemas es una acción de RRHH.
-  **Decisiones tomadas por el usuario**, que se apartan de lo que decía la redacción original:
-  - La baja **deshabilita siempre**, nunca borra, ni siquiera en drivers con `supportsDeleteUser()`.
-    Es reversible, deja rastro en el directorio y la propia aplicación ya borra la fila local cuando
-    un operador elimina una cuenta a mano, así que el histórico no depende del subsistema.
-  - **Sin `SoftDeletes`**: `cpf` y `usuario` son UNIQUE, así que un borrado lógico bloquearía para
-    siempre al sustituto de un empleado dado de baja. Es una columna `estado` a propósito.
-  - `estado` del `GestorUser` solo tiene `activo` y `baja`, no `suspendido`: la suspensión es un estado
-    **por cuenta**, no de la persona. El enum documenta que ambos niveles son independientes.
-  Si algún subsistema falla, **el usuario no se marca de baja**: un listado que promete "de baja"
-  con una cuenta viva es peor que no hacer nada. Reactividad implementada sobre
-  `atributosAlReactivar()` de 2.5. Vista: panel "Usuario dado de baja" + formulario de baja en la
-  ficha, columna "Estado" en el listado. `tests/Feature/OffboardingTest.php` (10 tests).
-  **Bug real encontrado de paso**: `EmailService::disableUser()` hacía `DELETE` sobre la casilla, lo
-  que hacía la baja irreversible y destruía el correo del usuario. Ahora hace `PATCH {active: false}`,
-  igual que `suspendUser()`. `SlackService` tenía exactamente el mismo problema (borraba el usuario
-  SCIM); corregido al PATCH `active: false` simétrico de su `reactivateUser()`. Verificado que
-  `GlpiService` y `EntraIdService` ya deshabilitaban bien.
-  **Chatwoot**: su `DELETE` no era un descuido, es la única forma de quitarle el acceso a un agente
-  (confirmado por quien conoce ese sistema: Chatwoot no tiene estado "deshabilitado"). Eso obliga a
-  adaptar el driver, porque si no la baja en Chatwoot **nunca se completaba**:
-  - `getUserStatus()` trata el 404/410 como `deshabilitado` en vez de como fallo. Sin esto, la
-    confirmación de la baja daba error siempre y el usuario quedaba sin marcar.
-  - `reactivateUser()` ahora **crea el agente de nuevo** (delega en `createUser()`) en lugar de hacer
-    un PATCH de `availability`, que ibas sobre un id ya borrado y no reactivaba nada.
-  - `UserOffboardingService::reactivarCuenta()` persiste el `external_account_id` que devuelve el
-    driver y lo aplica **antes** de confirmar: confirmar sobre el id viejo daría 404 y la
-    reactivación se reportaría como fallida aunque funcionase. Solo en memoria hasta que se confirma.
-  **Pendiente**: `AdagioService::disableUser()` sigue haciendo `DELETE` y su propio mensaje dice
-  *"endpoint no confirmado"*. Se deja así por indicación expresa, a la espera de confirmar la API real.
-- [x] **2.7 Modificación propagada** (M) — botón «Sincronizar datos con subsistemas» en la ficha del
-  usuario, que propaga los datos de contacto a todas sus cuentas. Nuevo método opcional del contrato,
-  `updateUser()`, implementado por los siete drivers.
-  Dos decisiones que fijan el alcance:
-  - **Solo atributos de contacto** (`nombre_completo`, `email_personal`, `telefono_personal`,
-    `telefono_trabajo`, `direccion_particular`). El login, la empresa y el CPF son **la clave con la que
-    se creó la cuenta** en cada subsistema (sAMAccountName, UPN, dirección del buzón, employeeId):
-    propagarlos sería renombrar la identidad de la cuenta, que es otra operación y no una corrección de
-    datos. La lista blanca vive en `UserDataSyncService::CAMPOS_SINCRONIZABLES`, que además mapea
-    vacíos a `null`, de modo que ningún driver pueda tocar por accidente `password_general` o el estado
-    de la baja.
-  - **Botón aparte en la ficha**, no automático al guardar. Sincronizar sale a sistemas de terceros y
-    manda un nombre a seis sitios: que sea una acción explícita evita propagar un alta con errata.
-  `supportsUpdateUser()` va **aparte** de `updateUser()` a propósito (igual que `supportsDeleteUser()`
-  en 2.6): permite distinguir «este subsistema no lo admite» de «este subsistema falló», que para el
-  operador son cosas distintas — reintentar no tiene sentido en el primer caso. Un subsistema sin driver
-  o que no lo implemente se reporta como `exito: true` con la explicación, no como fallo.
-  Aquí, a diferencia de la suspensión, la baja y la reactivación, **no hay confirmación posterior**:
-  actualizar el nombre de alguien no tiene un estado que verificar, y una segunda lectura solo añadiría
-  una petición por subsistema sin confirmar nada.
-  Cada driver envía solo lo que su API admite: Adagio no recibe el email porque ahí **es** la credencial;
-  Entra ID nunca toca el UPN; Slack SCIM devuelve un fallo claro si no hay `external_account_id`.
-  `SambaAdService` es el caso aparte: `cn` forma parte del DN, así que además del `ldap_mod_replace`
-  hay que hacer `ldap_rename` y renombrar el `cn`; si el rename falla devuelve éxito **con el aviso** de
-  que los datos se actualizaron pero el nombre completo no pudo aplicarse al CN.
-  `tests/Feature/UserDataSyncTest.php` (9 tests).
-- [x] **2.8 Generador de usuario robusto** (S) — más de 2 intentos (sufijo numérico), validar disponibilidad
-  contra todos los subsistemas, no solo Adagio.
-  El generador tenía tres defectos que solo se veían cuando algo fallaba:
-  - **Solo miraba Adagio.** Pero el login *es* la clave de la cuenta en los siete subsistemas
-    (sAMAccountName en Samba, UPN en Entra, dirección del buzón en el correo, `name` en GLPI,
-    `userName` en Slack SCIM, email del agente en Chatwoot). Un login libre en Adagio puede estar
-    ocupado en el buzón, y el alta falla después con un error mucho más difícil de entender.
-    Además **no miraba la base de datos local**, donde `gestor_users.usuario` es UNIQUE: un homónimo
-    ya dado de alta local no se detectaba hasta que el insert reventaba.
-  - **Confundía "no pude comprobar" con "libre".** `existsByEmail()` devuelve `false` cuando la
-    llamada falla, así que con Adagio caído el generador proponía un login que podía estar ocupado.
-    Por eso el contrato nuevo, `UsernameAvailabilityInterface::loginEnUso()`, devuelve **`?bool`**:
-    `true` ocupado, `false` libre, **`null` no comprobable**. Los drivers que no pueden responder
-    (Slack sin `scim_habilitado`, Adagio sin `dominio`, Entra sin dominio resoluble, Chatwoot sin
-    `account_id`) devuelven `null`, no `false`: decir "libre" sería una afirmación que nadie verificó.
-    - Es un contrato **aparte** de `IdentityProviderInterface`, no un método más: aquel busca un
-      usuario existente para reutilizarlo, este comprueba si un login nuevo está libre. Casi ningún
-      driver es lo segundo sin ser lo primero, así que atarlos habría dejado fuera comprobaciones
-      que hoy sí se hacen.
-  - **El bucle de sufijos devolvía el último candidato sin comprobarlo.** Agotados los intentos
-    proponía un login que ya sabía ocupado, y el alta reventaba con un error de duplicado. Ahora la
-    lista de candidatos termina en un único bucle y, agotada, lanza `RuntimeException` con un mensaje
-    accionable (`GestorUserController::store()` ya la capturaba y vuelve al formulario con
-    `withInput()`).
-  El orden de comprobación es **local primero** (una query frente a N peticiones HTTP) y luego
-  subsistemas. Ante un subsistema caído o que lanza excepción, **se propone el login igualmente y se
-  avisa** en vez de abortar el alta: bloquear un alta porque un servicio externo no responde sería
-  peor que proponer un login con un aviso visible. El aviso se recalcula en cada candidato, de modo
-  que solo menciona los subsistemas que no respondieron *para el login finalmente elegido*.
-  `provisionar()` devuelve `login_no_verificado`; el controlador web lo junta al aviso de fallos
-  parciales en **un único** mensaje `warning` (dos claves de sesión se solaparían: los toasts se
-  renderizan todos en la misma posición) y la API lo expone en el 201.
-  Cada driver comprueba la misma identidad que usaría al crear: GLPI busca con `equals` (un `contains`
-  marcaría ocupado a `jperez` por existir `jperez.gomez`), Entra consulta el UPN exacto, Chatwoot
-  compara los emails en PHP porque su API pública no filtra por agente.
-  **Bug de producción encontrado al escribir los tests**: un 404 de Adagio (propietario no
-  encontrado) caía en `failed()` y se devolvía como `null` — o sea, "libre" nunca se alcanzaba en
-  Adagio y el generador agotaba los 100 intentos siempre. Ahora el 404 se trata como `false` (libre)
-  y solo el resto de fallos como `null`.
-  `tests/Feature/UsernameGeneratorTest.php` (12 tests).
-
-## Fase 3 — Robustez y trazabilidad
-
-- [x] **3.1 Auditoría** (M) — implementada como **histórico de cambios por cuenta**, en la tabla
-  `account_state_logs`. Cubre el ciclo de vida completo de cada cuenta en subsistema (alta, todo cambio
-  de atributo con su antes/después, y borrado) con actor, origen (`web`/`api`/`scheduler`) y descripción.
-  Panel de consulta en la ficha del usuario (50 entradas más recientes).
-
-  Se resolvió con **un observer** (`AccountStateLogObserver`) en vez de instrumentar los orquestadores
-  uno a uno: hoy escriben estado seis sitios distintos y añadir la llamada en cada uno bastaría con que
-  el próximo cambio escribiera por otro lado para que el histórico dejara de ser fiable.
-
-  Puntos que resuelven cosas concretas de la Fase 2:
-  - Las FK son `SET NULL` y no `CASCADE`: el borrado es un evento que se quiere registrar, así que su
-    propio histórico tiene que sobrevivirle.
-  - `actor_nombre` se congela al escribir, para que borrar al operador no deje la entrada sin autor.
-  - El scheduler registra con `origen = scheduler` y actor nulo; es el caso que más hace falta auditar.
-  - Guarda el rastro que la **Fase 2.5 borra** (motivo y fechas de suspensión al reactivar).
-
-  Pendiente para cuando se quiera cerrar del todo la auditoría general (no solo de cuentas):
-  registrar también las acciones de gestión (alta/edición/baja de `GestorUser`, cambios de
-  subsistemas), la IP del llamante y los intentos fallidos.
-- [ ] **3.2 Colas** (L) — mover la creación/suspensión por subsistema a *jobs* (`ShouldQueue`) con reintentos y
-  *backoff*; servicio `queue` en Docker Compose (`php artisan queue:work`). La petición responde con un
-  identificador de operación y estado por cuenta (`pendiente`/`ok`/`error`).
-- [ ] **3.3 Persistir resultados** (M) — tabla `provisioning_operations` (+ detalle por cuenta) en lugar de
-  flash; botón "Reintentar cuenta fallida".
-- [ ] **3.4 Idempotencia y compensación** (M) — clave de idempotencia en la API; política definida ante fallo
-  parcial (reintentar / marcar `error` / revertir opcional con `deleteUser`).
-- [ ] **3.5 Conciliación** (M) — comando programado que consulte `getUserStatus` de cada cuenta y registre
-  divergencias; pantalla "Discrepancias" con acción de corregir.
-- [ ] **3.6 Notificaciones** (M) — enviar credenciales iniciales al `email_personal`, aviso de suspensión y de
-  reactivación (Mailables encolados, plantillas configurables).
-- [ ] **3.7 Manejo uniforme de errores** (S) — capturar `Throwable` (no solo `RuntimeException`) en
-  `GestorUserController` y orquestadores; mensajes sin datos sensibles.
-
-## Fase 4 — Experiencia de uso
-
-- [ ] **4.1 Listados** (S) — paginación, búsqueda (nombre, CPF, usuario, empresa) y filtros por estado y
-  subsistema en `gestor-users` y `subsystems`.
-- [ ] **4.2 Dashboard** (M) — totales por estado, cuentas con error, suspensiones por vencer, última prueba de
-  conexión por subsistema.
-- [ ] **4.3 Validaciones** (S) — validar dígitos verificadores del CPF y normalizar formato; unicidad de
-  `usuario`; validar `fin_suspension >= inicio_suspension` *(verificar en los FormRequests)*.
-- [ ] **4.4 Importación/exportación CSV** (M, opcional) — alta masiva con vista previa y reporte de errores.
-- [ ] **4.5 Ajustar drivers genéricos** (M–L) — `EmailService` y `SlackService` apuntan a endpoints de
-  referencia; adaptarlos a la API real y cubrirlos con tests contra respuestas simuladas.
-
-## Fase 5 — Calidad y CI
-
-- [ ] **5.1 Tests de orquestadores** (M) — `UserProvisioningService` (CPF existente/no existente, subsistemas
-  filtrados, fallo parcial), `UserSuspensionService` (confirmación remota, ya suspendido) y
-  `UsernameGeneratorService`.
-- [ ] **5.2 Tests de API** (S) — 401/403/422/201 para provisionar y suspender.
-- [ ] **5.3 Tests por driver** (M) — contrato completo (create, suspend, reactivate, disable, delete, status,
-  reset) con `Http::fake`/LDAP simulado.
-- [ ] **5.4 GitHub Actions** (M) — workflow que levante Compose o use la imagen PHP, ejecute `pint --test`,
-  `phpstan/larastan` y `php artisan test`.
-- [ ] **5.5 Análisis estático** (S) — añadir Larastan (nivel 5 → subir gradualmente).
-- Meta: cobertura ≥ 80 % en `app/Services` y `app/Http`.
-
-## Fase 6 — Producción
-
-- [ ] **6.1 Perfil de producción** (M) — `docker-compose.prod.yml` (sin puertos de MySQL expuestos, `restart`,
-  healthchecks, `APP_DEBUG=false`, servicios `queue` y `scheduler`).
-- [ ] **6.2 Gestión de secretos** (S) — sin credenciales por defecto, variables por entorno, rotación documentada.
-- [ ] **6.3 Backups y restauración** (S) — volcado programado de MySQL y prueba de restauración.
-- [ ] **6.4 Observabilidad** (M) — logs estructurados, canal de errores, alertas ante fallos de conexión de
-  subsistemas y de colas.
-- [ ] **6.5 Documentación** (S) — OpenAPI de la API, runbook (alta, suspensión, baja, qué hacer ante fallos),
-  actualizar `README.md`.
-
----
-
-## Pendientes para el final
-
-Cosas que funcionan pero conviene retomar con calma, cuando lo demás esté cerrado.
-
-- [ ] **Avisar de que la baja en Chatwoot es irreversible en la práctica** — Chatwoot no tiene estado
-  deshabilitado, así que la baja **elimina** al agente y la reactivación lo **crea de nuevo**. No es el
-  mismo tipo de reversibilidad que en los demás subsistemas: se pierde el historial del agente (conversaciones
-  asignadas, nombre anterior, configuración de equipos), no solo su acceso. La ficha del usuario debería
-  decirlo cuando tenga una cuenta de Chatwoot, para que el operador que da de baja lo sepa antes y no después.
-  Deuda directo del 2.6.
-- [ ] **Detalles visuales** — quedan por revisar al final, según indicación expresa: espaciado,
-  alineación y clases sueltas de las vistas de `gestor-users` y `subsystems`. Ojo al retocarlos: las
-  clases `account-status-*` solo existen en el CSS ya compilado, y un `npm run build` las borraría; para
-  estilos nuevos hay que añadirlos a `resources/css/app.css`.
-
----
-
-## Orden recomendado
-
-1. **Fase 0** completa (rápida y desbloquea la API).
-2. **Fase 1** antes de exponer nada fuera del entorno local.
-3. **Fase 2** (2.4 → 2.1 → 2.2 → 2.6) para cerrar el ciclo de vida funcional.
-4. **Fase 3.1 y 3.2** (auditoría y colas) antes de usar el sistema con volumen real.
-5. **Fases 4–6** en paralelo según prioridad; **5.4 (CI)** conviene adelantarlo tras la Fase 0.
-
-## Definición de "terminado"
-
-- Alta, suspensión (inmediata y programada), reactivación automática, reset de contraseña y baja funcionan
-  desde web y API, sobre todos los subsistemas activos.
-- Todo acceso requiere autenticación y permisos; toda acción queda auditada.
-- Fallos parciales son visibles y reintentables; el estado local se concilia con el remoto.
-- Pipeline de CI en verde y despliegue de producción documentado.
-
+| Autenticación, autorización y abilities API | Implementado |
+| Ciclo de vida del usuario y operaciones asíncronas | Implementado; suite de tests pasa |
+| Persistencia, consulta, reintento y secretos de operaciones | Implementado y cubierto |
+| Listados y validaciones | Implementado |
+| Tests de drivers y orquestación | Amplios; 458 tests pasan en ejecución local |
+| Pint, Larastan y CI | Configurados, pero no pasan actualmente |
+| Auditoría administrativa | Parcial |
+| Conciliación de cuentas | No implementada; comando vacío |
+| Idempotencia en la API | No operativa; middleware sin lógica y rutas sin integración |
+| Perfil de producción | No desplegable todavía |
+| Rotación segura de secretos | Parcial |
+| Notificaciones, backups y OpenAPI | Pendientes |

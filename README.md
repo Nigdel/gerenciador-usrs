@@ -44,5 +44,19 @@ Ningún comando PHP o Composer se ejecuta desde el host: siempre a través de
 
 ## Planificación
 
-El trabajo pendiente está en [`to-do/`](to-do/), con el análisis de lo que hay y
-el plan de fases. Las tareas se marcan con `[x]` al completarse.
+El estado, la lista priorizada de pendientes y el plan de implementación están
+en [`to-do/`](to-do/). Las tareas se marcan con `[x]` al completarse.
+
+
+# to-do — Gestor de usuarios
+
+Carpeta de planificación del proyecto.
+
+| Archivo | Contenido |
+|---|---|
+| [`analisis-estado-actual.md`](to-do/analisis-estado-actual.md) | Qué está implementado, qué falta y problemas detectados en el código |
+| [`todo.md`](to-do/todo.md) | Estado resumido y lista priorizada de pendientes |
+| [`plan-implementacion.md`](to-do/plan-implementacion.md) | Plan por fases con tareas, criterios de aceptación y orden recomendado |
+
+> Convención: marcar las tareas con `[x]` al completarlas. Todos los comandos PHP/Laravel se ejecutan
+> con `docker compose exec app ...` (ver `CLAUDE.md`).

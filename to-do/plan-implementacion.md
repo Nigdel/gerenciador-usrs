@@ -1,23 +1,38 @@
-# Plan de implementación — de aquí en adelante
+# Plan de implementación — estado y trabajo pendiente
 
-Base: `main` @ `e0e4586` · Fecha: 2026-10-07 · Sustituye a las fases 3–6 del `todo` anterior.
+Revisión: 2026-10-09 · Base: `main` @ `ded66b5`.
 
 **Reglas de trabajo** (de `CLAUDE.md`): todo comando PHP/Laravel con `docker compose exec app ...`;
 cambios pequeños; `docker compose exec app php artisan test` y
 `docker compose exec app ./vendor/bin/pint` antes de cada commit. Un commit por tarea.
 
-**Esfuerzo:** S ≤ 0,5 d · M 1–2 d · L 3–5 d. **Total estimado:** ~5–6 semanas de trabajo efectivo.
+**Esfuerzo:** S ≤ 0,5 d · M 1–2 d · L 3–5 d.
+
+**Validación actual:** `docker compose exec app php artisan test --compact` pasa (458 tests, 1341 aserciones).
+Pint falla en 11 archivos y Larastan reporta 4 errores; el último [CI de GitHub Actions](https://github.com/Nigdel/gerenciador-usrs/actions/runs/37938577058)
+se detuvo en Pint, por lo que tests/cobertura/Larastan no corrieron en ese workflow.
 
 ```
-Sprint 1  Cerrar la cola (3.3)          ~3 d   ← bloquea todo lo demás
-Sprint 2  Robustez y decisiones         ~3 d
-Sprint 3  Calidad: tests + CI           ~4 d   ← antes de añadir más funcionalidad
-Sprint 4  UX: listados, validaciones    ~4 d
-Sprint 5  Conciliación, avisos, idemp.  ~7 d
-Sprint 6  Drivers reales + producción   ~8 d
+Sprint 1  Cerrar la cola                ✅ completado
+Sprint 2  Robustez y decisiones         ✅ completado
+Sprint 3  Tests y CI                    🟡 tests pasan; gates de calidad fallan
+Sprint 4  UX y listados                 🟡 núcleo hecho; dashboard básico, CSV pendiente
+Sprint 5  Conciliación/auditoría/idemp. 🔴 aún no operativo
+Sprint 6  Producción y operación        🔴 configuración incompleta
 ```
 
-Dependencias: S1 → S2 → S3 → (S4 ∥ S5) → S6. El Sprint 3 (CI) puede adelantarse en paralelo al 2.
+Orden actual: primero restaurar CI; después implementar conciliación/idempotencia y auditoría; a continuación
+validar el despliegue de producción, secretos, backups y documentación. Las notificaciones y los drivers reales
+dependen de decisiones de negocio/proveedor.
+
+| Estado | Significado |
+|---|---|
+| ✅ | Implementado y con evidencia de pruebas/código |
+| 🟡 | Parcial, limitado o con validaciones pendientes |
+| 🔴 | No implementado u operativo |
+
+No se considera completa una tarea por la existencia de un modelo, una tabla, una ruta programada o una clase
+vacía: debe existir el comportamiento y una prueba que lo cubra.
 
 ---
 
@@ -80,7 +95,10 @@ no re-encola filas `Ok`).
 **Hecho cuando:** ver, reintentar y consultar por API cualquier operación; ningún secreto persiste más
 del TTL; no hay operaciones solapadas. Marcar 3.3 como `[x]`.
 
-**Estado:** Sprint 1 cerrado (1.1, 1.2, 1.3 y 1.4 completados; 275 tests, 896 aserciones).
+**Estado:** Sprint 1 cerrado. Están implementados el TTL/poda de secretos, el reintento de cuentas, el
+endpoint de consulta de operaciones y el bloqueo/expiración de operaciones activas. `OperationSecretsTest`,
+`RetryOperationAccountTest`, `OperationApiTest` y `ConcurrentOperationsTest` cubren estos flujos. La última
+ejecución general comprobada pasa 458 tests y 1341 aserciones.
 
 ---
 
@@ -95,6 +113,10 @@ del TTL; no hay operaciones solapadas. Marcar 3.3 como `[x]`.
   409 (operación en curso), 502 (subsistema/identidad caída), nunca 500 con traza.
 **Tests:** forzar una `Exception` en el registry y comprobar respuesta controlada en web y API.
 
+**Estado:** ✅ Implementado; `ErrorHandlingTest` y `Api/ProvisioningContractTest` cubren respuestas
+controladas (incluidos 422/502). Larastan aún reporta errores en otras áreas, no se toma eso como fallo
+de este comportamiento funcional.
+
 ### 2.2 Reset de contraseña: decisión + registro (S ahora, M después)
 Hoy es síncrono y no deja rastro en `provisioning_operations`.
 - **Ahora (recomendado):** mantenerlo síncrono a propósito, pero registrarlo como operación
@@ -103,11 +125,16 @@ Hoy es síncrono y no deja rastro en `provisioning_operations`.
 - **Después (junto con 3.6):** moverlo a cola cuando haya canal seguro de entrega de la contraseña temporal.
 **Tests:** ampliar `ResetPasswordTest` para verificar que se crea la operación y que no guarda la clave.
 
+**Estado:** ✅ Se conserva síncrono deliberadamente y queda registrado como operación. La suite general
+incluye `ResetPasswordTest`.
+
 ### 2.3 Redis: usar o quitar (S)
 - **Recomendado:** quitar el servicio `redis` de `docker-compose.yml` (y `REDIS_*` si no se usan) mientras
   cola/caché/sesión sigan en `database`; reevaluar en el Sprint 6 si el volumen lo pide.
 - Alternativa: pasar `QUEUE_CONNECTION` y `CACHE_STORE` a `redis` (verificar que `phpredis` está en
   `docker/php/Dockerfile`).
+
+  **Estado:** ✅ Redis se retiró; la cola, caché y sesiones usan `database`.
 
 ### 2.4 Operación del worker (S)
 - Documentar `docker compose exec app php artisan queue:restart` tras cada despliegue.
@@ -150,6 +177,9 @@ Ficheros nuevos en `tests/Feature/Operations/`:
 - `OperationPollingTest`: endpoint web (404 cruzado, sin payload en la respuesta).
 Usar `Queue::fake()` para encolado y `dispatchSync`/ejecución directa del job para los casos de ejecución.
 
+**Estado:** ✅ Cubierto por `ProvisioningOperationServiceTest`, `ProcessOperationAccountTest` y
+`OperationPollingTest`, ejecutados en la suite actual.
+
 ### 3.2 Tests de API completos (S)
 Extender `Api/`: 201 con `operacion_id` y filas `pendiente`, 422 de validación, 401/403, 409 (Sprint 1),
 `login_no_verificado` presente en la respuesta.
@@ -172,7 +202,8 @@ Contrato completo por subsistema con `Http::fake` (y LDAP simulado para Samba): 
 Casos con regla propia: Chatwoot (DELETE y 404/410 = `deshabilitado`, reactivar = recrear), Adagio (404 = login libre),
 Samba (`ldap_rename` fallido devuelve éxito con aviso).
 
-**Estado:** hecho. Los ocho métodos quedan cubiertos en los siete drivers (425 tests, 1247 aserciones).
+**Estado:** ✅ Los ocho métodos tienen cobertura por driver en los siete adaptadores. La suite completa
+actual pasa 458 tests y 1341 aserciones (la cifra no es solo la de estos tests).
 Las tres reglas con regla propia del plan ya estaban cubiertas de antes: Chatwoot en `DisableUserTest` /
 `EnableUserTest` / `GetUserStatusTest`, Adagio en `Adagio/LoginAvailabilityTest`, y el `ldap_rename`
 fallido en `SambaAd/UpdateUserTest`. Lo que faltaba de verdad eran `updateUser()` y `loginEnUso()`.
@@ -194,7 +225,7 @@ fallido en `SambaAd/UpdateUserTest`. Lo que faltaba de verdad eran `updateUser()
 
 ### 3.4 CI con GitHub Actions (M)
 `.github/workflows/ci.yml` en `push` y `pull_request`:
-1. `shivammathur/setup-php` (PHP 8.3, extensiones `ldap`, `pdo_mysql`, `redis` si aplica).
+1. `shivammathur/setup-php` (PHP 8.5, extensiones usadas por la aplicación y PCOV).
 2. Servicio MySQL 8.4 (o SQLite si `phpunit.xml` lo permite).
 3. `composer install --no-interaction --prefer-dist` en `src/`.
 4. `./vendor/bin/pint --test`.
@@ -206,7 +237,8 @@ Cachear Composer. Protección de rama: exigir CI en verde para `main`.
 `docker compose exec app composer require --dev larastan/larastan`; `phpstan.neon` con nivel 5, `paths: [app]`,
 baseline inicial para no bloquear; subir un nivel por sprint.
 
-**Estado (3.4 + 3.5):** hechos. `larastan/larastan ^3.13` (PHPStan 2.3.0); `phpstan.neon`
+**Estado (3.4 + 3.5):** 🟡 Workflow y Larastan están configurados: `larastan/larastan ^3.13`
+(PHPStan 2.3.0); `phpstan.neon`
 en nivel 5 y `phpstan-baseline.neon` con los 116 errores heredados. Tres desviaciones
 del plan, por no encajar con el repo: PHP 8.5 en vez de 8.3 (el `Dockerfile` es
 `php:8.5-fpm`), sin servicio MySQL (`phpunit.xml` fija sqlite `:memory:`) y sin
@@ -224,8 +256,8 @@ Lo que costó descubrir:
 - `pint --test` fallaba en 5 ficheros heredados; se corrigieron en 3.4, porque un
   gate de estilo rojo desde el primer día bloquea todos los PR.
 
-Pendiente del Sprint 3, cerrado: cobertura ≥ 80 % medida con **PCOV** (78,1 % →
-**80,1 %**). `Http` 89,6 %, `Jobs` 90,0 %, `Services` 80,0 %.
+Medición previa del Sprint 3: cobertura ≥ 80 % con **PCOV** (78,1 % → **80,1 %**).
+`Http` 89,6 %, `Jobs` 90,0 %, `Services` 80,0 %. Hay que repetirla al reparar el CI actual.
 
 El hueco era uno solo y grande: `SambaAdService::createUser()` tenía 100 líneas
 sin cubrir —crear, fijar contraseña, habilitar, con rollback en los dos últimos
@@ -240,8 +272,9 @@ Dos cosas que hacen falta para poder medirlo dos veces:
 - **`--min` mide la media global**, no por directorio, que es lo que permite el
   formato de `php artisan test`. El desglose hay que sacarlo a mano.
 
-**Hecho cuando:** CI verde en `main`; cobertura ≥ 80 % en `app/Services`, `app/Jobs` y `app/Http`
-(medir con `php artisan test --coverage`, requiere Xdebug/PCOV en la imagen).
+**Estado actual:** tests funcionales pasan localmente, pero el sprint no está cerrado: `pint --test`
+falla en 11 archivos, Larastan reporta 4 errores y el último workflow falla en Pint. Cuando Pint falla,
+GitHub Actions omite tests, cobertura y análisis estático. Corregir estos gates y volver a verificar cobertura.
 
 ---
 
@@ -293,14 +326,20 @@ unique con dos formatos mezclados no puede funcionar de forma fiable antes de fi
 Pantalla `operaciones.index` (solo `admin`/`operador`/`auditor` según policy): filtro por estado, tipo, usuario
 y rango de fechas; enlace a la ficha del usuario; acceso rápido a "solo fallidas" con reintento (Sprint 1.2).
 
+**Estado:** ✅ Existe listado general paginado con filtros, policy y ficha de operación.
+
 ### 4.4 Dashboard con métricas (M)
 Sustituir el lanzador por tarjetas: usuarios por estado, cuentas por estado y subsistema, operaciones
 fallidas/en curso, suspensiones que vencen en 7 días, última prueba de conexión por subsistema
 (`last_connection_test_*`). Consultas agregadas con caché corta (60 s).
 
+**Estado:** 🟡 Hay un dashboard básico; falta completar/verificar todas las métricas indicadas y el uso de caché.
+
 ### 4.5 Importación/exportación CSV (M, opcional)
 Alta masiva con vista previa, validación por fila y reporte de errores; cada fila genera una operación.
 Exportación de usuarios con filtros aplicados.
+
+**Estado:** 🔴 Pendiente; opcional según prioridad de producto.
 
 ---
 
@@ -315,6 +354,10 @@ Exportación de usuarios con filtros aplicados.
   la operación). Registrar la resolución en `account_state_logs` con origen del actor.
 - No tocar cuentas con operación activa (usa la guarda del 1.4).
 
+**Estado:** 🔴 No implementada. La migración/modelo de discrepancias y la tarea diaria existen, pero
+`AccountsReconcileCommand::handle()` está vacío; no consulta subsistemas ni crea/resuelve discrepancias.
+No hay tests funcionales de conciliación ni pantalla de discrepancias.
+
 ### 5.2 Notificaciones — 3.6 (M)
 - Mailables encolados en la cola `default`: credenciales iniciales (al `email_personal`), suspensión,
   reactivación, baja. Plantillas Blade en el idioma de la UI.
@@ -322,6 +365,8 @@ Exportación de usuarios con filtros aplicados.
   con la contraseña en memoria. Cambiar `MAIL_MAILER` a un transporte real en producción (no `log`).
 - Preferencias: activar/desactivar por tipo en `config/notifications.php`.
 - Con esto se puede mover el reset de contraseña a cola (cerrar 2.2 "después").
+
+**Estado:** 🔴 Pendiente; no hay notificaciones de negocio implementadas.
 
 ### 5.3 Idempotencia y compensación — 3.4 (M)
 - API: cabecera `Idempotency-Key` en `/provisionar` y `/suspender`; tabla `idempotency_keys`
@@ -333,9 +378,16 @@ Exportación de usuarios con filtros aplicados.
 - Política de fallo parcial del alta (decidir con el negocio): *reintentar* (por defecto, ya soportado),
   *dejar en error* o *revertir* con `deleteUser()` en las cuentas ya creadas (opción por operación).
 
+**Estado:** 🔴 La persistencia tiene scaffolding, pero no está operativa: `IdempotencyService` no está
+conectado a las rutas; los middlewares `IdempotencyMiddleware`, `IdempotencyHandler` y
+`ValidateIdempotency` solo llaman a `$next`. No hay tests de idempotencia ni política de compensación.
+
 ### 5.4 Auditoría general — resto del 3.1 (S–M)
 Registrar acciones de gestión (alta/edición/baja de `GestorUser`, cambios en subsistemas y en operadores),
 IP y user-agent del llamante en operaciones y logs de cuenta, e intentos de login fallidos.
+
+**Estado:** 🟡 Hay tabla/servicio de auditoría y listener de login fallido que registra IP y user-agent.
+Falta integrar el registro con el resto de acciones administrativas y cubrirlo con tests.
 
 ---
 
@@ -350,31 +402,49 @@ marcado "endpoint no confirmado").
 En la ficha, si el usuario tiene cuenta de Chatwoot, mostrar antes de "Dar de baja" que se elimina al agente y
 se pierde su historial; la reactivación lo recrea.
 
-### 6.3 Perfil de producción (M) (hecho)
-`docker-compose.prod.yml`: sin puerto MySQL publicado, credenciales por variables/secretos, `restart:
-unless-stopped`, healthchecks (app, mysql, nginx), `APP_DEBUG=false`, `scheduler` con
-`schedule:run` por cron o `schedule:work` supervisado, `queue:work` bajo supervisor con `--max-time` y
-`queue:restart` en el despliegue. HTTPS delante (proxy).
+### 6.3 Perfil de producción (M)
+Construir un perfil de producción funcional a partir de la imagen y rutas reales; sin puerto MySQL
+publicado, credenciales externas, healthchecks, `APP_DEBUG=false`, scheduler/worker supervisados y HTTPS
+delante (proxy).
 
-### 6.4 Secretos (S) (hecho)
-Sin valores por defecto en Compose; procedimiento de rotación. **Aviso:** rotar `APP_KEY` invalida todo lo
-cifrado (`api_config` y `payload`); documentar un procedimiento de re-cifrado antes de hacerlo.
+**Estado:** 🔴 El archivo actual no sirve como despliegue: referencia `Dockerfile` en la raíz (no existe en
+el repositorio) y publica el contenedor PHP-FPM en un puerto HTTP. No integra correctamente Nginx con los
+paths de `src/`; hay que corregirlo y probar el build/arranque antes de considerarlo hecho.
+
+### 6.4 Secretos (S)
+Sin valores por defecto; rotación compatible con los datos cifrados. **Aviso:** rotar `APP_KEY` invalida todo
+lo cifrado (`api_config` y `payload`); se requiere un procedimiento de re-cifrado probado antes de hacerlo.
+
+**Estado:** 🟡 Existe `SecretService` y `secrets:rotate`, pero el comando solo cambia la clave del `.env` y no
+re-cifra datos; no debe usarse contra datos cifrados existentes sin recuperación planificada. `SecretService`
+usa `env()` fuera de `config/` (Larastan lo reporta). `SecretsRotateTest.php` vive en `tests/` de la raíz y
+no en `src/tests`, así que queda fuera del testsuite activo.
 
 ### 6.5 Backups y restauración (S)
 Volcado programado de MySQL (cifrado, retención definida) y **prueba de restauración** documentada.
 
+**Estado:** 🔴 Pendiente.
+
 ### 6.6 Observabilidad (M)
 Logs estructurados (JSON) a stdout; canal de errores (Sentry/Flare o similar); alertas por `failed_jobs`,
 operaciones `Fallida`, discrepancias nuevas y fallo de `testConnection` en subsistemas.
+
+**Estado:** 🟡 Hay logs y registro de auditoría parcial; no hay alertas/canal de errores ni logs estructurados
+verificados.
 
 ### 6.7 Documentación (S)
 OpenAPI de la API (incluye `operacion_id`, `GET /operaciones/{uuid}`, 409, `Idempotency-Key`) y runbook:
 alta, suspensión, baja, reintento, reconciliación, `queue:restart`, qué hacer ante cola atascada y
 procedimiento de backup/restauración.
 
+**Estado:** 🟡 Hay README/runbook de operación básica; falta OpenAPI y documentar reconciliación, backups
+y recuperación segura de secretos.
+
 ### 6.8 Detalles visuales (S)
 Pasada final de espaciado/alineación en `gestor-users` y `subsystems`. Recordar: las clases `account-status-*`
 solo existen en el CSS compilado; los estilos nuevos van en `resources/css/app.css`.
+
+**Estado:** 🔴 Pendiente de revisión final.
 
 ---
 
@@ -382,13 +452,14 @@ solo existen en el CSS compilado; los estilos nuevos van en `resources/css/app.c
 
 | # | Tema | Decisión necesaria | Cuándo |
 |---|---|---|---|
-| D1 | TTL de secretos en payload | ¿72 h es aceptable? | Sprint 1 |
-| D2 | Alcance del token API en consultas | ¿solo operaciones `origen=api`? | Sprint 1 |
-| D3 | Reset de contraseña en cola | Esperar al canal de entrega (5.2) | Sprint 2→5 |
-| D4 | Formato único de CPF en BD | Solo dígitos + migración de existentes | Sprint 4 |
-| D5 | Política de fallo parcial en alta | Reintentar / error / revertir | Sprint 5 |
-| D6 | Redis | Mantener `database` o pasar a Redis | Sprint 2 / 6 |
-| D7 | Rotación de `APP_KEY` | Procedimiento de re-cifrado | Sprint 6 |
+| D1 | TTL de secretos en payload | Confirmar que 72 h cubre la ventana de reintento | Operación |
+| D2 | Reset de contraseña en cola | Mantenerlo síncrono hasta definir entrega segura | Sprint 5 |
+| D3 | Política de fallo parcial en alta | Mantener reintento/error; decidir si hace falta compensación | Sprint 5 |
+| D4 | Rotación de `APP_KEY` | Diseñar re-cifrado/recuperación antes de rotar claves con datos | Sprint 6 |
+| D5 | Idempotencia | Definir retención/alcance de claves y respuestas repetidas | Sprint 5 |
+| D6 | Producción | Alinear imagen, PHP-FPM/Nginx y rutas reales del repositorio | Sprint 6 |
+
+CPF normalizado a once dígitos y Redis retirado: decisiones cerradas, no son pendientes.
 
 ## Definición de "terminado" del proyecto
 
