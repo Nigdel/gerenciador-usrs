@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Contracts\SubsystemConnectionInterface;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use App\Services\AuditService;
 use App\Services\Subsystems\BaseSubsystemService;
 use App\Services\SubsystemServiceRegistry;
+use BackedEnum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +20,7 @@ class SubsystemController extends Controller
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
+        private readonly AuditService $audit,
     ) {}
 
     public function index(Request $request): View
@@ -193,6 +196,19 @@ class SubsystemController extends Controller
             $userSubsystemAccount->update($atributos + ['meta' => $result->raw]);
         }
 
+        // El cambio de estado ya deja rastro en account_state_logs por el
+        // observer; esta entrada añade lo que allí no cabe, que es que lo hizo
+        // una persona desde la ficha del subsistema y no un proceso.
+        if ($result->success) {
+            $this->audit->log(AuditService::CUENTA_ACCION, [
+                'accion' => $operation,
+                'gestor_user_id' => $userSubsystemAccount->gestor_user_id,
+                'subsistema' => $subsystem->slug,
+                'cuenta_id' => $userSubsystemAccount->id,
+                'estado' => $userSubsystemAccount->estado->value,
+            ]);
+        }
+
         return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)
             ->with($result->success ? 'success' : 'error', $result->mensaje ?? ($result->success ? 'Operación completada.' : 'No se pudo completar la operación.'));
     }
@@ -224,6 +240,11 @@ class SubsystemController extends Controller
                 'last_connection_test_at' => now(),
                 'last_connection_test_success' => $result->success,
             ]);
+            $this->audit->log(AuditService::SUBSISTEMA_CONEXION_PROBADA, [
+                'subsistema_id' => $subsystem->id,
+                'nombre' => $subsystem->nombre,
+                'exito' => $result->success,
+            ]);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -231,6 +252,12 @@ class SubsystemController extends Controller
             $subsystem->update([
                 'last_connection_test_at' => now(),
                 'last_connection_test_success' => false,
+            ]);
+
+            $this->audit->log(AuditService::SUBSISTEMA_CONEXION_PROBADA, [
+                'subsistema_id' => $subsystem->id,
+                'nombre' => $subsystem->nombre,
+                'exito' => false,
             ]);
 
             return redirect()
@@ -249,6 +276,12 @@ class SubsystemController extends Controller
 
         $subsystem = Subsystem::create($this->validatedData($request));
 
+        $this->audit->log(AuditService::SUBSISTEMA_CREADO, [
+            'subsistema_id' => $subsystem->id,
+            'nombre' => $subsystem->nombre,
+            'slug' => $subsystem->slug,
+        ]);
+
         return redirect()
             ->route('subsystems.index')
             ->with('success', "El subsistema {$subsystem->nombre} fue creado correctamente.");
@@ -265,7 +298,24 @@ class SubsystemController extends Controller
     {
         $this->authorize('update', $subsystem);
 
-        $subsystem->update($this->validatedData($request, $subsystem));
+        $data = $this->validatedData($request, $subsystem);
+
+        // Solo el nombre de las claves de `api_config`, nunca su valor: es el
+        // campo que guarda el token del subsistema, y un cambio de
+        // configuración se audita por qué claves se tocaron, no por lo que
+        // valían.
+        $cambios = array_diff_key($data, ['api_config' => true]);
+        $antes = array_keys($subsystem->api_config ?? []);
+        $despues = isset($data['api_config']) ? array_keys($data['api_config']) : $antes;
+
+        $subsystem->update($data);
+
+        $this->audit->log(AuditService::SUBSISTEMA_ACTUALIZADO, [
+            'subsistema_id' => $subsystem->id,
+            'nombre' => $subsystem->nombre,
+            'cambios' => $this->diffAuditable($subsystem, $cambios),
+            'api_config' => ['desde' => $antes, 'hasta' => $despues],
+        ]);
 
         return redirect()
             ->route('subsystems.index')
@@ -283,11 +333,47 @@ class SubsystemController extends Controller
         }
 
         $name = $subsystem->nombre;
+        $datos = ['subsistema_id' => $subsystem->id, 'nombre' => $name, 'slug' => $subsystem->slug];
         $subsystem->delete();
+
+        $this->audit->log(AuditService::SUBSISTEMA_ELIMINADO, $datos);
 
         return redirect()
             ->route('subsystems.index')
             ->with('success', "El subsistema {$name} fue eliminado correctamente.");
+    }
+
+    /**
+     * Campos que cambian de verdad, sin incluir `api_config`.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, array<string, mixed>>
+     */
+    private function diffAuditable(Subsystem $subsystem, array $data): array
+    {
+        $cambios = [];
+
+        foreach ($data as $campo => $valor) {
+            if ($subsystem->getOriginal($campo) === $valor) {
+                continue;
+            }
+
+            $cambios[$campo] = [
+                'desde' => $this->valorAuditable($subsystem->getOriginal($campo)),
+                'hasta' => $this->valorAuditable($valor),
+            ];
+        }
+
+        return $cambios;
+    }
+
+    private function valorAuditable(mixed $valor): mixed
+    {
+        if ($valor instanceof BackedEnum) {
+            return $valor->value;
+        }
+
+        return is_scalar($valor) || $valor === null ? $valor : 'cambiado';
     }
 
     private function validatedData(Request $request, ?Subsystem $subsystem = null): array

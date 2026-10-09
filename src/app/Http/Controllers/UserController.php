@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AuditService;
+use BackedEnum;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
+    public function __construct(private readonly AuditService $audit) {}
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', User::class);
@@ -47,6 +51,16 @@ class UserController extends Controller
 
         $user = User::create($validated);
 
+        // `validated` ya no vale aquí: la contraseña viene hasheada y el hash
+        // no sirve para nada en una bitácora. Se registra lo que sí identifica
+        // al operador nuevo.
+        $this->audit->log(AuditService::OPERADOR_CREADO, [
+            'operador_id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+        ]);
+
         if (! $this->isJsonRequest($request)) {
             return redirect()->route('users.index')->with('success', 'Usuário cadastrado com sucesso.');
         }
@@ -80,7 +94,13 @@ class UserController extends Controller
             unset($validated['password']);
         }
 
+        $cambios = $this->diffAuditable($user, $validated);
         $user->update($validated);
+
+        $this->audit->log(AuditService::OPERADOR_ACTUALIZADO, [
+            'operador_id' => $user->id,
+            'cambios' => $cambios,
+        ]);
 
         if (! $this->isJsonRequest($request)) {
             return redirect()->route('users.index')->with('success', 'Usuário atualizado com sucesso.');
@@ -93,7 +113,12 @@ class UserController extends Controller
     {
         $this->authorize('delete', $user);
 
+        // Se copian los datos antes de borrar: después el modelo ya no los tiene.
+        $datos = ['operador_id' => $user->id, 'name' => $user->name, 'email' => $user->email];
+
         $user->delete();
+
+        $this->audit->log(AuditService::OPERADOR_ELIMINADO, $datos);
 
         if (! $this->isJsonRequest($request)) {
             return redirect()->route('users.index')->with('success', 'Usuário removido com sucesso.');
@@ -138,6 +163,45 @@ class UserController extends Controller
         $validated['externo'] = $request->boolean('externo');
 
         return $validated;
+    }
+
+    /**
+     * Campos que cambian de verdad en {campo: [antes, después]}.
+     *
+     * El hash de la contraseña no se registra ni como valor nuevo ni como
+     * anterior: es una credencial tan reutilizable como la contraseña misma, y
+     * basta con anotar que se restableció.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, array<string, mixed>>
+     */
+    private function diffAuditable(User $user, array $data): array
+    {
+        $cambios = [];
+
+        foreach ($data as $campo => $valor) {
+            if ($campo === 'password') {
+                $cambios[$campo] = ['cambiada' => true];
+
+                continue;
+            }
+
+            if ($user->getOriginal($campo) === $valor) {
+                continue;
+            }
+
+            $cambios[$campo] = [
+                'desde' => $this->valorAuditable($user->getOriginal($campo)),
+                'hasta' => $this->valorAuditable($valor),
+            ];
+        }
+
+        return $cambios;
+    }
+
+    private function valorAuditable(mixed $valor): mixed
+    {
+        return $valor instanceof BackedEnum ? $valor->value : $valor;
     }
 
     private function userData(User $user): array

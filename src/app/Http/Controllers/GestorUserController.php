@@ -13,12 +13,14 @@ use App\Http\Requests\SyncGestorUserRequest;
 use App\Models\GestorUser;
 use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
+use App\Services\AuditService;
 use App\Services\ProvisioningOperationService;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\UserDataSyncService;
 use App\Services\UserOffboardingService;
 use App\Services\UserProvisioningService;
 use App\Services\UserSuspensionService;
+use BackedEnum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,6 +36,7 @@ class GestorUserController extends Controller
         private readonly UserDataSyncService $syncService,
         private readonly ProvisioningOperationService $operationService,
         private readonly SubsystemServiceRegistry $registry,
+        private readonly AuditService $audit,
     ) {}
 
     public function index(GestorUserListRequest $request): View
@@ -154,6 +157,17 @@ class GestorUserController extends Controller
 
         $this->operationService->despachar($operacion);
 
+        // Los datos de entrada, no los de la operación: el payload lleva la
+        // contraseña general en claro y el registro de auditoría se limpia
+        // solo, pero no hace falta darle la razón para pedírsela.
+        $this->audit->log(AuditService::USUARIO_CREADO, [
+            'gestor_user_id' => $gestorUser->id,
+            'nombre_completo' => $gestorUser->nombre_completo,
+            'cpf' => $gestorUser->cpf,
+            'operacion_id' => $operacion->uuid,
+            'subsistemas' => $operacion->cuentas->pluck('subsistema')->all(),
+        ]);
+
         return $this->redirigirTrasEncolar(
             $gestorUser,
             $operacion,
@@ -231,6 +245,13 @@ class GestorUserController extends Controller
                 ->with('error', $exception->getMessage());
         }
 
+        $this->audit->log(AuditService::OPERACION_REINTENTADA, [
+            'gestor_user_id' => $gestorUser->id,
+            'operacion_id' => $fila->operacion->uuid,
+            'subsistema' => $fila->subsistema,
+            'cuenta' => $fila->id,
+        ]);
+
         return redirect()
             ->route('gestor-users.show', $gestorUser)
             ->with('success', sprintf(
@@ -282,6 +303,14 @@ class GestorUserController extends Controller
 
         $this->operationService->despachar($operacion);
 
+        $this->audit->log(AuditService::USUARIO_DADO_DE_BAJA, [
+            'gestor_user_id' => $gestorUser->id,
+            'nombre_completo' => $gestorUser->nombre_completo,
+            'operacion_id' => $operacion->uuid,
+            'motivo_baja' => $motivo,
+            'cuentas' => $cuentas->pluck('subsistema')->all(),
+        ]);
+
         return $this->redirigirTrasEncolar($gestorUser, $operacion);
     }
 
@@ -318,6 +347,13 @@ class GestorUserController extends Controller
         );
 
         $this->operationService->despachar($operacion);
+
+        $this->audit->log(AuditService::USUARIO_REACTIVADO, [
+            'gestor_user_id' => $gestorUser->id,
+            'nombre_completo' => $gestorUser->nombre_completo,
+            'operacion_id' => $operacion->uuid,
+            'cuentas' => $cuentas->pluck('subsistema')->all(),
+        ]);
 
         return $this->redirigirTrasEncolar($gestorUser, $operacion);
     }
@@ -360,6 +396,12 @@ class GestorUserController extends Controller
 
         $this->operationService->despachar($operacion);
 
+        $this->audit->log(AuditService::USUARIO_SINCRONIZADO, [
+            'gestor_user_id' => $gestorUser->id,
+            'operacion_id' => $operacion->uuid,
+            'subsistemas' => $cuentas->pluck('subsistema')->all(),
+        ]);
+
         return $this->redirigirTrasEncolar($gestorUser, $operacion);
     }
 
@@ -374,7 +416,17 @@ class GestorUserController extends Controller
         }
 
         unset($data['subsistemas']);
+
+        // El diff se calcula antes de actualizar: después, getDirty() ya está
+        // limpio y no queda con qué comparar.
+        $cambios = $this->diffAuditable($gestorUser, $data);
+
         $gestorUser->update($data);
+
+        $this->audit->log(AuditService::USUARIO_ACTUALIZADO, [
+            'gestor_user_id' => $gestorUser->id,
+            'cambios' => $cambios,
+        ]);
 
         return redirect()
             ->route('gestor-users.show', $gestorUser)
@@ -391,7 +443,12 @@ class GestorUserController extends Controller
                 ->with('error', 'No se puede eliminar un usuario que tiene cuentas en subsistemas.');
         }
 
+        $datos = ['gestor_user_id' => $gestorUser->id, 'nombre_completo' => $gestorUser->nombre_completo];
         $gestorUser->delete();
+
+        // Se audita después del borrado, y por eso los datos se copian antes:
+        // una vez borrada la fila, el modelo ya no tiene nombre que guardar.
+        $this->audit->log(AuditService::USUARIO_ELIMINADO, $datos);
 
         return redirect()
             ->route('gestor-users.index')
@@ -439,6 +496,16 @@ class GestorUserController extends Controller
 
         $this->operationService->despachar($operacion);
 
+        $this->audit->log(AuditService::USUARIO_SUSPENDIDO, [
+            'gestor_user_id' => $gestorUser->id,
+            'nombre_completo' => $gestorUser->nombre_completo,
+            'operacion_id' => $operacion->uuid,
+            'subsistemas' => $cuentas->pluck('subsistema')->all(),
+            'motivo_suspension' => $datos['motivo_suspension'],
+            'inicio_suspension' => $datos['inicio_suspension'],
+            'fin_suspension' => $datos['fin_suspension'],
+        ]);
+
         return $this->redirigirTrasEncolar($gestorUser, $operacion);
     }
 
@@ -480,6 +547,19 @@ class GestorUserController extends Controller
             $results = $resultado['resultados'];
             $fallos = collect($results)->where('exito', false);
 
+            // Ni la contraseña ni su hash entran en la bitácora. Se anota qué
+            // subsistemas la recibieron y cuáles no, que es la información que
+            // hace falta para saber si hay que volver a intentarlo, y se
+            // no el nombre de la cuenta.
+            $this->audit->log(AuditService::USUARIO_CONTRASENA_RESTABLECIDA, [
+                'gestor_user_id' => $gestorUser->id,
+                'subsistemas' => array_map(
+                    fn (array $r): ?string => $r['subsistema'],
+                    $results,
+                ),
+                'fallos' => $fallos->count(),
+            ]);
+
             // La contraseña va en el flash de una sola vez y no se guarda en
             // ningún sitio: en la siguiente petición ya no está. Por eso la
             // vista tiene que avisar de que no se va a repetir.
@@ -504,6 +584,47 @@ class GestorUserController extends Controller
                 ->route('gestor-users.show', $gestorUser)
                 ->with('error', $this->mensajeAlOperador($exception, 'No se pudieron restablecer las contraseñas'));
         }
+    }
+
+    /**
+     * Qué campos cambiaron de verdad, en {campo: [antes, después]}.
+     *
+     * `password_general` queda fuera a propósito, y no solo por no escribir la
+     * contraseña nueva: la anterior tampoco se puede registrar, porque en el
+     * modelo ya está hasheada y el hash es exactamente igual de secreto que la
+     * clave. Anotarlo convertiría la bitácora en una segunda copia de la
+     * credencial, solo que ilegible. Se anota que cambió, sin más.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, array<string, mixed>>
+     */
+    private function diffAuditable(GestorUser $gestorUser, array $data): array
+    {
+        $cambios = [];
+
+        foreach ($data as $campo => $valor) {
+            if ($campo === 'password_general') {
+                $cambios[$campo] = ['cambiada' => true];
+
+                continue;
+            }
+
+            if ($gestorUser->getOriginal($campo) === $valor) {
+                continue;
+            }
+
+            $cambios[$campo] = [
+                'desde' => $this->valorAuditable($gestorUser->getOriginal($campo)),
+                'hasta' => $this->valorAuditable($valor),
+            ];
+        }
+
+        return $cambios;
+    }
+
+    private function valorAuditable(mixed $valor): mixed
+    {
+        return $valor instanceof BackedEnum ? $valor->value : $valor;
     }
 
     /**

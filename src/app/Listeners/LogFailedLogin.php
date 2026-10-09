@@ -14,7 +14,7 @@ class LogFailedLogin
         $request = request();
 
         app(AuditService::class)->log(
-            'api.login.failed',
+            AuditService::LOGIN_FALLIDO,
             [
                 'email' => $event->credentials['email'] ?? null,
             ],

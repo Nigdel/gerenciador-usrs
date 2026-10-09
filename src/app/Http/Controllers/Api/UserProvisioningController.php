@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Concerns\RespondeErroresDeProvisionado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProvisionUserRequest;
 use App\Http\Resources\GestorUserResource;
+use App\Services\AuditService;
 use App\Services\ProvisioningOperationService;
 use App\Services\UserProvisioningService;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,7 @@ class UserProvisioningController extends Controller
     public function __construct(
         private readonly UserProvisioningService $provisioningService,
         private readonly ProvisioningOperationService $operationService,
+        private readonly AuditService $audit,
     ) {
         $this->usaRespuestasControladas();
     }
@@ -54,6 +56,17 @@ class UserProvisioningController extends Controller
             $this->operationService->despachar($operacion);
 
             $this->enlazaLaClave($operacion);
+
+            // Igual que en la ruta web, y por el mismo motivo: una entrada de
+            // auditoría que solo existe para unos Origenes no sirve para
+            // reconstruir qué pasó.
+            $this->audit->log(AuditService::USUARIO_CREADO, [
+                'gestor_user_id' => $resultado['gestor_user']->id,
+                'nombre_completo' => $resultado['gestor_user']->nombre_completo,
+                'cpf' => $resultado['gestor_user']->cpf,
+                'operacion_id' => $operacion->uuid,
+                'subsistemas' => $operacion->cuentas->pluck('subsistema')->all(),
+            ]);
 
             return response()->json([
                 'usuario' => new GestorUserResource($resultado['gestor_user']),

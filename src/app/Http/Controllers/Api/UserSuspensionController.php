@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Concerns\ConservaLaClaveDeIdempotencia;
 use App\Http\Controllers\Api\Concerns\RespondeErroresDeProvisionado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SuspendUserRequest;
+use App\Services\AuditService;
 use App\Services\ProvisioningOperationService;
 use App\Services\UserSuspensionService;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,7 @@ class UserSuspensionController extends Controller
     public function __construct(
         private readonly UserSuspensionService $suspensionService,
         private readonly ProvisioningOperationService $operationService,
+        private readonly AuditService $audit,
     ) {
         $this->usaRespuestasControladas();
     }
@@ -65,6 +67,19 @@ class UserSuspensionController extends Controller
             $this->operationService->despachar($operacion);
 
             $this->enlazaLaClave($operacion);
+
+            // La API es la vía que usan las integraciones, y hasta ahora sus
+            // altas y suspensiones no dejaban rastro: la misma operación
+            // llegada por la web sí lo dejaba, y esa asimetría es justo lo que
+            // hace la bitácora poco fiable.
+            $this->audit->log(AuditService::USUARIO_SUSPENDIDO, [
+                'gestor_user_id' => $gestorUser->id,
+                'operacion_id' => $operacion->uuid,
+                'subsistemas' => $cuentas->pluck('subsistema')->all(),
+                'motivo_suspension' => $datos['motivo_suspension'],
+                'inicio_suspension' => $datos['inicio_suspension'],
+                'fin_suspension' => $datos['fin_suspension'],
+            ]);
 
             return response()->json([
                 'operacion_id' => $operacion->uuid,

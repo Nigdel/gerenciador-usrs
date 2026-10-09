@@ -386,8 +386,11 @@ conectado a las rutas; los middlewares `IdempotencyMiddleware`, `IdempotencyHand
 Registrar acciones de gestión (alta/edición/baja de `GestorUser`, cambios en subsistemas y en operadores),
 IP y user-agent del llamante en operaciones y logs de cuenta, e intentos de login fallidos.
 
-**Estado:** 🟡 Hay tabla/servicio de auditoría y listener de login fallido que registra IP y user-agent.
-Falta integrar el registro con el resto de acciones administrativas y cubrirlo con tests.
+**Estado:** ✅ Cerrado. `AuditService` es el punto único de entrada y filtra los secretos antes de
+guardar; queda registrado actor, origen, IP y user-agent en altas, ediciones, bajas, suspensiones,
+reactivaciones, sincronizaciones, reintentos, reinicio de contraseña, cambios de subsistema y de
+operadores, pruebas de conexión y login fallido. La tabla `audit_logs` ya no se borra con el operador
+(SET NULL) y distingue web / api / scheduler con `origen`. Cubierto con `tests/Feature/AuditLogTest.php`.
 
 ---
 
