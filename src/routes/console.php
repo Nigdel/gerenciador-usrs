@@ -46,16 +46,10 @@ Schedule::command('operations:prune-secrets')
     ->onOneServer();
 
 /*
- * Operaciones atascadas (Sprint 1.4): una operación 'en curso' sin movimiento
- * es una operación cuyo worker murió, y mientras siga así bloquea al usuario
- * para abrir cualquier otra (1.4). Este comando la cierra para que pueda
- * reintentarse.
- *
- * Cada quince minutos y no cada hora porque el bloqueo es visible para el
- * operador: son quince minutos de "esta operación no avanza" en lugar de una
- * hora. El coste es una consulta con índice sobre (estado, updated_at).
+ * Reconciliación de cuentas (Sprint 5.1)
+ * Ejecuta diariamente la verificación y creación de discrepancias.
  */
-Schedule::command('operations:expire-stuck')
-    ->everyFifteenMinutes()
+Schedule::command('accounts:reconcile')
+    ->daily()
     ->withoutOverlapping()
     ->onOneServer();
