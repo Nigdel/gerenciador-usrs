@@ -2,11 +2,23 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\SubsystemAccountStatus;
+use App\Models\AccountDiscrepancy;
+use App\Models\Subsystem;
+use App\Models\UserSubsystemAccount;
+use App\Services\Subsystems\AdagioService;
+use App\Services\Subsystems\BaseSubsystemService;
+use App\Services\Subsystems\ChatwootService;
+use App\Services\Subsystems\EmailService;
+use App\Services\Subsystems\EntraIdService;
+use App\Services\Subsystems\GlpiService;
+use App\Services\Subsystems\SambaAdService;
+use App\Services\Subsystems\SlackService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
-#[Signature('accounts:reconcile')]
+#[Signature('accounts:reconcile {--dry-run}')]
 #[Description('Reconciliar cuentas de operaciones pendientes o en error')]
 class AccountsReconcileCommand extends Command
 {
@@ -16,17 +28,18 @@ class AccountsReconcileCommand extends Command
     public function handle()
     {
         // Load all relevant user subsystem accounts
-        $cuentas = \App\Models\UserSubsystemAccount::query()
+        $cuentas = UserSubsystemAccount::query()
             ->whereIn('estado', [
-                \App\Enums\AccountStatus::Activo,
-                \App\Enums\AccountStatus::Suspendido,
-                \App\Enums\AccountStatus::Deshabilitado,
+                SubsystemAccountStatus::Activo,
+                SubsystemAccountStatus::Suspendido,
+                SubsystemAccountStatus::Deshabilitado,
             ])
             ->with('subsystem')
             ->get();
 
         if ($cuentas->isEmpty()) {
             $this->components->info('No hay cuentas que conciliar.');
+
             return self::SUCCESS;
         }
 
@@ -36,52 +49,67 @@ class AccountsReconcileCommand extends Command
 
         foreach ($cuentas as $cuenta) {
             $procesadas++;
+            $subsystem = $cuenta->subsystem;
+            if (! $subsystem instanceof Subsystem) {
+                $this->components->warn("La cuenta {$cuenta->id} no tiene un subsistema válido.");
+
+                continue;
+            }
+
             // Resolve the service class based on subsystem slug
-            $serviceClass = match ($cuenta->subsystem->slug) {
-                'email' => \App\Services\Subsystems\EmailService::class,
-                'slack' => \App\Services\Subsystems\SlackService::class,
-                'samba' => \App\Services\Subsystems\SambaAdService::class,
-                'adagio' => \App\Services\Subsystems\AdagioService::class,
-                'entra_id' => \App\Services\Subsystems\EntraIdService::class,
-                'glpi' => \App\Services\Subsystems\GlpiService::class,
-                'chatwoot' => \App\Services\Subsystems\ChatwootService::class,
+            $serviceClass = match ($subsystem->slug) {
+                'email' => EmailService::class,
+                'slack' => SlackService::class,
+                'samba' => SambaAdService::class,
+                'adagio' => AdagioService::class,
+                'entra_id' => EntraIdService::class,
+                'glpi' => GlpiService::class,
+                'chatwoot' => ChatwootService::class,
                 default => null,
             };
 
             if (! $serviceClass) {
                 // Unknown subsystem – skip with a warning
-                $this->components->warn("Subsistema desconocido: {$cuenta->subsystem->slug}");
+                $this->components->warn("Subsistema desconocido: {$subsystem->slug}");
+
                 continue;
             }
 
-            /** @var \App\Services\Subsystems\BaseSubsystemService $service */
+            /** @var BaseSubsystemService $service */
             $service = app($serviceClass);
 
             try {
                 $resultado = $service->getUserStatus($cuenta);
-                $estadoRemoto = $resultado->status; // enum SubsystemUserStatus
+                if (! $resultado->success || $resultado->estado === null) {
+                    $this->components->warn("No se pudo determinar el estado remoto de la cuenta {$cuenta->id}.");
+
+                    continue;
+                }
+                $estadoRemoto = $resultado->estado;
             } catch (\Throwable $e) {
                 $this->components->error("Error al obtener estado de {$cuenta->id}: {$e->getMessage()}");
+
                 continue;
             }
 
             $estadoLocal = $cuenta->estado;
-            if ($estadoRemoto->value !== $estadoLocal->value) {
+            if ($estadoRemoto !== $estadoLocal->value) {
                 $discrepancias[] = [
                     'cuenta' => $cuenta,
                     'local' => $estadoLocal->value,
-                    'remoto' => $estadoRemoto->value,
+                    'remoto' => $estadoRemoto,
+                    'subsystem' => $subsystem->slug,
                 ];
 
                 if (! $dryRun) {
-                    \App\Models\AccountDiscrepancy::updateOrCreate(
+                    AccountDiscrepancy::updateOrCreate(
                         [
                             'user_subsystem_account_id' => $cuenta->id,
                             'subsystem_id' => $cuenta->subsystem_id,
                         ],
                         [
                             'estado_local' => $estadoLocal->value,
-                            'estado_remoto' => $estadoRemoto->value,
+                            'estado_remoto' => $estadoRemoto,
                             'detected_at' => now(),
                         ]
                     );
@@ -90,12 +118,12 @@ class AccountsReconcileCommand extends Command
         }
 
         $this->components->info("Se procesaron {$procesadas} cuentas.");
-        $this->components->info("Se detectaron " . count($discrepancias) . " discrepancias.");
+        $this->components->info('Se detectaron '.count($discrepancias).' discrepancias.');
 
         if (! $dryRun && count($discrepancias) > 0) {
             foreach ($discrepancias as $d) {
                 $this->components->twoColumnDetail(
-                    "Cuenta {$d['cuenta']->id} ({$d['cuenta']->subsystem->slug})",
+                    "Cuenta {$d['cuenta']->id} ({$d['subsystem']})",
                     "Local: {$d['local']} → Remoto: {$d['remoto']}"
                 );
             }
