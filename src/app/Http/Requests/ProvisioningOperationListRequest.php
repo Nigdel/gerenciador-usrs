@@ -29,18 +29,21 @@ class ProvisioningOperationListRequest extends FormRequest
     public function estado(): ?OperationStatus
     {
         $estado = $this->validated('estado');
+
         return is_string($estado) ? OperationStatus::tryFrom($estado) : null;
     }
 
     public function tipo(): ?OperationType
     {
         $tipo = $this->validated('tipo');
+
         return is_string($tipo) ? OperationType::tryFrom($tipo) : null;
     }
 
     public function usuario(): ?string
     {
         $q = $this->validated('usuario');
+
         return is_string($q) && $q !== '' ? $q : null;
     }
 

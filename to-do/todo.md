@@ -1,8 +1,8 @@
 # Gestor de usuarios — To-do actualizado
 
-Revisión: 2026-10-09 · Rama `main` · Base `ded66b5`.
+Revisión: 2026-10-09 · Rama `main`.
 
-**Pruebas:** 458 tests / 1341 aserciones pasan dentro de Docker. **Calidad/CI:** Pint falla en 11 archivos; Larastan reporta 4 errores; el último CI se detiene en Pint. Detalle en [análisis del estado actual](./analisis-estado-actual.md).
+**Pruebas:** 481 tests / 1398 aserciones pasan dentro de Docker. **Calidad/CI:** Pint, Larastan y la cobertura (81,1 %, umbral 80 %) pasan en verde. Detalle en [análisis del estado actual](./analisis-estado-actual.md).
 
 ## Estado por área
 
@@ -11,16 +11,16 @@ Revisión: 2026-10-09 · Rama `main` · Base `ded66b5`.
 | Fases 0–2: API, acceso, ciclo de vida | ✅ Implementadas |
 | Sprint 1: cola, persistencia, consulta, reintento, secretos | ✅ Implementado |
 | Sprint 2: errores, reset registrado, worker y configuración | ✅ Implementado |
-| Sprint 3: cobertura funcional y CI | 🟡 Suite pasa localmente; Pint/Larastan/CI no pasan |
+| Sprint 3: cobertura funcional y CI | ✅ Implementado |
 | Sprint 4: listados, filtros, validaciones, operaciones | ✅ Implementado |
 | Dashboard | 🟡 Básico |
-| Sprint 5: conciliación, idempotencia y auditoría | 🔴 Parcial: conciliación vacía, idempotencia desconectada, auditoría incompleta |
+| Sprint 5: conciliación, idempotencia y auditoría | 🟡 Parcial: conciliación implementada y probada; idempotencia con servicio pero desconectada de la API; auditoría incompleta |
 | Sprint 6: producción y secretos | 🔴 Parcial: Compose de producción no funciona con la imagen actual |
 
 ## Pendientes prioritarios
 
-- [ ] **Restablecer CI en verde.** Corregir los 11 problemas de Pint y los 4 errores de Larastan; después ejecutar el workflow completo y confirmar cobertura ≥80 %.
-- [ ] **Implementar conciliación real.** `accounts:reconcile` está programado, pero su `handle()` no contiene lógica. Añadir detección/resolución de discrepancias y tests.
+- [x] **Restablecer CI en verde.** Pint y Larastan sin errores; cobertura 81,1 %.
+- [x] **Implementar conciliación real.** `accounts:reconcile` compara el estado remoto con el guardado y registra la discrepancia. Tests incluidos.
 - [ ] **Conectar idempotencia a la API.** Los middlewares actuales no hacen nada y las rutas no los usan. Definir respuesta repetida y conflicto por payload distinto; cubrir duplicados/concurrencia con tests.
 - [ ] **Completar auditoría.** Registrar cambios administrativos, actor, IP y user-agent; probar que no se registran secretos.
 - [ ] **Rehacer y validar `docker-compose.prod.yml`.** Usar el Dockerfile y los paths reales del proyecto; probar build y arranque del stack.
@@ -44,4 +44,4 @@ Revisión: 2026-10-09 · Rama `main` · Base `ded66b5`.
 - [x] Operaciones asíncronas por cuenta, polling web/API, exclusión de operaciones simultáneas y reintento de filas fallidas.
 - [x] Poda de secretos de operaciones y cifrado de configuración de subsistemas.
 - [x] Tests de orquestación, API y drivers; búsqueda, paginación, filtros y validaciones de CPF.
-- [x] CI configurado en GitHub Actions (la configuración existe, pero hay que corregir los fallos señalados arriba).
+- [x] CI configurado en GitHub Actions y en verde (Pint, tests, cobertura y Larastan).

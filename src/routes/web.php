@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GestorUserController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProvisioningOperationController;
 use App\Http\Controllers\SubsystemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserSubsystemAccountController;
@@ -12,8 +14,7 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->middleware('verified')->name('dashboard');
-
+    Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('verified')->name('dashboard');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -87,7 +88,7 @@ Route::middleware('auth')->group(function () {
         ->name('subsystems.accounts.action');
 
     Route::resource('subsystems', SubsystemController::class);
-    Route::resource('operaciones', \App\Http\Controllers\ProvisioningOperationController::class)->only(['index', 'show']);
+    Route::resource('operaciones', ProvisioningOperationController::class)->only(['index', 'show']);
 
 });
 

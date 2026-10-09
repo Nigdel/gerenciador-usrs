@@ -105,12 +105,12 @@ class AccountsReconcileCommand extends Command
                     AccountDiscrepancy::updateOrCreate(
                         [
                             'user_subsystem_account_id' => $cuenta->id,
-                            'subsystem_id' => $cuenta->subsystem_id,
                         ],
                         [
+                            'subsystem' => $subsystem->slug,
                             'estado_local' => $estadoLocal->value,
-                            'estado_remoto' => $estadoRemoto,
-                            'detected_at' => now(),
+                            'remote_estado' => $estadoRemoto,
+                            'detectada_at' => now(),
                         ]
                     );
                 }

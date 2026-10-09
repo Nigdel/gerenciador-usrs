@@ -19,10 +19,11 @@ class SecretService
      */
     public function getAppKey(): string
     {
-        $key = env('APP_KEY');
+        $key = config('app.key');
         if (empty($key)) {
             throw new RuntimeException('APP_KEY is not set. Provide it via Docker secret or env var.');
         }
+
         return $key;
     }
 
@@ -31,10 +32,11 @@ class SecretService
      */
     public function getMysqlRootPassword(): string
     {
-        $pwd = env('MYSQL_ROOT_PASSWORD');
+        $pwd = config('database.connections.mysql.password');
         if (empty($pwd)) {
-            throw new RuntimeException('MYSQL_ROOT_PASSWORD is not set.');
+            throw new RuntimeException('DB_PASSWORD is not set.');
         }
+
         return $pwd;
     }
 
@@ -43,10 +45,11 @@ class SecretService
      */
     public function getMysqlUserPassword(): string
     {
-        $pwd = env('MYSQL_PASSWORD');
+        $pwd = config('database.connections.mysql.password');
         if (empty($pwd)) {
-            throw new RuntimeException('MYSQL_PASSWORD is not set.');
+            throw new RuntimeException('DB_PASSWORD is not set.');
         }
+
         return $pwd;
     }
 }

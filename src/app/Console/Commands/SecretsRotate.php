@@ -26,6 +26,7 @@ class SecretsRotate extends Command
 
         if ($key !== 'app') {
             $this->error('Only the Laravel APP_KEY rotation is supported at this time.');
+
             return 1;
         }
 

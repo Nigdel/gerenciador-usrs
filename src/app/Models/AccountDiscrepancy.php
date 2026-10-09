@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OperationAccountStatus;
+use App\Enums\SubsystemAccountStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ class AccountDiscrepancy extends Model
         'user_subsystem_account_id',
         'subsystem',
         'local_estado',
+        'estado_local',
         'remote_estado',
         'detectada_at',
         'resuelta_at',
@@ -29,6 +31,7 @@ class AccountDiscrepancy extends Model
         'detectada_at' => 'datetime',
         'resuelta_at' => 'datetime',
         'local_estado' => OperationAccountStatus::class,
+        'estado_local' => SubsystemAccountStatus::class,
         'resolucion' => 'string',
     ];
 

@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Auth\Events\Failed;
 use App\Listeners\LogFailedLogin;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Support\ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
 {

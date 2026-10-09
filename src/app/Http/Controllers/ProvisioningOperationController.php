@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProvisioningOperationListRequest;
 use App\Models\ProvisioningOperation;
-use App\Models\GestorUser;
 use Illuminate\View\View;
 
 class ProvisioningOperationController extends Controller
@@ -15,17 +14,17 @@ class ProvisioningOperationController extends Controller
 
         $query = ProvisioningOperation::query()
             ->with(['usuario', 'actor'])
-            ->when($request->estado(), fn($q, $estado) => $q->where('estado', $estado))
-            ->when($request->tipo(), fn($q, $tipo) => $q->where('tipo', $tipo))
+            ->when($request->estado(), fn ($q, $estado) => $q->where('estado', $estado))
+            ->when($request->tipo(), fn ($q, $tipo) => $q->where('tipo', $tipo))
             ->when($request->usuario(), function ($q, $userQuery) {
                 $q->whereHas('usuario', function ($u) use ($userQuery) {
                     $u->where('nombre_completo', 'like', "%{$userQuery}%")
-                      ->orWhere('cpf', 'like', "%{$userQuery}%")
-                      ->orWhere('usuario', 'like', "%{$userQuery}%");
+                        ->orWhere('cpf', 'like', "%{$userQuery}%")
+                        ->orWhere('usuario', 'like', "%{$userQuery}%");
                 });
             })
-            ->when($request->fechaInicio(), fn($q, $start) => $q->whereDate('iniciada_at', '>=', $start))
-            ->when($request->fechaFim(), fn($q, $end) => $q->whereDate('iniciada_at', '<=', $end))
+            ->when($request->fechaInicio(), fn ($q, $start) => $q->whereDate('iniciada_at', '>=', $start))
+            ->when($request->fechaFim(), fn ($q, $end) => $q->whereDate('iniciada_at', '<=', $end))
             ->orderBy('iniciada_at', 'desc')
             ->paginate(25)
             ->withQueryString();
@@ -36,12 +35,15 @@ class ProvisioningOperationController extends Controller
         ]);
     }
 
-    public function show(ProvisioningOperation $provisioningOperation): View
+    public function show(ProvisioningOperation $operacione): View
     {
-        $this->authorize('view', $provisioningOperation);
+        // Route::resource nombra el parámetro «operacione» (de «operaciones»),
+        // no «provisioning_operation». La resolución implícita empareja por
+        // nombre, así que sin esto el modelo llegaba vacío a la vista.
+        $this->authorize('view', $operacione);
 
         return view('operaciones.show', [
-            'operacion' => $provisioningOperation->load(['usuario', 'actor', 'cuentas']),
+            'operacion' => $operacione->load(['usuario', 'actor', 'cuentas']),
         ]);
     }
 }

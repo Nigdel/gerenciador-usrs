@@ -2,8 +2,8 @@
 
 namespace App\Listeners;
 
-use Illuminate\Auth\Events\Failed;
 use App\Services\AuditService;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Http\Request;
 
 class LogFailedLogin

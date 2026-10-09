@@ -16,9 +16,9 @@ class AuditService
         $request ??= request();
 
         AuditLog::create([
-            'user_id'    => Auth::id(),
-            'action'     => $action,
-            'payload'    => $payload,
+            'user_id' => Auth::id(),
+            'action' => $action,
+            'payload' => $payload,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'performed_at' => now(),
