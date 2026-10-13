@@ -1,0 +1,49 @@
+; Ajustes de PHP para producción.
+;
+; Cada línea lleva el porqué de su valor: un php.ini en un repositorio es de los
+; ficheros que más se tocan sin entender y más se rompen sin querer.
+
+[PHP]
+; Que los errores vayan a stdout y no al log propio de PHP: así el orquestador
+; los ve junto al resto de la salida del contenedor. display_errors va apagado
+; en producción, siempre: un error que se le enseña al visitante enseña rutas,
+; nombres de columna y a veces fragmentos de consulta.
+display_errors = Off
+display_startup_errors = Off
+log_errors = On
+error_log = /proc/self/fd/2
+error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT
+
+; Sube desde los 128M de la imagen porque las reconciliaciones cargan
+; colecciones enteras en memoria. post_max_size y upload_max_filesize se dejan
+; como vienen: no hay ningún flujo de subida que los pida.
+memory_limit = 512M
+max_execution_time = 120
+
+[opcache]
+; Sin esto PHP relee y recompila todos los ficheros en cada petición, que en un
+; despliegue real es buena parte del tiempo de respuesta.
+opcache.enable = 1
+opcache.enable_cli = 0
+opcache.memory_consumption = 192
+opcache.interned_strings_buffer = 16
+opcache.max_accelerated_files = 20000
+
+; validate_timestamps=0 porque la imagen es inmutable: no hay nada que cambiar en
+; caliente, y comprobar la fecha de cada fichero en cada petición es un trabajo
+; que aquí no aporta nada. OJO a la consecuencia: si alguien monta un volumen sobre
+; /var/www en un despliegue, sus cambios se ignorarían sin ningún aviso. Por eso
+; va con un comentario y no como un valor más.
+opcache.validate_timestamps = 0
+
+[Session]
+; Las sesiones ya viven en base de datos (SESSION_DRIVER=database). Estos tres
+; valores sí importan: http_only evita que un XSS se lleve la cookie, y secure y
+; samesite la mantienen fuera de peticiones de terceros y de enlaces externos.
+; secure=1 exige que la petición llegue por HTTPS, que es justo lo que hay detrás
+; del proxy; con HTTP plano el navegador rechazaría la cookie y nadie podría
+; iniciar sesión, así que el proxy tiene que reescribir
+; X-Forwarded-Proto.
+session.cookie_httponly = 1
+session.cookie_secure = 1
+session.cookie_samesite = Lax

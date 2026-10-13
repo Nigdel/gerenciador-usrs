@@ -3,6 +3,7 @@
 namespace tests\Feature;
 
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -14,6 +15,11 @@ class UserTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // La suite de tests no gestiona la cookie XSRF-TOKEN, así que el
+        // middleware CSRF fallaría en todos los POST web. Se deshabilita
+        // solo ese middleware; el resto del stack web (ShareErrorsFromSession,
+        // autenticación, etc.) sigue activo para que las vistas reciban $errors.
+        $this->withoutMiddleware(PreventRequestForgery::class);
         $user = User::factory()->create();
         $user->email_verified_at = now();
         $user->save();

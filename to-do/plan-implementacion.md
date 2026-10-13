@@ -410,9 +410,42 @@ Construir un perfil de producción funcional a partir de la imagen y rutas reale
 publicado, credenciales externas, healthchecks, `APP_DEBUG=false`, scheduler/worker supervisados y HTTPS
 delante (proxy).
 
-**Estado:** 🔴 El archivo actual no sirve como despliegue: referencia `Dockerfile` en la raíz (no existe en
-el repositorio) y publica el contenedor PHP-FPM en un puerto HTTP. No integra correctamente Nginx con los
-paths de `src/`; hay que corregirlo y probar el build/arranque antes de considerarlo hecho.
+**Estado:** 🟢 Hecho y probado. El perfil se reconstruyó sobre `docker/php/Dockerfile.prod` (tres stages:
+assets de Vite, `php` con PHP-FPM, y `web` con nginx y el `public/` que ve php-fpm), con
+`docker/nginx/prod.conf`, `docker/php/php.ini.prod` y `docker/php/entrypoint.sh` nuevos. Servicios `app`
+(sin puertos publicados), `nginx` (único puerto del stack), `scheduler`, `queue` y `mysql` (sin puerto).
+Healthchecks reales en `app` (con `db:show`, porque php-fpm no habla HTTP), `nginx` y `mysql`;
+`APP_DEBUG=false` explícito; credenciales por `env_file` sin valores por defecto (el arranque falla si
+faltan). Los cachés de Laravel se generan en el entrypoint, no en el build, porque `config:cache` congelaría
+el `APP_KEY` y las contraseñas de despliegue dentro de la imagen. HTTPS queda para el proxy de delante
+(nginx confía en `X-Forwarded-Proto`); sin proxy hay que poner `session.cookie_secure=0` o no se puede
+iniciar sesión.
+
+Verificado: build completo de los dos stages, arranque de los cinco servicios (los tres con healthcheck en
+`healthy`), 24 migraciones aplicadas sin pendientes, `/` y `/login` a 200 por nginx→php-fpm, la API
+respondiendo JSON (405 en GET, que es la ruta llegando a Laravel), CSS y JS de Vite servidos desde
+`/build/`, las 5 tareas programadas registradas, worker y scheduler sin excepción, persistencia de datos
+tras `down`/`up`, y MySQL sin puerto publicado mientras nginx sí lo tiene.
+
+Pendiente de 6.3: sigue sin desplegarse un proxy HTTPS real ni probarse contra los subsistemas reales de
+Klios — la validación es de arranque local.
+
+**Dos cosas que hubo que arreglar y que conviene no deshacer:**
+
+1. **`.dockerignore` (nuevo, en la raíz).** No existía, así que la imagen se construía con todo el árbol de
+   trabajo. `src/vendor` del host se copiaba encima de las dependencias instaladas con `--no-dev`, dejando
+   las de desarrollo (laravel/boost) dentro de la imagen de producción y rompiendo `package:discover`; y
+   `src/.env` y el `.env` de la raíz —con `APP_KEY` y credenciales— quedaban dentro de la imagen,
+   recuperables con `docker history` o `docker save`.
+2. **Nombre de proyecto e imágenes propios** (`name: gerenciador-usrs-prod`, `gerenciador-usrs-prod-*`).
+   Compose deduce el nombre del proyecto del directorio, así que sin esto los dos perfiles se pisan y el
+   `up` de producción recrea los contenedores de desarrollo con la imagen de producción, que no lleva
+   PHPUnit.
+
+**Aviso conocido:** el de producción escribe los cachés de Laravel en `src/bootstrap/cache/` porque ambos
+stacks comparten el árbol de código por volumen. Ese `config.php` tiene prioridad sobre `phpunit.xml`, así
+que después de levantar producción hay que ejecutar `docker compose exec app php artisan optimize:clear`
+antes de lanzar los tests de desarrollo; si no, el suite usa MySQL y falla con errores de migración y 419.
 
 ### 6.4 Secretos (S)
 Sin valores por defecto; rotación compatible con los datos cifrados. **Aviso:** rotar `APP_KEY` invalida todo

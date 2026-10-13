@@ -15,7 +15,7 @@ Revisión: 2026-10-09 · Rama `main`.
 | Sprint 4: listados, filtros, validaciones, operaciones | ✅ Implementado |
 | Dashboard | 🟡 Básico |
 | Sprint 5: conciliación, idempotencia y auditoría | ✅ Conciliación, idempotencia y auditoría implementadas, conectadas a la API y probadas |
-| Sprint 6: producción y secretos | 🔴 Parcial: Compose de producción no funciona con la imagen actual |
+| Sprint 6: producción y secretos | 🟡 Perfil de producción funcionando; faltan rotación de secretos y backups |
 
 ## Pendientes prioritarios
 
@@ -23,7 +23,7 @@ Revisión: 2026-10-09 · Rama `main`.
 - [x] **Implementar conciliación real.** `accounts:reconcile` compara el estado remoto con el guardado y registra la discrepancia. Tests incluidos.
 - [x] **Conectar idempotencia a la API.** Los middlewares actuales no hacen nada y las rutas no los usan. Definir respuesta repetida y conflicto por payload distinto; cubrir duplicados/concurrencia con tests.
 - [x] **Completar auditoría.** Registrar cambios administrativos, actor, IP y user-agent; probar que no se registran secretos.
-- [ ] **Rehacer y validar `docker-compose.prod.yml`.** Usar el Dockerfile y los paths reales del proyecto; probar build y arranque del stack.
+- [x] **Rehacer y validar `docker-compose.prod.yml`.** Usar el Dockerfile y los paths reales del proyecto; probar build y arranque del stack.
 - [ ] **Asegurar rotación de `APP_KEY`.** No perder `api_config` ni payloads cifrados; usar configuración en lugar de `env()` directo y mover `SecretsRotateTest` a `src/tests`.
 - [ ] **Añadir backups y una restauración comprobada.**
 - [ ] **Añadir notificaciones** de credenciales y cambios de estado con transporte real en producción.

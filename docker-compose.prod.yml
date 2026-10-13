@@ -1,56 +1,211 @@
-version: '3.8'
+# Perfil de producción.
+#
+# No es el de desarrollo con otras variables: aquí la imagen se construye con
+# el código dentro (no hay volúmenes de código), el worker y el scheduler se
+# supervisan, y MySQL no se publica. La diferencia está explicada al pie de cada
+# bloque, porque un compose de producción que no explica por qué algo está como
+# está acaba copiado tal cual al siguiente entorno.
+#
+# Uso:
+#   cp .env.example .env   y rellena APP_KEY y las contraseñas
+#   docker compose -f docker-compose.prod.yml up --build -d
+#   docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+#
+# `name:` no es cosmético. Compose deduce el nombre del proyecto del directorio
+# en el que está el fichero, así que sin esto los dos perfiles —desarrollo y
+# producción— comparten proyecto y se pisan: al levantar el de producción se
+# recrean los contenedores del otro con la imagen de producción, y el stack de
+# desarrollo desaparece sin avisar. Con el nombre propio, conviven.
+name: gerenciador-usrs-prod
+
+x-app: &app
+  build:
+    # La raíz del repositorio, y no docker/php/: el Dockerfile copia src/ y
+    # docker/, así que necesita los dos árboles.
+    context: .
+    dockerfile: docker/php/Dockerfile.prod
+    # El stage se indica explícitamente en los dos servicios. El último stage
+    # del Dockerfile es el `web` de nginx, y sin `target:` compose construiría
+    # esa imagen para app: el contenedor arrancaría con nginx en lugar de
+    # php-fpm, sin PHP dentro y sin poder ejecutar ni una migración.
+    target: php
+  # Etiqueta propia, y no `gerenciador-usrs-app:latest`: esa es la que construye
+  # docker-compose.yml para el stack de desarrollo, y compartir el nombre haría
+  # que un `up --build` de producción reemplazara la imagen que el otro stack
+  # tiene en marcha —un contenedor de desarrollo con PHP de producción y sin
+  # PHPUnit, que es justo lo que se vio al probar esto.
+  image: gerenciador-usrs-prod-app:latest
+  restart: unless-stopped
+  # El DC de Klios, igual que en docker-compose.yml. Sin esta línea los drivers
+  # de LDAP no resolverían dc1.klios.br y el alta fallaría al autenticar contra
+  # Samba; el error que sale es de resolución de nombre, no de credenciales, y
+  # por eso cuesta bastante diagnosticar.
+  extra_hosts:
+    - "dc1.klios.br:10.1.2.2"
+  env_file:
+    - .env
+  environment:
+    APP_ENV: production
+    # APP_DEBUG va explícito en false. Aunque .env lo traiga, un valor
+    # olvidado en el despliegue expondría trazas de pila y variables a cualquiera
+    # que adivine una URL.
+    APP_DEBUG: "false"
+    # Mismo puerto que el que publica nginx, y no un 8085 fijo: si se cambia
+    # APP_PORT, los enlaces absolutos que genera Laravel (redirecciones, URLs de
+    # las vistas) tienen que apuntar al puerto que de verdad está abierto, o la
+    # web responde en un sitio y manda al usuario a otro.
+    APP_URL: ${APP_URL:-http://localhost:${APP_PORT:-8085}}
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    DB_CONNECTION: mysql
+    DB_HOST: mysql
+    DB_PORT: "3306"
+    DB_DATABASE: ${MYSQL_DATABASE:-gerenciador}
+    DB_USERNAME: ${MYSQL_USER:-gerenciador}
+    # Sin valor por defecto a propósito: si falta, la aplicación no arranca, y
+    # es mejor eso que arrancar contra una base de datos cualquiera.
+    DB_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD en .env}
+    CACHE_STORE: database
+    SESSION_DRIVER: database
+    QUEUE_CONNECTION: database
+    # Las vistas compiladas a /tmp porque el contenedor corre como root y
+    # php-fpm como www-data; escribirlas en storage/ obligaría a hacerlas
+    # escribibles por www-data y el arranque se volvería una carrera.
+    VIEW_COMPILED_PATH: /tmp/laravel-views
+  depends_on:
+    mysql:
+      condition: service_healthy
+  # Todos los servicios declaran la red a propósito. Un servicio que se la deja
+  # entra en la red `default`, y los que sí la declaran entran en la suya: dos
+  # redes distintas, sin resolución de nombres entre ellas. El síntoma es que
+  # MySQL está healthy y el app sigue sin encontrarlo por DNS (`getaddrinfo for
+  # mysql failed`), que parece un problema de credenciales y no lo es.
+  networks:
+    - gerenciador-usrs
+  # La salud no es "el contenedor está vivo" sino "la aplicación arranca y
+  # encuentra la base de datos". Se mide con artisan y no con una petición HTTP
+  # porque este contenedor no habla HTTP: es php-fpm, y el puerto 9000 es
+  # FastCGI, así que un curl contra él no devolvería nada ni con todo en su sitio.
+  # `db:show` es la prueba de que cargan la configuración cacheada y las
+  # credenciales, que es justo lo que puede fallar en un despliegue nuevo.
+  healthcheck:
+    test: ["CMD-SHELL", "php artisan db:show --json > /dev/null 2>&1"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 40s
 
 services:
   app:
+    <<: *app
+    # Sin puertos: php-fpm habla FastCGI, no HTTP, y nginx es quien publica el
+    # único puerto del stack. Publicar 9000 además expondría el intérprete.
+    expose:
+      - "9000"
+
+  # Ejecuta las tareas programadas: conciliación diaria de cuentas, purga de
+  # claves de idempotencia caducadas y caducidad de operaciones atascadas.
+  #
+  # Sin este servicio la web aceptaría altas y suspendisiones que nunca se
+  # ejecutan, sin ningún error visible: el fallo se descubre cuando alguien
+  # pregunta por una conciliación que nunca se hizo.
+  scheduler:
+    <<: *app
+    command: php artisan schedule:work
+    # schedule:work corre en primer plano, que es lo que quiere un contenedor
+    # supervisado: si el proceso muere, la política de reinicio lo levanta.
+    # schedule:run es para cron, y aquí no hay cron.
+    healthcheck:
+      disable: true
+
+  # Worker de la cola: es quien ejecuta el alta, suspensión, baja, reactivación
+  # y sincronización contra los subsistemas.
+  #
+  # --queue=subsistemas primero porque ahí va el trabajo lento con llamadas
+  # salientes, y 'default' detrás para que nada nuevo quede sin procesar.
+  queue:
+    <<: *app
+    command: php artisan queue:work --queue=subsistemas,default --tries=3
+    # Sin `pgrep` porque la imagen php:-fpm no lo trae (viene de procps, que no
+    # está en la imagen oficial): un healthcheck con una utilidad ausente
+    # devuelve «command not found», que para Docker cuenta como fallo y
+    # reiniciaría el worker en bucle. La alternativa sería leerse /proc, que no
+    # vale más. Lo que cubre la salud del worker es el de app.
+    healthcheck:
+      disable: true
+
+  # Único puerto publicado del stack.
+  nginx:
+    # Stage `web` del mismo Dockerfile, no nginx:alpine. En producción el código
+    # va compilado dentro de la imagen y no hay volúmenes, así que un nginx
+    # independiente no tendría nada que servir en /var/www/public y respondería
+    # 404 a todo. El stage lleva una copia de public/, la misma que ve php-fpm.
+    image: gerenciador-usrs-prod-web:latest
     build:
       context: .
-      dockerfile: Dockerfile
-    image: gerenciador-usrs-app:latest
+      dockerfile: docker/php/Dockerfile.prod
+      target: web
     restart: unless-stopped
-    environment:
-      - APP_ENV=production
-      - APP_DEBUG=false
-      - LOG_CHANNEL=stderr
     ports:
-      - '8085:80'
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    volumes:
-      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./public:/var/www/html:ro
-    ports:
-      - '80:80'
+      # Sin HTTPS aquí a propósito: el TLS lo termina el proxy que hay delante,
+      # y nginx solo confía en X-Forwarded-Proto (ver prod.conf). Publicar 443
+      # con certificados en el repositorio sería guardar la clave privada en el
+      # sitio donde se roba.
+      - "${APP_PORT:-8085}:80"
+    # Sin volumen para prod.conf: ya va dentro de la imagen, y montarlo además
+    # dejaría dos sitios donde cambiar la configuración, de los que solo uno se
+    # usa al desplegar.
     depends_on:
       app:
         condition: service_healthy
+    networks:
+      - gerenciador-usrs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost"]
+      # 127.0.0.1 y no localhost: en la imagen de nginx, localhost resuelve a
+      # ::1 antes que a 127.0.0.1 y wget no prueba la siguiente dirección cuando
+      # la primera rechaza, así que el chequeo fallaría con nginx perfectamente
+      # sano.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     restart: unless-stopped
+    # Sin `command:`. El `--default-authentication-plugin=mysql_native_password`
+    # que estaba puesto antes ya no existe en MySQL 8.4: el servidor aborta con
+    # `unknown variable` y el contenedor no arranca nunca. 8.4 usa
+    # `caching_sha2_password`, que es lo que quiere el driver de PHP.
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Falta MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-gerenciador}
+      MYSQL_USER: ${MYSQL_USER:-gerenciador}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Falta MYSQL_PASSWORD en .env}
     volumes:
+      # Volumen nombrado, no un bind mount del host: es el único sitio donde
+      # vive todo (datos, cola, caché y sesiones), y con un bind mount una
+      # limpieza automática de ficheros acabaría con la base de producción.
       - db_data:/var/lib/mysql
+    networks:
+      - gerenciador-usrs
+    # Sin `ports`. Publicar 3306 en el despliegue de producción dejaría la base
+    # accesible desde fuera; app habla con ella por la red interna.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  gerenciador-usrs:
+    driver: bridge
 
 volumes:
+  # Solo la base de datos. No hay volumen para storage/: la aplicación no sube
+  # ni guarda ficheros en disco —todo (usuarios, cola, caché y sesiones) está
+  # en MySQL—, así que un volumen para eso sería un sitio vacío que además
+  # sugiere que hay algo que respaldar cuando no lo hay. Si algún día se
+  # importan ficheros, es aquí donde hay que añadirlo.
   db_data:

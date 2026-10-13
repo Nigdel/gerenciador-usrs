@@ -1,1 +1,9 @@
 security_reports/
+
+# Credenciales del despliegue. El .env de la RAÍZ es el del perfil de producción
+# (docker-compose.prod.yml) y contiene APP_KEY y contraseñas de MySQL; el
+# src/.gitignore ya cubría el de la aplicación, pero este no estaba ignorado en
+# ninguna parte, así que un `git add .` en la raíz lo subía.
+.env
+.env.*
+!.env.example

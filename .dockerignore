@@ -1,0 +1,73 @@
+# Contexto de build de la imagen de producción.
+#
+# El contexto es la raíz del repositorio, así que sin este fichero Docker copia
+# TODO lo que hay en el árbol de trabajo, y eso rompe el build por dos motivos
+# que ya costaron una sesión entera:
+#
+# 1. `src/vendor` se copia ENCIMA de las dependencias que instaló
+#    `composer install --no-dev`. El vendor del host tiene las dependencias de
+#    desarrollo (laravel/boost, pint, phpunit…), así que la imagen "de
+#    producción" acaba con ellas dentro y `package:discover` aborta al no
+#    encontrar la clase del provider que el manifiesto de bootstrap espera.
+#
+# 2. `src/.env` —con APP_KEY y credenciales de los subsistemas— y el `.env` de
+#    la raíz van dentro de la imagen. Se quedarían ahí para siempre, visibles
+#    con `docker history` o con un `docker save`.
+#
+# Regla general: en la imagen entra solo lo que el Dockerfile copia
+# explícitamente.
+
+# Credenciales. Los dos .env: el de la aplicación (src/) y el del despliegue
+# (raíz). .env.example sí se deja, es la plantilla y no tiene secretos.
+.env
+.env.*
+src/.env
+src/.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencias instaladas en el host. La imagen las instala ella misma, con sus
+# propias extensiones compiladas; copiar estas además rompe --no-dev (ver 1).
+src/vendor/
+src/node_modules/
+vendor/
+node_modules/
+
+# Artefactos de build y de framework. Nada de esto debe viajar a producción:
+# public/build lo compila el stage de assets del Dockerfile, y los ficheros de
+# caché de Laravel se regeneran en el arranque (config:cache con el entorno
+# real, no con el del build).
+src/public/build/
+src/public/hot
+src/storage/framework/cache/
+src/storage/framework/sessions/
+src/storage/framework/views/
+src/storage/logs/
+src/bootstrap/cache/*.php
+src/node_modules/.vite/
+
+# Metadatos de Git y de las herramientas: no los usa el build y multiplican el
+# contexto. En un despliegue shallow (sin .git) se puede quitar esta sección si
+# el constructor necesita los metadatos.
+.git/
+.gitignore
+.github/
+.dockerignore
+docker-compose*.yml
+README.md
+CLAUDE.md
+AGENTS.md
+to-do/
+security_reports/
+
+# Editores y sistema operativo
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Documentación y pruebas que no se empaquetan
+src/tests/
+src/phpunit.xml

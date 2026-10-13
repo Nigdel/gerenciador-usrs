@@ -42,6 +42,65 @@ docker compose exec app php artisan queue:failed     # jobs fallidos
 Ningún comando PHP o Composer se ejecuta desde el host: siempre a través de
 `docker compose exec`.
 
+## Despliegue
+
+El perfil de producción es [`docker-compose.prod.yml`](docker-compose.prod.yml),
+con `docker/php/Dockerfile.prod`, `docker/nginx/prod.conf`, `docker/php/php.ini.prod`
+y `docker/php/entrypoint.sh`. No es el de desarrollo con otras variables: el
+código va compilado dentro de la imagen (no hay volúmenes), el worker y el
+scheduler están supervisados, y MySQL no se publica.
+
+```bash
+cp .env.example .env
+docker compose exec app php artisan key:generate --show   # copiar a APP_KEY
+$EDITOR .env                                            # rellenar contraseñas
+docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+```
+
+La aplicación queda en `http://localhost:8085` (o en el `APP_PORT` que se haya
+puesto en `.env`).
+
+**Aviso al alternar entre los dos stacks:** levantar el de producción deja
+cachés de Laravel (`config:cache`, `route:cache`) en `src/bootstrap/cache/`,
+porque el volumen del código es el mismo árbol que monta el de desarrollo. Ese
+`config.php` cacheado tiene prioridad sobre el `phpunit.xml`, así que el
+testsuite pasa a usar MySQL y `session=database` en vez de SQLite en memoria, y
+falla con errores de migración y 419 (CSRF) que no tienen nada que ver con los
+tests. Si pasa, hay que limpiarlos desde el stack de desarrollo:
+
+```bash
+docker compose exec app php artisan optimize:clear
+```
+
+Los dos perfiles pueden levantarse a la vez: el de producción usa su propio
+nombre de proyecto (`gerenciador-usrs-prod`) y sus propias imágenes
+(`gerenciador-usrs-prod-app`, `gerenciador-usrs-prod-web`). Si coincidieran, un
+`up` del stack de producción recrearía los contenedores del de desarrollo con la
+imagen de producción —que no lleva PHPUnit ni las dependencias de desarrollo—
+y el otro stack se quedaría inservible sin ningún aviso.
+
+**Sobre el HTTPS:** el stack publica HTTP y el TLS lo termina un proxy externo,
+que debe reenviar `X-Forwarded-Proto`. Si se despliega sin proxy, hay que poner
+`session.cookie_secure=0` en `docker/php/php.ini.prod`; con la cookie marcada
+como segura sobre una URL `http://` el navegador la rechaza y nadie puede
+iniciar sesión.
+
+**Al rotar `APP_KEY`:** todo lo cifrado con la clave anterior queda ilegible —los
+`api_config` de los subsistemas y los payloads de las operaciones pendientes—,
+y no hay recifrado automático. Ver la tarea 6.4 de
+[plan-implementacion.md](to-do/plan-implementacion.md).
+
+Comandos del stack:
+
+```bash
+docker compose -f docker-compose.prod.yml ps                # estado y salud
+docker compose -f docker-compose.prod.yml logs -f app nginx
+docker compose -f docker-compose.prod.yml exec app php artisan schedule:list
+docker compose -f docker-compose.prod.yml down               # parar (conserva datos)
+docker compose -f docker-compose.prod.yml down -v            # parar y BORRAR la base
+```
+
 ## Planificación
 
 El estado, la lista priorizada de pendientes y el plan de implementación están
