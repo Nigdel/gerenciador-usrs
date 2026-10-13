@@ -91,6 +91,21 @@ iniciar sesión.
 y no hay recifrado automático. Ver la tarea 6.4 de
 [plan-implementacion.md](to-do/plan-implementacion.md).
 
+## Operación y Backups
+
+El sistema realiza volcados cifrados de la base de datos diariamente vía scheduler.
+
+### Restauración de datos
+Para restaurar la base de datos desde un archivo cifrado:
+1. Colocar el archivo `.enc` en `storage/app/backups/` (dentro del contenedor).
+2. Ejecutar el comando de restauración:
+   ```bash
+   docker compose exec app php artisan db:restore storage/app/backups/nombre_del_archivo.sql.enc
+   ```
+3. Confirmar la acción cuando el sistema advierta que se sobrescribirá la base de datos actual.
+
+*Nota: Requiere que `DB_BACKUP_PASSWORD` esté configurada en el `.env`.*
+
 Comandos del stack:
 
 ```bash

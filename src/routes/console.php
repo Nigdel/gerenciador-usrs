@@ -46,6 +46,15 @@ Schedule::command('operations:prune-secrets')
     ->onOneServer();
 
 /*
+ * Backup de base de datos (Sprint 6.5)
+ * Realiza un volcado cifrado de MySQL diariamente.
+ */
+Schedule::command('db:backup')
+    ->daily()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+/*
  * Reconciliación de cuentas (Sprint 5.1)
  * Ejecuta diariamente la verificación y creación de discrepancias.
  */
