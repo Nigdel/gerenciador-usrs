@@ -38,5 +38,12 @@
         <symbol id="icon-sync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 4v5h.6M20 20v-5h-.6M4.6 15a7.5 7.5 0 0 0 12.3 2.2L20 14M4 10l3.1-3.2A7.5 7.5 0 0 1 19.4 9"/>
         </symbol>
+
+        {{-- Flecha izquierda (volver) --}}
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5"/>
+            <path d="m12 19-7-7 7-7"/>
+        </symbol>
+
     </defs>
 </svg>
