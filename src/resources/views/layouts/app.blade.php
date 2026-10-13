@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        <title>@hasSection('title')@yield('title') · @endif{{ config('app.name', 'Laravel') }}</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -15,6 +15,9 @@
         @vite(['resources/css/app.css'])
     </head>
     <body class="font-sans antialiased">
+        <!-- SVG sprite (iconos reutilizables: #icon-eye, #icon-edit, #icon-trash) -->
+        @include('layouts.icons')
+
         <!-- Toast notifications container -->
         <div id="toast-container" class="toast-container fixed top-4 right-4 z-50"></div>
 
