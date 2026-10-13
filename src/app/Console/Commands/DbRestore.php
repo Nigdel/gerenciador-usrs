@@ -30,21 +30,24 @@ class DbRestore extends Command
     {
         $encryptedPath = $this->argument('file');
 
-        if (!File::exists($encryptedPath)) {
+        if (! File::exists($encryptedPath)) {
             $this->error("Backup file not found: {$encryptedPath}");
+
             return Command::FAILURE;
         }
 
         if ($this->option('dry-run')) {
             $this->info('Dry run enabled. No restoration will be performed.');
             $this->info('Action: openssl enc -d -aes-256-cbc');
-            $this->info('Action: mysql ' . Config::get('database.connections.mysql.database'));
+            $this->info('Action: mysql '.Config::get('database.connections.mysql.database'));
+
             return Command::SUCCESS;
         }
 
         // Safeguard: Confirmation prompt
-        if (!$this->confirm('WARNING: This will overwrite the current database. Are you sure you want to proceed?', false)) {
+        if (! $this->confirm('WARNING: This will overwrite the current database. Are you sure you want to proceed?', false)) {
             $this->info('Restoration cancelled.');
+
             return Command::SUCCESS;
         }
 
@@ -52,14 +55,15 @@ class DbRestore extends Command
         $username = Config::get('database.connections.mysql.username');
         $password = Config::get('database.connections.mysql.password');
         $host = Config::get('database.connections.mysql.host', '127.0.0.1');
-        $backupPassword = env('DB_BACKUP_PASSWORD');
+        $backupPassword = Config::get('database.backup_password');
 
-        if (!$backupPassword) {
+        if (! $backupPassword) {
             $this->error('DB_BACKUP_PASSWORD is not defined in the .env file.');
+
             return Command::FAILURE;
         }
 
-        $tempDecryptedPath = storage_path("app/temp_restore_" . uniqid() . ".sql");
+        $tempDecryptedPath = storage_path('app/temp_restore_'.uniqid().'.sql');
 
         $this->info('Decrypting backup file...');
 
@@ -73,12 +77,13 @@ class DbRestore extends Command
             '-pbkdf2',
             '-in', $encryptedPath,
             '-out', $tempDecryptedPath,
-            '-pass', "pass:{$backupPassword}"
+            '-pass', "pass:{$backupPassword}",
         ]);
         $decryptProcess->run();
 
-        if (!$decryptProcess->isSuccessful()) {
-            $this->error('Decryption failed: ' . $decryptProcess->getErrorOutput());
+        if (! $decryptProcess->isSuccessful()) {
+            $this->error('Decryption failed: '.$decryptProcess->getErrorOutput());
+
             return Command::FAILURE;
         }
 
@@ -91,16 +96,17 @@ class DbRestore extends Command
             '-h', $host,
             '-u', $username,
             "-p{$password}",
-            $database
+            $database,
         ]);
         $importProcess->setInput(File::get($tempDecryptedPath));
         $importProcess->run();
 
-        if (!$importProcess->isSuccessful()) {
-            $this->error('Database import failed: ' . $importProcess->getErrorOutput());
+        if (! $importProcess->isSuccessful()) {
+            $this->error('Database import failed: '.$importProcess->getErrorOutput());
             if (File::exists($tempDecryptedPath)) {
                 File::delete($tempDecryptedPath);
             }
+
             return Command::FAILURE;
         }
 

@@ -30,8 +30,9 @@ class DbBackup extends Command
     {
         if ($this->option('dry-run')) {
             $this->info('Dry run enabled. No backup will be created.');
-            $this->info('Action: mysqldump ' . Config::get('database.connections.mysql.database'));
+            $this->info('Action: mysqldump '.Config::get('database.connections.mysql.database'));
             $this->info('Action: openssl enc -aes-256-cbc');
+
             return Command::SUCCESS;
         }
 
@@ -39,10 +40,11 @@ class DbBackup extends Command
         $username = Config::get('database.connections.mysql.username');
         $password = Config::get('database.connections.mysql.password');
         $host = Config::get('database.connections.mysql.host', '127.0.0.1');
-        $backupPassword = env('DB_BACKUP_PASSWORD');
+        $backupPassword = Config::get('database.backup_password');
 
-        if (!$backupPassword) {
+        if (! $backupPassword) {
             $this->error('DB_BACKUP_PASSWORD is not defined in the .env file.');
+
             return Command::FAILURE;
         }
 
@@ -52,7 +54,7 @@ class DbBackup extends Command
         $tempPath = storage_path("app/temp_{$filename}");
         $finalPath = storage_path("app/backups/{$encryptedFilename}");
 
-        if (!File::exists(storage_path('app/backups'))) {
+        if (! File::exists(storage_path('app/backups'))) {
             File::makeDirectory(storage_path('app/backups'), 0755, true);
         }
 
@@ -66,13 +68,16 @@ class DbBackup extends Command
             '-h', $host,
             '-u', $username,
             "-p{$password}",
-            $database
+            $database,
         ]);
-        $dumpProcess->setOutputFile($tempPath);
+        // Redirect stdout to file
+        $dumpProcess->setTty(false);
         $dumpProcess->run();
+        File::put($tempPath, $dumpProcess->getOutput());
 
-        if (!$dumpProcess->isSuccessful()) {
-            $this->error('MySQL dump failed: ' . $dumpProcess->getErrorOutput());
+        if (! $dumpProcess->isSuccessful()) {
+            $this->error('MySQL dump failed: '.$dumpProcess->getErrorOutput());
+
             return Command::FAILURE;
         }
 
@@ -88,15 +93,16 @@ class DbBackup extends Command
             '-pbkdf2',
             '-in', $tempPath,
             '-out', $finalPath,
-            '-pass', "pass:{$backupPassword}"
+            '-pass', "pass:{$backupPassword}",
         ]);
         $encryptProcess->run();
 
-        if (!$encryptProcess->isSuccessful()) {
-            $this->error('Encryption failed: ' . $encryptProcess->getErrorOutput());
+        if (! $encryptProcess->isSuccessful()) {
+            $this->error('Encryption failed: '.$encryptProcess->getErrorOutput());
             if (File::exists($tempPath)) {
                 File::delete($tempPath);
             }
+
             return Command::FAILURE;
         }
 
