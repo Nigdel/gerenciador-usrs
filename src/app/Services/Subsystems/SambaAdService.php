@@ -42,6 +42,9 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
     /**
      * Busca un usuario por CPF (almacenado en employeeNumber).
+     *
+     * La búsqueda parte de la raíz del dominio: los usuarios pueden estar
+     * repartidos en varias OU (Usuarios, Users, ...).
      */
     public function findByCpf(string $cpf): ?array
     {
@@ -51,8 +54,8 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
         try {
             $ldap = $this->connectAndBind($subsystem);
-            $baseDn = $this->getUsersOu($subsystem);
-            $filter = '(employeeNumber='.$this->escapeFilter($cpfLimpio).')';
+            $baseDn = $this->getBaseDn($subsystem);
+            $filter = '(&(objectCategory=person)(objectClass=user)(employeeNumber='.$this->escapeFilter($cpfLimpio).'))';
 
             $search = @ldap_search($ldap, $baseDn, $filter, ['cn', 'sAMAccountName', 'mail', 'employeeNumber', 'userAccountControl']);
             if (! $search) {
@@ -84,7 +87,8 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     }
 
     /**
-     * Verifica la existencia de un usuario por userPrincipalName o mail.
+     * Verifica la existencia de un usuario por userPrincipalName o mail
+     * (búsqueda desde la raíz del dominio).
      */
     public function existsByEmail(string $email): bool
     {
@@ -94,8 +98,8 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
         try {
             $ldap = $this->connectAndBind($subsystem);
-            $baseDn = $this->getUsersOu($subsystem);
-            $filter = "(|(userPrincipalName={$cleanEmail})(mail={$cleanEmail}))";
+            $baseDn = $this->getBaseDn($subsystem);
+            $filter = "(&(objectCategory=person)(objectClass=user)(|(userPrincipalName={$cleanEmail})(mail={$cleanEmail})))";
 
             $search = @ldap_search($ldap, $baseDn, $filter, ['dn']);
             if (! $search) {
@@ -119,6 +123,9 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
      * así que se buscan **los dos**: un sAMAccountName libre con el UPN ya
      * ocupado es justo el caso en el que el alta fallaría.
      *
+     * La búsqueda parte de la raíz del dominio porque el sAMAccountName es único
+     * en todo el dominio, no por OU.
+     *
      * Un fallo de conexión se devuelve como **null** y no como false (ver
      * UsernameAvailabilityInterface): si el directorio está caído, decir "libre"
      * propondría un login que después el propio Samba rechazaría.
@@ -130,7 +137,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
         try {
             $ldap = $this->connectAndBind($subsystem);
-            $baseDn = $this->getUsersOu($subsystem);
+            $baseDn = $this->getBaseDn($subsystem);
 
             $dominio = $subsystem->api_config['dominio'] ?? null;
             $candidatos = ['samaccountname' => $clean];
@@ -175,7 +182,10 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     /**
      * Crea un nuevo usuario en la OU delegada.
      *
-     * Flujo: add (cuenta deshabilitada) -> set unicodePwd -> habilitar (512).
+     * Flujo: buscar por sAMAccountName en todo el dominio -> si existe, se
+     * devuelven los datos de esa cuenta para que se provisione el
+     * UserSubsystemAccount (no se modifica nada en el directorio).
+     * Si no existe: add (cuenta deshabilitada) -> set unicodePwd -> habilitar (512).
      * Si algún paso posterior al add falla, se elimina la cuenta parcial.
      */
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
@@ -193,6 +203,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
             );
         }
 
+        $baseDn = $this->getBaseDn($subsystem);
         $usersOu = $this->getUsersOu($subsystem);
         // El RDN (CN) debe coincidir con el atributo cn.
         $userDn = 'CN='.ldap_escape($nombreCompleto, '', LDAP_ESCAPE_DN).','.$usersOu;
@@ -201,20 +212,11 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         try {
             $ldap = $this->connectAndBind($subsystem);
 
-            // Idempotencia: si ya existe por sAMAccountName, se reutiliza.
-            $search = @ldap_search(
-                $ldap,
-                $usersOu,
-                '(sAMAccountName='.$this->escapeFilter($samAccountName).')',
-                ['dn']
-            );
-            if ($search && (@ldap_get_entries($ldap, $search)['count'] ?? 0) > 0) {
-                return SubsystemOperationResult::ok(
-                    credencialUsuario: $samAccountName,
-                    externalAccountId: $samAccountName,
-                    estado: 'activo',
-                    mensaje: 'El usuario ya existía en Samba AD, se reutilizó',
-                );
+            // Idempotencia: el sAMAccountName es único en todo el dominio, así que
+            // se busca desde la raíz (la cuenta puede estar en otra OU, p. ej. Users).
+            $existente = $this->buscarPorSam($ldap, $baseDn, $samAccountName);
+            if ($existente !== null) {
+                return $this->resultadoCuentaExistente($existente);
             }
 
             $password = $userData['password_general'] ?? app(TemporaryPasswordGenerator::class)->generar();
@@ -241,8 +243,17 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
 
             // 1) Crear la cuenta
             if (! @ldap_add($ldap, $userDn, $entry)) {
+                $error = $this->ldapError($ldap);
+
+                // Carrera o rechazo por "ya existe": se vuelve a buscar desde la raíz.
+                // Solo se reutiliza si la cuenta existe de verdad por sAMAccountName.
+                $existente = $this->buscarPorSam($ldap, $baseDn, $samAccountName);
+                if ($existente !== null) {
+                    return $this->resultadoCuentaExistente($existente);
+                }
+
                 return SubsystemOperationResult::fail(
-                    'Error al crear usuario en Samba AD: '.$this->ldapError($ldap)." (DN: {$userDn})"
+                    "Error al crear usuario en Samba AD: {$error} (DN: {$userDn})"
                 );
             }
 
@@ -545,6 +556,84 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         return $ldap;
     }
 
+    /**
+     * Busca una cuenta de usuario por sAMAccountName desde $baseDn (raíz del
+     * dominio) y devuelve sus datos normalizados, o null si no existe.
+     *
+     * El sAMAccountName es único en todo el dominio, por eso la búsqueda no se
+     * limita a una OU. El DN devuelto es el real, estén donde estén (Usuarios, Users...).
+     *
+     * @return array{dn: string, sam: string, cn: ?string, nombre_completo: ?string, email_personal: ?string, cpf: ?string, upn: ?string, uac: int, estado: string}|null
+     */
+    private function buscarPorSam($ldap, string $baseDn, string $sam): ?array
+    {
+        $filter = '(&(objectCategory=person)(objectClass=user)(sAMAccountName='.$this->escapeFilter($sam).'))';
+
+        $search = @ldap_search(
+            $ldap,
+            $baseDn,
+            $filter,
+            ['cn', 'displayName', 'sAMAccountName', 'userPrincipalName', 'mail', 'employeeNumber', 'userAccountControl'],
+            0,
+            1
+        );
+
+        if (! $search) {
+            return null;
+        }
+
+        $entries = @ldap_get_entries($ldap, $search);
+
+        if (! $entries || ($entries['count'] ?? 0) === 0) {
+            return null;
+        }
+
+        $e = $entries[0];
+        $uac = (int) ($e['useraccountcontrol'][0] ?? self::UAC_NORMAL_ACCOUNT);
+        $deshabilitada = ($uac & self::UAC_ACCOUNTDISABLE) === self::UAC_ACCOUNTDISABLE;
+
+        return [
+            'dn' => $e['dn'],
+            // Se lee del directorio y no del input, por si normaliza mayúsculas.
+            'sam' => $e['samaccountname'][0] ?? $sam,
+            'cn' => $e['cn'][0] ?? null,
+            'nombre_completo' => $e['displayname'][0] ?? $e['cn'][0] ?? null,
+            'email_personal' => $e['mail'][0] ?? null,
+            'cpf' => $e['employeenumber'][0] ?? null,
+            'upn' => $e['userprincipalname'][0] ?? null,
+            'uac' => $uac,
+            'estado' => $deshabilitada ? 'suspendido' : 'activo',
+        ];
+    }
+
+    /**
+     * Resultado para una cuenta que ya existía: lleva los datos reales de la
+     * cuenta (id externo, login, estado y atributos) para que quien llama
+     * provisione el UserSubsystemAccount con ellos. No modifica el directorio.
+     *
+     * @param  array{dn: string, sam: string, cn: ?string, nombre_completo: ?string, email_personal: ?string, cpf: ?string, upn: ?string, uac: int, estado: string}  $existente
+     */
+    private function resultadoCuentaExistente(array $existente): SubsystemOperationResult
+    {
+        return SubsystemOperationResult::ok(
+            credencialUsuario: $existente['sam'],
+            externalAccountId: $existente['sam'],
+            estado: $existente['estado'],
+            mensaje: 'El usuario ya existía en Samba AD, se reutilizó',
+            raw: [
+                'existente' => true,
+                'dn' => $existente['dn'],
+                'sAMAccountName' => $existente['sam'],
+                'upn' => $existente['upn'],
+                'cn' => $existente['cn'],
+                'nombre_completo' => $existente['nombre_completo'],
+                'email_personal' => $existente['email_personal'],
+                'cpf' => $existente['cpf'],
+                'userAccountControl' => $existente['uac'],
+            ],
+        );
+    }
+
     private function toggleUserAccountControl(UserSubsystemAccount $account, bool $disable): SubsystemOperationResult
     {
         $ldap = null;
@@ -581,28 +670,21 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     }
 
     /**
-     * Resuelve el DN real buscando por sAMAccountName (el CN ya no es el sAMAccountName).
+     * Resuelve el DN real buscando por sAMAccountName desde la raíz del dominio
+     * (el CN ya no es el sAMAccountName y la cuenta puede estar en cualquier OU).
      */
     private function resolveUserDn($ldap, UserSubsystemAccount $account, Subsystem $subsystem): string
     {
         $samAccountName = (string) $account->external_account_id;
-        $usersOu = $this->getUsersOu($subsystem);
+        $baseDn = $this->getBaseDn($subsystem);
 
-        $search = @ldap_search(
-            $ldap,
-            $usersOu,
-            '(sAMAccountName='.$this->escapeFilter($samAccountName).')',
-            ['dn']
-        );
+        $existente = $this->buscarPorSam($ldap, $baseDn, $samAccountName);
 
-        if ($search) {
-            $entries = @ldap_get_entries($ldap, $search);
-            if (($entries['count'] ?? 0) > 0) {
-                return $entries[0]['dn'];
-            }
+        if ($existente !== null) {
+            return $existente['dn'];
         }
 
-        throw new RuntimeException("Usuario '{$samAccountName}' no encontrado en {$usersOu}");
+        throw new RuntimeException("Usuario '{$samAccountName}' no encontrado en {$baseDn}");
     }
 
     private function ldapError($ldap): string
@@ -637,6 +719,17 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         return iconv('UTF-8', 'UTF-16LE', '"'.$password.'"');
     }
 
+    /**
+     * Raíz del dominio, desde donde se buscan las cuentas existentes.
+     */
+    private function getBaseDn(Subsystem $subsystem): string
+    {
+        return trim((string) ($subsystem->api_config['base_dn'] ?? config('services.samba_ad.base_dn', 'DC=klios,DC=br')));
+    }
+
+    /**
+     * OU donde se CREAN los usuarios nuevos.
+     */
     private function getUsersOu(Subsystem $subsystem): string
     {
         return trim((string) ($subsystem->api_config['users_ou'] ?? config('services.samba_ad.users_ou', 'OU=Usuarios,DC=klios,DC=br')));

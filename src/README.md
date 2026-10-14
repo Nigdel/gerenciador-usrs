@@ -442,3 +442,19 @@ No se requiere tocar `UserProvisioningService` ni
 - El dominio usado para proponer usuario/email (`empresa.com.br`) se
   resuelve en `UsernameGeneratorService::resolverDominio()`; puedes
   reemplazarlo por una tabla de empresas si manejas varios dominios.
+
+  ## Otros comandos
+
+  '''
+  docker compose exec app php artisan tinker
+  App\Models\User::create([
+    'name' => 'Super Admin',
+    'email' => 'admin@tudominio.com',
+    'password' => 'UnaClaveSegura123',
+    'role' => 'admin',
+]);
+
+  $user = User::where('email', 'admin@klios.com.br')->first();
+  $user->password = Hash::make(env('SUPERADMIN_PASSWORD', 'CambiaEstaClave123'));
+  $user->save();
+''' 

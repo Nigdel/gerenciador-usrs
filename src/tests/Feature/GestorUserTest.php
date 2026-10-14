@@ -19,6 +19,7 @@ class GestorUserTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware();
         $this->actingAs(User::factory()->create());
     }
 
