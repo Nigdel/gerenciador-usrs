@@ -191,30 +191,64 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
     public function suspendUser(UserSubsystemAccount $account, array $suspensionData): SubsystemOperationResult
     {
-        $response = $this->request($account->subsystem, 'PATCH', "proprietarios/internos/{$account->external_account_id}/suspender", form: [
-            'motivo' => $suspensionData['motivo_suspension'] ?? null,
-            'inicio' => ($suspensionData['inicio_suspension'] ?? now())->toIso8601String(),
-            'fin' => $suspensionData['fin_suspension']?->toIso8601String(),
-        ]);
-
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo suspender el propietario en Adagio (endpoint no confirmado)', $response->json() ?? []);
-        }
-
-        return SubsystemOperationResult::ok(estado: 'suspendido', raw: $response->json() ?? []);
+        return $this->cambiarEstado($account, $suspensionData, activar: false);
     }
 
     public function reactivateUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->request($account->subsystem, 'PATCH', "proprietarios/internos/{$account->external_account_id}/reactivar");
-
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo reactivar el propietario en Adagio (endpoint no confirmado)', $response->json() ?? []);
-        }
-
-        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
+        return $this->cambiarEstado($account, [], activar: true);
     }
 
+    private function cambiarEstado(UserSubsystemAccount $account, array $data, bool $activar): SubsystemOperationResult
+    {
+        $documento = $this->limpiarDocumento($data['cpf'] ?? $account->user?->cpf ?? '');
+
+        if ($documento === '') {
+            return SubsystemOperationResult::fail('Falta el CPF para cambiar el estado del propietario en Adagio');
+        }
+
+        try {
+            $response = $this->request($account->subsystem, 'POST', 'kliosAnalise/usuarios/alterarStatus', form: [
+                'documento' => $documento,
+                'email' => $account->credencial_usuario,
+                'status' => $activar ? 1 : 0,
+            ]);
+        } catch (\Throwable $exception) {
+            $this->log('Error de comunicación al cambiar estado en Adagio', [
+                'account_id' => $account->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return SubsystemOperationResult::fail('Error de comunicación con Adagio: '.$exception->getMessage());
+        }
+
+        if ($response->successful()) {
+            return SubsystemOperationResult::ok(
+                estado: $activar ? 'activo' : 'suspendido',
+                mensaje: $response->json('status'),
+                raw: $response->json() ?? [],
+            );
+        }
+
+        $mensaje = match ($response->status()) {
+            404 => 'Usuario no encontrado en Adagio (documento y email deben existir ambos)',
+            403 => $activar
+                ? 'Adagio no pudo activar: el usuario no está desactivado'
+                : 'Adagio no pudo desactivar: el usuario ya está desactivado',
+            default => "Adagio respondió HTTP {$response->status()}",
+        };
+
+        $this->log('Adagio rechazó el cambio de estado', [
+            'account_id' => $account->id,
+            'http_status' => $response->status(),
+            'body' => $response->body(),
+        ]);
+
+        return SubsystemOperationResult::fail($mensaje, [
+            'http_status' => $response->status(),
+            'body' => $response->json() ?? $response->body(),
+        ]);
+    }
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
         $response = $this->request($account->subsystem, 'DELETE', "proprietarios/internos/{$account->external_account_id}");
@@ -228,7 +262,23 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->request($account->subsystem, 'GET', "proprietarios/internos/{$account->external_account_id}");
+        $documento = $this->limpiarDocumento($account['gestor_user_id'] ?->cpf ?? '');
+
+        $response = $this->request($account->subsystem, 'GET', 'proprietarios/internos', query: ['documento' => $documento]);
+        
+        $existente = $this->mapearPropietarioRaw(
+            $response,
+        );
+
+        if (! empty($existente['id'])) {
+            return SubsystemOperationResult::ok(
+                externalAccountId: (string) $existente['id'],
+                estado: 'activo',
+                mensaje: 'Usuario ya existía en Adagio, se reutilizó',
+                raw: $existente,
+            );
+        }
+        
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('No se pudo consultar el estado en Adagio (endpoint no confirmado)', $response->json() ?? []);
@@ -463,5 +513,12 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             mensaje: 'Solicitud de reset de contraseña enviada a Adagio',
             raw: $response->json() ?? []
         );
+    }
+
+    public function verificaEstadoRemoto(): bool
+    {
+        // alterarStatus ya confirma con 200 + {"status": "Usuário desativado"}
+        // y no hay endpoint documentado para leer el estado.
+        return false;
     }
 }

@@ -80,4 +80,9 @@ abstract class BaseSubsystemService implements SubsystemServiceInterface
     {
         return SubsystemOperationResult::fail('Este subsistema no admite actualizar los datos del usuario.');
     }
+
+    public function verificaEstadoRemoto(): bool
+    {
+        return true; // por defecto, los demás subsistemas siguen verificando
+    }
 }
