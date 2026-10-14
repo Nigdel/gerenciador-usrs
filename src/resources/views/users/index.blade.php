@@ -6,9 +6,8 @@
     <section class="w-full max-w-5xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title">
         <div class="mb-8 flex flex-col items-start justify-between gap-6 sm:flex-row">
             <div>
-                <a class="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-emerald-700" href="{{ route('home') }}">Gestão de acessos</a>
-                <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Usuários</h1>
-                <p class="max-w-prose leading-6 text-[#68756d]">Consulte e administre os acessos cadastrados.</p>
+                <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Operadores</h1>
+                <p class="max-w-prose leading-6 text-[#68756d]">Gerencie os acessos dos operadores do sistema.</p>
             </div>
             @can('create', [App\Models\User::class])
                 <a class="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 py-2.5 font-bold text-white no-underline transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-700/20" href="{{ route('users.create') }}">Novo usuário</a>

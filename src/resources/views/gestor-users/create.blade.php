@@ -3,102 +3,118 @@
 @section('title', 'Nuevo usuario gestionado')
 
 @section('content')
-    <section class="form-panel" aria-labelledby="page-title">
-        <div class="form-heading">
-            <a class="eyebrow" href="{{ route('home') }}">Home</a>
-            <h1 id="page-title">Novo Usuario</h1>
-            <p>Cadastra o usuário e cria suas contas nos subsistemas selecionados.</p>
+    @php
+        // Clases reutilizables basadas en la identidad visual de gestor-users/edit
+        $btnBase = 'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2';
+        $btnPrimary = $btnBase.' bg-emerald-700 text-white hover:bg-emerald-800';
+        $btnSecondary = $btnBase.' border border-[#d9e2dc] bg-white text-[#17211b] hover:bg-[#f7faf8]';
+        $input = 'w-full rounded-lg border border-[#d9e2dc] bg-white px-3.5 py-2.5 text-sm text-[#17211b] placeholder:text-[#a3b0a8] transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20';
+        $label = 'mb-1 block text-sm font-bold text-[#17211b]';
+        $hint = 'mt-1 block text-xs text-[#68756d]';
+        $err = 'mt-1 block text-xs font-bold text-red-700';
+    @endphp
+
+    <section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title">
+        {{-- Cabecera --}}
+        <div class="mb-8">
+            <a class="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-emerald-700 hover:text-emerald-800" href="{{ route('home') }}">Gestão de acessos</a>
+            <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Novo Usuario</h1>
+            <p class="max-w-prose leading-6 text-[#68756d]">Cadastra o usuário e cria suas contas nos subsistemas selecionados.</p>
         </div>
 
         @if ($errors->any())
-            <div class="feedback feedback-error" role="alert">Revisa los campos destacados.</div>
+            <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700" role="alert">
+                Revisa los campos destacados.
+            </div>
         @endif
 
         @php $chatwootSubsystem = $subsystems->firstWhere('slug', 'chatwoot'); @endphp
 
         <form action="{{ route('gestor-users.store') }}" method="POST">
             @csrf
-            <div class="field-grid">
-                <div class="field">
-                    <label for="cpf">CPF <span aria-hidden="true">*</span></label>
-                    <input id="cpf" name="cpf" type="text" pattern="\d{11}" minlength="11" maxlength="11" value="{{ old('cpf') }}" autocomplete="off" placeholder="Solo 11 dígitos" required>
-                    <small id="cpf-status" class="field-hint" aria-live="polite">Insira o CPF para consultar no Adagio.</small>
-                    @error('cpf')<small class="error-message">{{ $message }}</small>@enderror
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div class="">
+                    <label class="{{ $label }}" for="cpf">CPF <span aria-hidden="true" class="text-red-500">*</span></label>
+                    <input id="cpf" name="cpf" type="text" pattern="\d{11}" minlength="11" maxlength="11" class="{{ $input }}" value="{{ old('cpf') }}" autocomplete="off" placeholder="Solo 11 dígitos" required>
+                    <small id="cpf-status" class="{{ $hint }}" aria-live="polite">Insira o CPF para consultar no Adagio.</small>
+                    @error('cpf')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
-                <div class="field field-wide">
-                    <label for="nombre_completo">Nome Completo <span aria-hidden="true">*</span></label>
-                    <input id="nombre_completo" name="nombre_completo" type="text" maxlength="255" value="{{ old('nombre_completo') }}" required>
-                    @error('nombre_completo')<small class="error-message">{{ $message }}</small>@enderror
+                <div class="sm:col-span-2">
+                    <label class="{{ $label }}" for="nombre_completo">Nome Completo <span aria-hidden="true" class="text-red-500">*</span></label>
+                    <input id="nombre_completo" name="nombre_completo" type="text" maxlength="255" class="{{ $input }}" value="{{ old('nombre_completo') }}" required>
+                    @error('nombre_completo')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
-                <div class="field">
-                    <label for="usuario">Usuário</label>
-                    <input id="usuario" name="usuario" type="text" maxlength="255" value="{{ old('usuario') }}">
-                    <small class="field-hint">Se ficar vazio, o sistema proporá um.</small>
-                    @error('usuario')<small class="error-message">{{ $message }}</small>@enderror
+                <div class="">
+                    <label class="{{ $label }}" for="usuario">Usuário</label>
+                    <input id="usuario" name="usuario" type="text" maxlength="255" class="{{ $input }}" value="{{ old('usuario') }}">
+                    <small class="{{ $hint }}">Se ficar vazio, o sistema proporá um.</small>
+                    @error('usuario')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
-                <div class="field">
-                    <label for="email_personal">E-mail</label>
-                    <input id="email_personal" name="email_personal" type="email" maxlength="255" value="{{ old('email_personal') }}">
-                    @error('email_personal')<small class="error-message">{{ $message }}</small>@enderror
+                <div class="">
+                    <label class="{{ $label }}" for="email_personal">E-mail</label>
+                    <input id="email_personal" name="email_personal" type="email" maxlength="255" class="{{ $input }}" value="{{ old('email_personal') }}">
+                    @error('email_personal')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
-                <div class="field">
-                    <label for="empresa">Empresa <span aria-hidden="true">*</span></label>
-                    <select id="empresa" name="empresa" required >
+                <div class="">
+                    <label class="{{ $label }}" for="empresa">Empresa <span aria-hidden="true" class="text-red-500">*</span></label>
+                    <select id="empresa" name="empresa" class="{{ $input }}" required >
                         <option value="">Seleccione uma empresa</option>
                         <option value="klios" @selected(old('empresa') === 'klios')>Klios</option>
                         <option value="federal" @selected(old('empresa') === 'federal')>Federal</option>
                     </select>
-                    @error('empresa')<small class="error-message">{{ $message }}</small>@enderror
+                    @error('empresa')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
-                <div class="field">
-                    <label for="telefono_personal">Teléfono pessoal</label>
-                    <input id="telefono_personal" name="telefono_personal" type="tel" maxlength="30" value="{{ old('telefono_personal') }}">
+                <div class="">
+                    <label class="{{ $label }}" for="telefono_personal">Teléfono pessoal</label>
+                    <input id="telefono_personal" name="telefono_personal" type="tel" maxlength="30" class="{{ $input }}" value="{{ old('telefono_personal') }}">
                 </div>
-                <div class="field">
-                    <label for="telefono_trabajo">Teléfono corporativo</label>
-                    <input id="telefono_trabajo" name="telefono_trabajo" type="tel" maxlength="30" value="{{ old('telefono_trabajo') }}">
+                <div class="">
+                    <label class="{{ $label }}" for="telefono_trabajo">Teléfono corporativo</label>
+                    <input id="telefono_trabajo" name="telefono_trabajo" type="tel" maxlength="30" class="{{ $input }}" value="{{ old('telefono_trabajo') }}">
                 </div>
-                <div class="field field-wide">
-                    <label for="direccion_particular">Endereço particular</label>
-                    <input id="direccion_particular" name="direccion_particular" type="text" maxlength="255" value="{{ old('direccion_particular') }}">
+                <div class="sm:col-span-2">
+                    <label class="{{ $label }}" for="direccion_particular">Endereço particular</label>
+                    <input id="direccion_particular" name="direccion_particular" type="text" maxlength="255" class="{{ $input }}" value="{{ old('direccion_particular') }}">
                 </div>
-                <div class="field field-wide">
-                    <label for="password_general">Senha Padrao <span aria-hidden="true">*</span></label>
-                    <input id="password_general" name="password_general" type="password" minlength="8" autocomplete="new-password" required>
-                    <small class="field-hint">Será armazenada com hash e utilizada para o aprovisionamento.</small>
-                    @error('password_general')<small class="error-message">{{ $message }}</small>@enderror
+                <div class="sm:col-span-2">
+                    <label class="{{ $label }}" for="password_general">Senha Padrao <span aria-hidden="true" class="text-red-500">*</span></label>
+                    <input id="password_general" name="password_general" type="password" minlength="8" class="{{ $input }}" autocomplete="new-password" required>
+                    <small class="{{ $hint }}">Será armazenada com hash e utilizada para o aprovisionamento.</small>
+                    @error('password_general')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
             </div>
 
-            <fieldset class="mt-8 border-t border-[#d9e2dc] pt-6">
+            <fieldset class="mt-10 border-t border-[#d9e2dc] pt-6">
                 <legend class="mb-2 text-lg font-bold text-[#17211b]">Contas nos Subsistemas</legend>
                 <p class="mb-4 text-sm text-[#68756d]">Selecione os subsistemas nos quais o usuário terá uma conta.</p>
                 @if ($subsystems->isEmpty())
-                    <p class="feedback feedback-error">No hay subsistemas activos disponibles.</p>
+                    <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">No hay subsistemas activos disponibles.</div>
                 @else
                     <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($subsystems as $subsystem)
-                            <label class="checkbox-field rounded-md border border-[#d9e2dc] p-3 {{ $subsystem->slug === 'adagio' ? 'opacity-75' : '' }}" for="subsystem-{{ $subsystem->id }}" data-subsystem-slug="{{ $subsystem->slug }}">
-                                @if ($subsystem->slug === 'adagio')
-                                    <input type="hidden" name="subsistemas[]" value="adagio">
-                                @endif
-                                <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio') @if ($subsystem->slug === 'chatwoot') data-chatwoot-route="{{ route('subsystems.chatwoot.teams', $subsystem) }}" @endif>
-                                <span>
-                                    <strong>{{ $subsystem->nombre }}</strong>
-                                    <small class="block text-[#68756d]" data-original-text="{{ $subsystem->descripcion ?: $subsystem->slug }}">
+                            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-[#d9e2dc] p-4 transition hover:bg-[#f7faf8] {{ $subsystem->slug === 'adagio' ? 'opacity-75' : '' }}" for="subsystem-{{ $subsystem->id }}" data-subsystem-slug="{{ $subsystem->slug }}">
+                                <div class="mt-1">
+                                    @if ($subsystem->slug === 'adagio')
+                                        <input type="hidden" name="subsistemas[]" value="adagio">
+                                    @endif
+                                    <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" class="rounded border-[#d9e2dc] text-emerald-600 focus:ring-emerald-600" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio') @if ($subsystem->slug === 'chatwoot') data-chatwoot-route="{{ route('subsystems.chatwoot.teams', $subsystem) }}" @endif>
+                                </div>
+                                <div class="flex-1">
+                                    <strong class="block text-sm text-[#17211b]">{{ $subsystem->nombre }}</strong>
+                                    <small class="block text-xs text-[#68756d]" data-original-text="{{ $subsystem->descripcion ?: $subsystem->slug }}">
                                         @if ($subsystem->slug === 'adagio')
                                             Consultando disponibilidad...
                                         @else
                                             {{ $subsystem->descripcion ?: $subsystem->slug }}
                                         @endif
                                     </small>
-                                </span>
+                                </div>
 
                                 @if ($subsystem->slug === 'chatwoot')
-                                    <div class="chatwoot-team-panel mt-3 hidden w-full rounded-md border border-[#d9e2dc] bg-slate-50 p-3">
+                                    <div class="chatwoot-team-panel mt-3 hidden w-full rounded-lg border border-[#d9e2dc] bg-slate-50 p-3">
                                         <div class="mb-2 flex items-center justify-between gap-2">
-                                            <strong class="text-sm text-[#17211b]">Equipos disponibles</strong>
-                                            <small class="chatwoot-team-status text-xs text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
+                                            <strong class="text-xs text-[#17211b]">Equipos disponibles</strong>
+                                            <small class="chatwoot-team-status text-[10px] text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
                                         </div>
                                         <div class="chatwoot-team-options grid w-full gap-2"></div>
                                     </div>
@@ -107,13 +123,13 @@
                         @endforeach
                     </div>
                 @endif
-                @error('subsistemas')<small class="error-message">{{ $message }}</small>@enderror
-                @error('subsistemas.*')<small class="error-message">{{ $message }}</small>@enderror
+                @error('subsistemas')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                @error('subsistemas.*')<small class="{{ $err }}">{{ $message }}</small>@enderror
             </fieldset>
 
-            <div class="form-actions">
-                <a class="button button-secondary" href="{{ route('gestor-users.index') }}">Cancelar</a>
-                <button class="button button-primary" type="submit" @disabled($subsystems->isEmpty())>Crear usuario y cuentas</button>
+            <div class="mt-10 flex items-center gap-3 border-t border-[#d9e2dc] pt-6">
+                <a class="{{ $btnSecondary }}" href="{{ route('gestor-users.index') }}">Cancelar</a>
+                <button class="{{ $btnPrimary }}" type="submit" @disabled($subsystems->isEmpty())>Crear usuario y cuentas</button>
             </div>
         </form>
     </section>

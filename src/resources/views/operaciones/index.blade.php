@@ -15,8 +15,7 @@
 
     <section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title">
         {{-- Cabecera --}}
-        <div class="mb-8">
-            <a class="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-emerald-700 hover:text-emerald-800" href="{{ route('home') }}">Home</a>
+        <div class="mb-8">    
             <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Operações de Provisionamento</h1>
             <p class="max-w-prose leading-6 text-[#68756d]">Histórico detalhado de todas as ações realizadas nos subsistemas.</p>
         </div>
