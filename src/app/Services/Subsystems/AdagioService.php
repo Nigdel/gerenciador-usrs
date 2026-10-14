@@ -262,29 +262,45 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $documento = $this->limpiarDocumento($account['gestor_user_id'] ?->cpf ?? '');
+        $documento = $this->limpiarDocumento($account->gestorUser?->cpf ?? '');
 
-        $response = $this->request($account->subsystem, 'GET', 'proprietarios/internos', query: ['documento' => $documento]);
-        
-        $existente = $this->mapearPropietarioRaw(
-            $response,
-        );
-
-        if (! empty($existente['id'])) {
-            return SubsystemOperationResult::ok(
-                externalAccountId: (string) $existente['id'],
-                estado: 'activo',
-                mensaje: 'Usuario ya existía en Adagio, se reutilizó',
-                raw: $existente,
-            );
+        if ($documento === '') {
+            return SubsystemOperationResult::fail('Falta el CPF para consultar el estado en Adagio');
         }
-        
+
+        try {
+            $response = $this->request($account->subsystem, 'GET', 'proprietarios/internos', query: ['documento' => $documento]);
+        } catch (\Throwable $exception) {
+            return SubsystemOperationResult::fail('Error de comunicación con Adagio: '.$exception->getMessage());
+        }
 
         if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo consultar el estado en Adagio (endpoint no confirmado)', $response->json() ?? []);
+            return SubsystemOperationResult::fail(
+                "Adagio respondió HTTP {$response->status()} al consultar el estado",
+                $response->json() ?? [],
+            );
         }
 
-        return SubsystemOperationResult::ok(estado: $response->json('estado'), raw: $response->json() ?? []);
+        $usuario = $response->json('usuario');
+
+        // Adagio responde 200 con {"usuario": null} cuando el usuario está
+        // desactivado o no existe. Esta cuenta ya existía en Adagio, así que
+        // se interpreta como desactivado.
+        if (empty($usuario)) {
+            return SubsystemOperationResult::ok(
+                estado: 'suspendido',
+                mensaje: 'Adagio no devuelve el usuario (desactivado o inexistente)',
+                raw: $response->json() ?? [],
+            );
+        }
+
+        $estado = empty($usuario['deleted_at']) ? 'activo' : 'suspendido';
+
+        return SubsystemOperationResult::ok(
+            externalAccountId: isset($usuario['id']) ? (string) $usuario['id'] : null,
+            estado: $estado,
+            raw: $usuario,
+        );
     }
 
     // -----------------------------------------------------------------

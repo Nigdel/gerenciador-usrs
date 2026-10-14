@@ -165,42 +165,7 @@ class UserSuspensionService
         }
 
         $servicio = $this->registry->resolve($subsystem->slug);
-        // $resultado = $servicio->suspendUser($account, $datosSuspension);
-        // $confirmado = false;
-        // $detalleVerificacion = null;
-
-        // if ($resultado->success) {
-        //     $estadoRemoto = $servicio->getUserStatus($account);
-
-            
-        //     \Illuminate\Support\Facades\Log::info('Estado remoto tras suspender', [
-        //         'success' => $estadoRemoto->success,
-        //         'estado' => $estadoRemoto->estado,
-        //         'mensaje' => $estadoRemoto->mensaje,
-        //         'raw' => $estadoRemoto->raw,
-        //     ]);
-        //     $confirmado = $estadoRemoto->success
-        //         && in_array($estadoRemoto->estado, ['suspendido', 'deshabilitado'], true);
-
-        //     if ($confirmado) {
-        //         $account->update([
-        //             'estado' => 'suspendido',
-        //             'inicio_suspension' => $datosSuspension['inicio_suspension'],
-        //             'fin_suspension' => $datosSuspension['fin_suspension'],
-        //             'motivo_suspension' => $datosSuspension['motivo_suspension'],
-        //         ]);
-        //     }
-        // }
-
-        // return [
-        //     'subsistema' => $subsystem->slug,
-        //     'exito' => $resultado->success && $confirmado,
-        //     'mensaje' => $resultado->success && ! $confirmado
-        //         ? 'El subsistema no confirmó la suspensión de la cuenta.'
-        //         : $resultado->mensaje,
-        //     'cuenta' => $account->fresh(),
-        // ];
-
+        
         $resultado = $servicio->suspendUser($account, $datosSuspension);
         $confirmado = false;
         $detalleVerificacion = null;
