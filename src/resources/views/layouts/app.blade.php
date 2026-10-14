@@ -69,5 +69,6 @@
                 </main>
             </div>
         @endauth
+        @stack('scripts')
     </body>
 </html>

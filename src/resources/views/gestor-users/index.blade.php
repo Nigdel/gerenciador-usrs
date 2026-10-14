@@ -17,7 +17,6 @@
         {{-- Cabecera --}}
         <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-                <a class="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-emerald-700 hover:text-emerald-800" href="{{ route('home') }}">Home</a>
                 <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Listagem de Usuarios Gestionados</h1>
                 <p class="max-w-prose leading-6 text-[#68756d]">Administra personas y sus cuentas en los subsistemas conectados.</p>
             </div>

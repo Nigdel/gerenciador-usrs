@@ -16,7 +16,6 @@
         {{-- Cabecera --}}
         <div class="mb-8 flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
             <div>
-                <a class="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-emerald-700 hover:text-emerald-800" href="{{ route('home') }}">Gestão de acessos</a>
                 <h1 id="page-title" class="mb-2 text-3xl font-bold tracking-normal text-[#17211b]">Subsistemas</h1>
                 <p class="max-w-prose leading-6 text-[#68756d]">Administre las plataformas conectadas al gestor de usuarios.</p>
             </div>
