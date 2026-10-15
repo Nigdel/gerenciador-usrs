@@ -6,6 +6,7 @@ use App\Contracts\IdentityProviderInterface;
 use App\Contracts\SubsystemConnectionInterface;
 use App\Contracts\UsernameAvailabilityInterface;
 use App\DTO\SubsystemOperationResult;
+use App\Enums\GestorUserStatus;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Http\Client\PendingRequest;
@@ -201,16 +202,27 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
     private function cambiarEstado(UserSubsystemAccount $account, array $data, bool $activar): SubsystemOperationResult
     {
-        $documento = $this->limpiarDocumento($data['cpf'] ?? $account->user?->cpf ?? '');
+        $documento = $this->limpiarDocumento((string) ($data['cpf'] ?? $account->user?->cpf ?? ''));
 
         if ($documento === '') {
             return SubsystemOperationResult::fail('Falta el CPF para cambiar el estado del propietario en Adagio');
         }
 
         try {
+            // alterarStatus exige que documento Y email existan a la vez (404 si
+            // no): la credencial guardada puede venir sin @dominio, así que el
+            // email se resuelve antes de llamar.
+            $email = $this->resolverEmail($account, $documento);
+
+            if ($email === null) {
+                return SubsystemOperationResult::fail(
+                    'No se pudo determinar el email del propietario en Adagio: la credencial no incluye dominio y api_config.dominio no está configurado',
+                );
+            }
+
             $response = $this->request($account->subsystem, 'POST', 'proprietarios/internos/alterarStatus', form: [
                 'documento' => $documento,
-                'email' => $account->credencial_usuario,
+                'email' => $email,
                 'status' => $activar ? 1 : 0,
             ]);
         } catch (\Throwable $exception) {
@@ -242,6 +254,24 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             );
         }
 
+        // 403 = "el usuario ya está en el estado pedido" (no está desactivado al
+        // activar, o ya lo está al desactivar). Es el estado que se quería, así
+        // que se confirma contra Adagio y, si coincide, se devuelve como éxito
+        // idempotente. Si la consulta falla, el 403 era otra cosa y se informa.
+        if ($response->status() === 403) {
+            $remoto = $this->getUserStatus($account);
+            $deseado = $activar ? 'activo' : 'suspendido';
+
+            if ($remoto->success && $remoto->estado === $deseado) {
+                return SubsystemOperationResult::ok(
+                    estado: $deseado,
+                    mensaje: $activar
+                        ? 'El usuario ya estaba activo en Adagio'
+                        : 'El usuario ya estaba desactivado en Adagio',
+                );
+            }
+        }
+
         $mensaje = match ($response->status()) {
             404 => 'Usuario no encontrado en Adagio (documento y email deben existir ambos)',
             403 => $activar
@@ -268,7 +298,9 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $documento = $this->limpiarDocumento($account->gestorUser?->cpf ?? '');
+        // La relación del modelo se llama user(); gestorUser no existe y
+        // devolvía siempre null, de ahí el "Falta el CPF" en cada confirmación.
+        $documento = $this->limpiarDocumento((string) ($account->user?->cpf ?? ''));
 
         if ($documento === '') {
             return SubsystemOperationResult::fail('Falta el CPF para consultar el estado en Adagio');
@@ -328,15 +360,64 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
      */
     public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
     {
-        $statusResult = $this->getUserStatus($account);
-        $estadoSubsystemActual = $statusResult->success ? $statusResult->estado : null;
-        $gestorUserStatus = $account->gestorUser?->estado;
+        $gestorUser = $account->user;
 
-        if($estadoSubsystemActual !== null && $estadoSubsystemActual !== $gestorUserStatus ) {
-            return $this->cambiarEstado($account, [], activar: $gestorUserStatus === 'activo');
+        if ($gestorUser === null) {
+            return SubsystemOperationResult::fail('La cuenta no tiene un usuario del gestor asociado para sincronizar con Adagio');
         }
-        return SubsystemOperationResult::ok(mensaje: 'No se requiere actualización de usuario: estado del subsistema y estado del gestor coinciden');
 
+        $statusResult = $this->getUserStatus($account);
+
+        // Antes un fallo de consulta se devolvía como "no se requiere
+        // actualización", ocultando el error. Ahora se propaga.
+        if (! $statusResult->success) {
+            return $statusResult;
+        }
+
+        // estado es un enum (GestorUserStatus), no un string. Solo 'activo' del
+        // gestor debe dejar activo el propietario; suspendido y baja lo desactivan.
+        $estadoDeseado = $gestorUser->estado === GestorUserStatus::Activo ? 'activo' : 'suspendido';
+
+        if ($statusResult->estado === $estadoDeseado) {
+            return SubsystemOperationResult::ok(
+                estado: $estadoDeseado,
+                mensaje: 'No se requiere actualización de usuario: estado del subsistema y estado del gestor coinciden',
+            );
+        }
+
+        return $this->cambiarEstado($account, [], activar: $estadoDeseado === 'activo');
+    }
+
+    /**
+     * Email del propietario tal como Adagio lo tiene registrado.
+     *
+     * Orden: lo que devuelva Adagio para el documento (autoritativo); si no
+     * devuelve nada —un propietario desactivado puede no aparecer en el
+     * listado—, la credencial guardada si ya es un email; y como último
+     * recurso credencial@dominio. Null si no hay forma de armarlo.
+     */
+    private function resolverEmail(UserSubsystemAccount $account, string $documento): ?string
+    {
+        $response = $this->request($account->subsystem, 'GET', 'proprietarios/internos', query: ['documento' => $documento]);
+        $usuario = $this->extraerUsuario($response);
+
+        if (! blank($usuario['email'] ?? null)) {
+            return (string) $usuario['email'];
+        }
+
+        $credencial = trim((string) $account->credencial_usuario);
+
+        if ($credencial === '') {
+            return null;
+        }
+
+        if (str_contains($credencial, '@')) {
+            return $credencial;
+        }
+
+        $dominio = $account->subsystem->api_config['dominio'] ?? null;
+
+        return blank($dominio) ? null : $credencial.'@'.$dominio;
     }
 
     private function request(

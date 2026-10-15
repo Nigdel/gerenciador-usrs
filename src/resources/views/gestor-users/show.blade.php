@@ -25,7 +25,7 @@
             ->values();
     @endphp
 
-    <section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title" x-data="{ showSuspension: false, showManagerSuspension: false }">
+    <section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title" x-data="{ showSuspension: false, showManagerSuspension: false, showOffboard: false }">
         {{-- Cabecera --}}
         <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -280,28 +280,41 @@
 
         {{-- Dar de baja --}}
         @can('offboard', $gestorUser)
-            @unless ($gestorUser->estaDadoDeBaja() || $gestorUser->estaSuspendido())
-                <div class="mt-8 rounded-xl border border-red-200 bg-red-50/40 p-5 sm:p-6">
-                    <h2 class="mb-1 text-xl font-bold text-red-800">Dar de baja</h2>
-                    <p class="mb-4 text-sm text-[#68756d]">
-                        Deshabilita la cuenta del usuario en todos sus subsistemas.
-                        No borra nada: se puede revertir desde aquí.
-                    </p>
+            <div class="mt-8">
+                <button type="button"
+                        @click="showOffboard = ! showOffboard"
+                        class="{{ $btnSecondary }} {{ $btnIcon }} mb-4"
+                        aria-label="Mostrar/ocultar sección de baja"
+                        title="Mostrar/ocultar sección de baja">
+                    <svg class="h-4 w-4" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+                    <span class="ml-2">Gestão de baixa</span>
+                </button>
 
-                    <form action="{{ route('gestor-users.offboard', $gestorUser) }}" method="POST">
-                        @csrf
+                <div x-show="showOffboard" x-cloak x-transition>
+                    @unless ($gestorUser->estaDadoDeBaja() || $gestorUser->estaSuspendido())
+                        <div class="rounded-xl border border-red-200 bg-red-50/40 p-5 sm:p-6">
+                            <h2 class="mb-1 text-xl font-bold text-red-800">Dar de baja</h2>
+                            <p class="mb-4 text-sm text-[#68756d]">
+                                Deshabilita la cuenta del usuario en todos sus subsistemas.
+                                No borra nada: se puede revertir desde aquí.
+                            </p>
 
-                        <div class="mb-4">
-                            <label class="{{ $label }}" for="motivo_baja">Motivo de la baja</label>
-                            <input id="motivo_baja" class="{{ $input }}" name="motivo_baja" type="text" maxlength="500" required value="{{ old('motivo_baja') }}">
-                            <small class="{{ $hint }}">Queda registrado en la ficha del usuario.</small>
-                            @error('motivo_baja')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                            <form action="{{ route('gestor-users.offboard', $gestorUser) }}" method="POST">
+                                @csrf
+
+                                <div class="mb-4">
+                                    <label class="{{ $label }}" for="motivo_baja">Motivo de la baja</label>
+                                    <input id="motivo_baja" class="{{ $input }}" name="motivo_baja" type="text" maxlength="500" required value="{{ old('motivo_baja') }}">
+                                    <small class="{{ $hint }}">Queda registrado en la ficha del usuario.</small>
+                                    @error('motivo_baja')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                                </div>
+
+                                <button class="{{ $btnDanger }}" type="submit" onclick="return confirm('¿Deseas dar de baja a {{ $gestorUser->nombre_completo }}? Se deshabilitará su acceso en todos los subsistemas.');">Dar de baja</button>
+                            </form>
                         </div>
-
-                        <button class="{{ $btnDanger }}" type="submit" onclick="return confirm('¿Deseas dar de baja a {{ $gestorUser->nombre_completo }}? Se deshabilitará su acceso en todos los subsistemas.');">Dar de baja</button>
-                    </form>
+                    @endunless
                 </div>
-            @endunless
+            </div>
         @endcan
 
         {{-- Cuentas en subsistemas --}}
