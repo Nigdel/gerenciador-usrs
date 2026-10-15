@@ -25,7 +25,7 @@
             ->values();
     @endphp
 
-    <section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title">
+    <section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title" x-data="{ showSuspension: false, showManagerSuspension: false }">
         {{-- Cabecera --}}
         <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -43,6 +43,44 @@
                         <button class="{{ $btnSecondary }} {{ $btnIcon }}" type="submit" aria-label="Restablecer contraseñas de {{ $gestorUser->nombre_completo }}" title="Restablecer contraseñas"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-key"></use></svg><span class="sr-only">Restablecer contraseñas</span></button>
                     </form>
                 @endcan
+                @can('suspend', $gestorUser)
+                    @if ($gestorUser->subsystemAccounts->contains(fn ($account) => ($account->estado?->value ?? $account->estado) === 'activo'))
+                        <button class="{{ $btnSecondary }} {{ $btnIcon }}" type="button" @click="showSuspension = true" aria-label="Suspender cuentas de {{ $gestorUser->nombre_completo }}" title="Suspender cuentas"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Suspender cuentas</span></button>
+                    @endif
+                @endcan
+                @can('suspendManager', $gestorUser)
+                    @if ($gestorUser->estado === \App\Enums\GestorUserStatus::Activo)
+                        <button class="{{ $btnSecondary }} {{ $btnIcon }}" type="button" @click="showManagerSuspension = true" aria-label="Suspender gestor {{ $gestorUser->nombre_completo }}" title="Suspender gestor"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-ban"></use></svg><span class="sr-only">Suspender gestor</span></button>
+                    @endif
+                @endcan
+                @if ($gestorUser->estaSuspendido())
+                    @can('reactivateManager', $gestorUser)
+                        <form action="{{ route('gestor-users.reactivate-manager', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Reactivar el gestor y las cuentas que estaban activas antes de la suspensión?');">
+                            @csrf
+                            <button class="{{ $btnSecondary }} {{ $btnIcon }}" type="submit" aria-label="Reactivar gestor {{ $gestorUser->nombre_completo }}" title="Reactivar gestor"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Reactivar gestor</span></button>
+                        </form>
+                    @endcan
+                @endif
+                @foreach ($gestorUser->subsystemAccounts as $account)
+                    @if ($account->subsystem && ($account->estado?->value ?? $account->estado) !== 'activo')
+                        @can('reactivate', $account)
+                            <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST" onsubmit="return confirm('¿Deseas reactivar la cuenta {{ $account->credencial_usuario }}?');">
+                                @csrf
+                                <input type="hidden" name="return_to" value="gestor-user">
+                                <input type="hidden" name="operation" value="enable">
+                                <button class="{{ $btnSecondary }} {{ $btnIcon }}" type="submit" aria-label="Reactivar cuenta {{ $account->credencial_usuario }}" title="Reactivar {{ $account->credencial_usuario }}"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Reactivar {{ $account->credencial_usuario }}</span></button>
+                            </form>
+                        @endcan
+                    @endif
+                @endforeach
+                @if ($gestorUser->estaDadoDeBaja())
+                    @can('offboard', $gestorUser)
+                        <form action="{{ route('gestor-users.reactivate', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Reactivar este usuario y sus cuentas en todos los subsistemas?');">
+                            @csrf
+                            <button class="{{ $btnSecondary }} {{ $btnIcon }}" type="submit" aria-label="Reactivar usuario {{ $gestorUser->nombre_completo }}" title="Reactivar usuario"><svg class="h-4 w-4" aria-hidden="true"><use href="#icon-check"></use></svg><span class="sr-only">Reactivar usuario</span></button>
+                        </form>
+                    @endcan
+                @endif
                 @can('update', $gestorUser)
                     <form action="{{ route('gestor-users.sync-subsystems', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Propagar los datos de contacto a todas las cuentas en subsistemas?');">
                         @csrf
@@ -96,6 +134,22 @@
             @endforeach
         </dl>
 
+        @if ($gestorUser->estaSuspendido())
+            <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50/60 p-5" role="status">
+                <h2 class="font-bold text-amber-900">Gestor suspendido</h2>
+                <p class="mt-1 text-sm text-[#68756d]">Las cuentas que estaban activas al suspenderlo se deshabilitaron. Las demás conservaron su estado.</p>
+                @if ($gestorUser->suspendido_at)
+                    <p class="mt-2 text-sm text-[#68756d]">Suspensión registrada el {{ $gestorUser->suspendido_at->format('d/m/Y') }}.</p>
+                @endif
+                @if ($gestorUser->fin_suspension_gestor)
+                    <p class="mt-2 text-sm text-[#68756d]">Fin previsto de la suspensión: {{ $gestorUser->fin_suspension_gestor->format('d/m/Y') }}.</p>
+                @endif
+                @if ($gestorUser->motivo_suspension_gestor)
+                    <p class="mt-2 text-sm text-[#68756d]">Motivo: {{ $gestorUser->motivo_suspension_gestor }}</p>
+                @endif
+            </div>
+        @endif
+
         {{-- Usuario dado de baja --}}
         @if ($gestorUser->estaDadoDeBaja())
             <div class="mt-6 rounded-xl border border-red-200 bg-red-50/60 p-5" role="status">
@@ -109,77 +163,124 @@
                 @if ($gestorUser->motivo_baja)
                     <p class="mt-2 text-sm text-[#68756d]">Motivo: {{ $gestorUser->motivo_baja }}</p>
                 @endif
-
-                @can('offboard', $gestorUser)
-                    <form action="{{ route('gestor-users.reactivate', $gestorUser) }}" method="POST" class="mt-4" onsubmit="return confirm('¿Reactivar este usuario y sus cuentas en todos los subsistemas?');">
-                        @csrf
-                        <button class="{{ $btnSecondary }}" type="submit">Reactivar usuario</button>
-                    </form>
-                @endcan
             </div>
         @endif
+
+        {{-- Suspensión del gestor y captura de sus cuentas activas --}}
+        @can('suspendManager', $gestorUser)
+            @if ($gestorUser->estado === \App\Enums\GestorUserStatus::Activo)
+                <div x-show="showManagerSuspension"
+                     x-cloak
+                     x-transition
+                     class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+                    <div class="absolute inset-0 bg-[#17211b]/60 backdrop-blur-sm" @click="showManagerSuspension = false"></div>
+                    <div class="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#d9e2dc] bg-white shadow-2xl">
+                        <div class="flex items-center justify-between border-b border-[#d9e2dc] bg-[#f7faf8] px-6 py-4">
+                            <h2 class="text-xl font-bold text-[#17211b]">Suspender gestor</h2>
+                            <button type="button" @click="showManagerSuspension = false" class="text-[#68756d] hover:text-[#17211b]" aria-label="Cerrar">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                        <form action="{{ route('gestor-users.suspend-manager', $gestorUser) }}" method="POST" class="p-6">
+                            @csrf
+                            <p class="mb-4 text-sm text-[#68756d]">Se deshabilitarán únicamente las cuentas activas ahora. Se guardará esa selección para reactivar solo esas mismas cuentas.</p>
+                            <label class="{{ $label }}" for="motivo_suspension_gestor">Motivo</label>
+                            <input id="motivo_suspension_gestor" class="{{ $input }}" name="motivo_suspension_gestor" type="text" minlength="5" maxlength="500" required value="{{ old('motivo_suspension_gestor') }}">
+                            @error('motivo_suspension_gestor')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                            <label class="{{ $label }} mt-4" for="fin_suspension_gestor">Fecha de fin (opcional)</label>
+                            <input id="fin_suspension_gestor" class="{{ $input }}" name="fin_suspension_gestor" type="date" min="{{ now()->toDateString() }}" value="{{ old('fin_suspension_gestor') }}">
+                            @error('fin_suspension_gestor')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                            <div class="mt-6 flex justify-end gap-3">
+                                <button type="button" @click="showManagerSuspension = false" class="{{ $btnSecondary }}">Cancelar</button>
+                                <button class="{{ $btnDanger }}" type="submit" onclick="return confirm('¿Suspender al gestor y deshabilitar sus cuentas activas?');">Suspender gestor</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endif
+        @endcan
 
         {{-- Suspender cuentas --}}
         @can('suspend', $gestorUser)
             @if ($gestorUser->subsystemAccounts->isNotEmpty())
-                <div class="mt-8 border-t border-[#d9e2dc] pt-6">
-                    <h2 class="mb-4 text-xl font-bold text-[#17211b]">Suspender cuentas</h2>
+                <div x-show="showSuspension"
+                     x-cloak
+                     x-transition
+                     class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
 
-                    <form action="{{ route('gestor-users.suspend', $gestorUser) }}" method="POST">
-                        @csrf
+                    {{-- Backdrop --}}
+                    <div class="absolute inset-0 bg-[#17211b]/60 backdrop-blur-sm" @click="showSuspension = false"></div>
 
-                        <fieldset class="mb-5">
-                            <legend class="mb-1 text-sm font-bold text-[#17211b]">Subsistemas</legend>
-                            <p class="mb-3 text-xs text-[#68756d]">Sin marcar ninguno, se suspenderán todas las cuentas del usuario.</p>
-
-                            <div class="grid gap-2 sm:grid-cols-2">
-                                @foreach ($gestorUser->subsystemAccounts as $cuenta)
-                                    <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d9e2dc] bg-white px-3.5 py-2.5 text-sm text-[#17211b] transition hover:bg-[#f7faf8] has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/50" for="subsistema-{{ $cuenta->id }}">
-                                        <input
-                                            id="subsistema-{{ $cuenta->id }}"
-                                            class="h-4 w-4 rounded border-[#d9e2dc] text-emerald-700 focus:ring-emerald-600"
-                                            name="subsistemas[]"
-                                            type="checkbox"
-                                            value="{{ $cuenta->subsystem?->slug }}"
-                                            @checked(in_array($cuenta->subsystem?->slug, old('subsistemas', []) ?? []))
-                                        >
-                                        <span>{{ $cuenta->subsystem?->nombre ?: 'Subsistema no disponible' }} <span class="font-mono text-xs text-[#68756d]">({{ $cuenta->credencial_usuario }})</span></span>
-                                    </label>
-                                @endforeach
-                            </div>
-                            @error('subsistemas')<small class="{{ $err }}">{{ $message }}</small>@enderror
-                            @error('subsistemas.*')<small class="{{ $err }}">{{ $message }}</small>@enderror
-                        </fieldset>
-
-                        <div class="mb-5 grid gap-4 sm:grid-cols-2">
-                            <div class="sm:col-span-2">
-                                <label class="{{ $label }}" for="motivo_suspension">Motivo</label>
-                                <input id="motivo_suspension" class="{{ $input }}" name="motivo_suspension" type="text" maxlength="500" required value="{{ old('motivo_suspension') }}">
-                                @error('motivo_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
-                            </div>
-                            <div>
-                                <label class="{{ $label }}" for="inicio_suspension">Inicio</label>
-                                <input id="inicio_suspension" class="{{ $input }}" name="inicio_suspension" type="date" value="{{ old('inicio_suspension') }}">
-                                <small class="{{ $hint }}">Si lo dejas vacío, empieza ahora.</small>
-                                @error('inicio_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
-                            </div>
-                            <div>
-                                <label class="{{ $label }}" for="fin_suspension">Fin</label>
-                                <input id="fin_suspension" class="{{ $input }}" name="fin_suspension" type="date" value="{{ old('fin_suspension') }}">
-                                <small class="{{ $hint }}">Opcional: sin fin, la suspensión es indefinida.</small>
-                                @error('fin_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
-                            </div>
+                    {{-- Modal Content --}}
+                    <div class="relative w-full max-w-2xl rounded-2xl border border-[#d9e2dc] bg-white shadow-2xl overflow-hidden">
+                        <div class="flex items-center justify-between border-b border-[#d9e2dc] bg-[#f7faf8] px-6 py-4">
+                            <h2 class="text-xl font-bold text-[#17211b]">Suspender cuentas</h2>
+                            <button type="button" @click="showSuspension = false" class="text-[#68756d] hover:text-[#17211b]">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
                         </div>
 
-                        <button class="{{ $btnSecondary }}" type="submit" onclick="return confirm('¿Deseas suspender las cuentas marcadas?');">Suspender</button>
-                    </form>
+                        <div class="p-6">
+                            <form action="{{ route('gestor-users.suspend', $gestorUser) }}" method="POST">
+                                @csrf
+
+                                <fieldset class="mb-6">
+                                    <legend class="mb-2 text-sm font-bold text-[#17211b]">Subsistemas</legend>
+                                    <p class="mb-4 text-xs text-[#68756d]">Sin marcar ninguno, se suspenderán todas las cuentas del usuario.</p>
+
+                                    <div class="grid gap-2 sm:grid-cols-2">
+                                        @foreach ($gestorUser->subsystemAccounts as $cuenta)
+                                            <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d9e2dc] bg-white px-3.5 py-2.5 text-sm text-[#17211b] transition hover:bg-[#f7faf8] has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/50" for="subsistema-{{ $cuenta->id }}">
+                                                <input
+                                                    id="subsistema-{{ $cuenta->id }}"
+                                                    class="h-4 w-4 rounded border-[#d9e2dc] text-emerald-700 focus:ring-emerald-600"
+                                                    name="subsistemas[]"
+                                                    type="checkbox"
+                                                    value="{{ $cuenta->subsystem?->slug }}"
+                                                    @checked(in_array($cuenta->subsystem?->slug, old('subsistemas', []) ?? []))
+                                                >
+                                                <span>{{ $cuenta->subsystem?->nombre ?: 'Subsistema no disponible' }} <span class="font-mono text-xs text-[#68756d]">({{ $cuenta->credencial_usuario }})</span></span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    @error('subsistemas')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                                    @error('subsistemas.*')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                                </fieldset>
+
+                                <div class="mb-6 grid gap-4 sm:grid-cols-2">
+                                    <div class="sm:col-span-2">
+                                        <label class="{{ $label }}" for="motivo_suspension">Motivo</label>
+                                        <input id="motivo_suspension" class="{{ $input }}" name="motivo_suspension" type="text" maxlength="500" required value="{{ old('motivo_suspension') }}">
+                                        @error('motivo_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="{{ $label }}" for="inicio_suspension">Inicio</label>
+                                        <input id="inicio_suspension" class="{{ $input }}" name="inicio_suspension" type="date" value="{{ old('inicio_suspension') }}">
+                                        <small class="{{ $hint }}">Si lo dejas vacío, empieza ahora.</small>
+                                        @error('inicio_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="{{ $label }}" for="fin_suspension">Fin</label>
+                                        <input id="fin_suspension" class="{{ $input }}" name="fin_suspension" type="date" value="{{ old('fin_suspension') }}">
+                                        <small class="{{ $hint }}">Opcional: sin fin, la suspensión es indefinida.</small>
+                                        @error('fin_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-end gap-3">
+                                    <button type="button" @click="showSuspension = false" class="{{ $btnSecondary }}">Cancelar</button>
+                                    <button class="{{ $btnSecondary }}" type="submit" onclick="return confirm('¿Deseas suspender las cuentas marcadas?');">Suspender</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             @endif
         @endcan
 
         {{-- Dar de baja --}}
         @can('offboard', $gestorUser)
-            @unless ($gestorUser->estaDadoDeBaja())
+            @unless ($gestorUser->estaDadoDeBaja() || $gestorUser->estaSuspendido())
                 <div class="mt-8 rounded-xl border border-red-200 bg-red-50/40 p-5 sm:p-6">
                     <h2 class="mb-1 text-xl font-bold text-red-800">Dar de baja</h2>
                     <p class="mb-4 text-sm text-[#68756d]">
@@ -207,7 +308,7 @@
         <div class="mt-8">
             <div class="mb-4 flex items-center justify-between gap-3">
                 <h2 class="text-xl font-bold text-[#17211b]">Cuentas en subsistemas</h2>
-                @can('create', [App\Models\UserSubsystemAccount::class])
+                @can('createAccount', $gestorUser)
                     <a class="{{ $btnPrimary }}" href="{{ route('gestor-users.accounts.create', $gestorUser) }}">Nueva cuenta</a>
                 @endcan
             </div>
@@ -229,7 +330,6 @@
                         </thead>
                         <tbody class="divide-y divide-[#e8eee9]">
                             @foreach ($gestorUser->subsystemAccounts as $account)
-                                @php($status = $account->estado?->value ?? $account->estado)
                                 <tr class="align-middle transition hover:bg-[#f7faf8]">
                                     <td class="px-4 py-3.5 font-bold text-[#17211b]">
                                         @if ($account->subsystem)
@@ -263,7 +363,7 @@
                                     <td class="px-4 py-3.5">
                                         @if ($account->subsystem)
                                             <div class="flex items-center justify-start gap-2 whitespace-nowrap sm:justify-end">
-                                                @if ($status === 'activo')
+                                                @if ($account->estado === \App\Enums\SubsystemAccountStatus::Activo)
                                                     @can('disable', $account)
                                                         <form action="{{ route('subsystems.accounts.action', [$account->subsystem, $account]) }}" method="POST">
                                                             @csrf

@@ -6,6 +6,7 @@ use App\Contracts\IdentityProviderInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Enums\OperationAccountStatus;
 use App\Enums\OperationType;
+use App\Enums\GestorUserStatus;
 use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
@@ -116,6 +117,12 @@ class UserProvisioningService
 
     private function guardarUsuarioLocal(array $datos): GestorUser
     {
+        $existente = GestorUser::query()->where('cpf', $datos['cpf'])->first();
+
+        if ($existente && $existente->estado !== GestorUserStatus::Activo) {
+            throw new ProvisioningException('No se puede provisionar una cuenta para un gestor que no está activo.');
+        }
+
         return GestorUser::updateOrCreate(
             ['cpf' => $datos['cpf']],
             [

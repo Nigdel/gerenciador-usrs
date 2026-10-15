@@ -109,11 +109,19 @@ class ProcessOperationAccount implements ShouldQueue
         $resultado = match ($operacion->tipo) {
             OperationType::Alta => $this->darDeAlta($fila, $usuario, $operacion, $provisioning),
             OperationType::Suspension => $this->suspender($fila, $suspension),
+            OperationType::SuspensionGestor => $this->sobreLaCuentaDeGestor(
+                $fila,
+                fn (UserSubsystemAccount $cuenta) => $offboarding->suspenderCuentaPorGestor($cuenta),
+            ),
             OperationType::Baja => $this->sobreLaCuenta(
                 $fila,
                 fn (UserSubsystemAccount $cuenta) => $offboarding->darDeBajaCuenta($cuenta),
             ),
             OperationType::Reactivacion => $this->sobreLaCuenta(
+                $fila,
+                fn (UserSubsystemAccount $cuenta) => $offboarding->reactivarCuenta($cuenta),
+            ),
+            OperationType::ReactivacionGestor => $this->sobreLaCuentaDeGestor(
                 $fila,
                 fn (UserSubsystemAccount $cuenta) => $offboarding->reactivarCuenta($cuenta),
             ),
@@ -159,6 +167,29 @@ class ProcessOperationAccount implements ShouldQueue
                 'subsistema' => $fila->subsistema,
                 'exito' => false,
                 'mensaje' => 'La cuenta ya no existe.',
+                'cuenta' => null,
+            ];
+        }
+
+        return $accion($cuenta);
+    }
+
+    /**
+     * Una cuenta eliminada durante una suspensión global ya no puede conceder
+     * acceso, así que no debe dejar bloqueada la transición del gestor.
+     *
+     * @param  callable(UserSubsystemAccount): array  $accion
+     * @return array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}
+     */
+    private function sobreLaCuentaDeGestor(ProvisioningOperationAccount $fila, callable $accion): array
+    {
+        $cuenta = $fila->cuenta;
+
+        if (! $cuenta instanceof UserSubsystemAccount) {
+            return [
+                'subsistema' => $fila->subsistema,
+                'exito' => true,
+                'mensaje' => 'La cuenta fue eliminada y no requiere cambios.',
                 'cuenta' => null,
             ];
         }

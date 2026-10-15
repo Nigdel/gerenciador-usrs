@@ -26,6 +26,7 @@ class UserSubsystemAccountController extends Controller
     public function create(GestorUser $gestorUser): View
     {
         $this->authorize('create', UserSubsystemAccount::class);
+        $this->authorize('createAccount', $gestorUser);
 
         return view('gestor-users.accounts.create', [
             'gestorUser' => $gestorUser,
@@ -37,6 +38,7 @@ class UserSubsystemAccountController extends Controller
     public function store(UserSubsystemAccountRequest $request, GestorUser $gestorUser): RedirectResponse
     {
         $this->authorize('create', UserSubsystemAccount::class);
+        $this->authorize('createAccount', $gestorUser);
 
         $data = $request->validated();
         $data['gestor_user_id'] = $gestorUser->id;

@@ -94,6 +94,10 @@
                                         <span class="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700" title="Dado de baja">
                                             <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>De baja
                                         </span>
+                                    @elseif ($gestorUser->estaSuspendido())
+                                        <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800" title="Gestor suspendido">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspendido
+                                        </span>
                                     @else
                                         <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
                                             <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Activo

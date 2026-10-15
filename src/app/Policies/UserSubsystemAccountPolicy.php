@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\GestorUserStatus;
 use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Auth\Access\HandlesAuthorization;
@@ -39,7 +40,8 @@ class UserSubsystemAccountPolicy
      */
     public function update(User $user, UserSubsystemAccount $account): bool
     {
-        return in_array($user->role, ['admin', 'operador']);
+        return in_array($user->role, ['admin', 'operador'])
+            && $account->user?->estado !== GestorUserStatus::Suspendido;
     }
 
     /**
@@ -63,7 +65,8 @@ class UserSubsystemAccountPolicy
      */
     public function reactivate(User $user, UserSubsystemAccount $account): bool
     {
-        return in_array($user->role, ['admin', 'operador']);
+        return in_array($user->role, ['admin', 'operador'])
+            && $account->user?->estado !== GestorUserStatus::Suspendido;
     }
 
     /**

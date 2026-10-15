@@ -32,6 +32,16 @@ Route::middleware('auth')->group(function () {
     )->name('gestor-users.suspend');
 
     Route::post(
+        'gestor-users/{gestorUser}/suspend-manager',
+        [GestorUserController::class, 'suspendManager']
+    )->name('gestor-users.suspend-manager');
+
+    Route::post(
+        'gestor-users/{gestorUser}/reactivate-manager',
+        [GestorUserController::class, 'reactivateManager']
+    )->name('gestor-users.reactivate-manager');
+
+    Route::post(
         'gestor-users/{gestorUser}/reset-password',
         [GestorUserController::class, 'resetPassword']
     )->name('gestor-users.reset-password');

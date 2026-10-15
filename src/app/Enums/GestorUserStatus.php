@@ -6,18 +6,18 @@ namespace App\Enums;
  * Estado del usuario gestionado, independiente del estado de cada una de sus
  * cuentas en subsistemas (SubsystemAccountStatus).
  *
- * Son dos niveles distintos y no conviene mezclarlos: una persona puede estar
- * 'baja' aquí y tener una cuenta todavía activa en un subsistema al que la
- * baja no llegó, y eso es justo lo que la ficha tiene que poder explicar.
+ * 'suspendido' representa una suspensión temporal del gestor; 'baja' representa
+ * el fin del vínculo. Ninguno de esos valores se deduce de los estados de cuenta.
  */
 enum GestorUserStatus: string
 {
     case Activo = 'activo';
 
+    case Suspendido = 'suspendido';
+
     /**
-     * El usuario está de baja: todas sus cuentas están deshabilitadas en los
-     * subsistemas y no debería volver a acceder. El estado es reversible con
-     * UserOffboardingService::reactivar(); no se borra nada.
+     * El vínculo laboral terminó. Este estado corresponde a la baja completa,
+     * no a una suspensión temporal del gestor.
      */
     case Baja = 'baja';
 }

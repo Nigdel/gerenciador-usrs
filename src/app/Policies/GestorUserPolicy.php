@@ -34,6 +34,13 @@ class GestorUserPolicy
         return in_array($user->role, ['admin', 'operador']);
     }
 
+    public function createAccount(User $user, GestorUser $gestorUser): bool
+    {
+        return in_array($user->role, ['admin', 'operador'])
+            && ! $gestorUser->estaSuspendido()
+            && ! $gestorUser->estaDadoDeBaja();
+    }
+
     /**
      * Determine whether the user can update the model.
      */
@@ -74,6 +81,19 @@ class GestorUserPolicy
      * de quien la pide: el operador que la ejecute no debería poder hacerlo.
      */
     public function offboard(User $user, GestorUser $gestorUser): bool
+    {
+        return $user->role === 'admin';
+    }
+
+    /**
+     * Suspend or reactivate the manager and all accounts captured for that action.
+     */
+    public function suspendManager(User $user, GestorUser $gestorUser): bool
+    {
+        return $user->role === 'admin';
+    }
+
+    public function reactivateManager(User $user, GestorUser $gestorUser): bool
     {
         return $user->role === 'admin';
     }

@@ -14,8 +14,10 @@ enum OperationType: string
 {
     case Alta = 'alta';
     case Suspension = 'suspension';
+    case SuspensionGestor = 'suspension_gestor';
     case Baja = 'baja';
     case Reactivacion = 'reactivacion';
+    case ReactivacionGestor = 'reactivacion_gestor';
     case Sincronizacion = 'sincronizacion';
     case ResetPassword = 'reset_password';
 
@@ -27,8 +29,10 @@ enum OperationType: string
         return match ($this) {
             self::Alta => 'Alta',
             self::Suspension => 'Suspensión',
+            self::SuspensionGestor => 'Suspensión del gestor',
             self::Baja => 'Baja',
             self::Reactivacion => 'Reactivación',
+            self::ReactivacionGestor => 'Reactivación del gestor',
             self::Sincronizacion => 'Sincronización de datos',
             // En minúsculas y con guion a propósito: a diferencia de los otros
             // cinco, este nunca lo ve un operador en un botón —nace ya
@@ -51,8 +55,10 @@ enum OperationType: string
         return match ($this) {
             self::Alta => 'El alta en los subsistemas está en curso',
             self::Suspension => 'La suspensión está en curso',
+            self::SuspensionGestor => 'La suspensión del gestor está en curso',
             self::Baja => 'La baja está en curso',
             self::Reactivacion => 'La reactivación está en curso',
+            self::ReactivacionGestor => 'La reactivación del gestor está en curso',
             self::Sincronizacion => 'La sincronización está en curso',
             // No hay aviso porque nunca se encola: ver el docblock.
             self::ResetPassword => 'El restablecimiento está en curso',
@@ -74,24 +80,24 @@ enum OperationType: string
         return match ($this) {
             self::Alta => 'create',
             self::Suspension => 'suspend',
+            self::SuspensionGestor => 'suspendManager',
             self::Baja => 'offboard',
             self::Reactivacion, self::Sincronizacion => 'update',
+            self::ReactivacionGestor => 'reactivateManager',
             self::ResetPassword => 'resetPassword',
         };
     }
 
     /**
-     * Los dos tipos cuyo desenlace cambia además el estado del GestorUser.
+     * Los tipos cuyo desenlace cambia además el estado del GestorUser.
      *
-     * El alta, la suspensión y la sincronización no lo tocan: suspender una
-     * cuenta no suspende al usuario. Y marcarlo de baja depende de que TODAS
-     * las cuentas queden deshabilitadas, cosa que un job por cuenta no puede
-     * saber; de eso se encarga ProvisioningOperationService::cerrar().
+     * Las operaciones por cuenta no cambian el estado del gestor. Las
+     * operaciones de gestor esperan a que todas las cuentas terminen.
      *
      * @return array<int, self>
      */
     public static function queCambianElEstadoDelUsuario(): array
     {
-        return [self::Baja, self::Reactivacion];
+        return [self::SuspensionGestor, self::Baja, self::Reactivacion, self::ReactivacionGestor];
     }
 }

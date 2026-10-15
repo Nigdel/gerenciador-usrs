@@ -39,9 +39,13 @@ class AuditService
 
     public const USUARIO_SUSPENDIDO = 'gestor_usuario.suspendido';
 
+    public const USUARIO_SUSPENDIDO_GESTOR = 'gestor_usuario.suspendido_gestor';
+
     public const USUARIO_DADO_DE_BAJA = 'gestor_usuario.dado_de_baja';
 
     public const USUARIO_REACTIVADO = 'gestor_usuario.reactivado';
+
+    public const USUARIO_REACTIVADO_GESTOR = 'gestor_usuario.reactivado_gestor';
 
     public const USUARIO_SINCRONIZADO = 'gestor_usuario.subsistemas_sincronizados';
 

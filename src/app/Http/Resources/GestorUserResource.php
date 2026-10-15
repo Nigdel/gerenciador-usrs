@@ -15,6 +15,8 @@ class GestorUserResource extends JsonResource
             'cpf' => $this->cpf,
             'usuario' => $this->usuario,
             'empresa' => $this->empresa,
+            'estado' => $this->estado->value,
+            'fin_suspension_gestor' => $this->fin_suspension_gestor,
             'email_personal' => $this->email_personal,
             'telefono_personal' => $this->telefono_personal,
             'telefono_trabajo' => $this->telefono_trabajo,

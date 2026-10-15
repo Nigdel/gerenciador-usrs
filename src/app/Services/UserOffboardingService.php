@@ -30,16 +30,15 @@ use Throwable;
  * deshabilitada, la fila local no se toca.
  *
  * Desde la Fase 3.2 este servicio ya **no itera cuentas**: eso lo hace un job
- * por cuenta. Aquí quedan solo dos cosas, y ambas por lo que no se puede
- * hacer desde un job:
+ * por cuenta. Aquí quedan las precondiciones y las acciones individuales:
  *
  *  - las precondiciones (validarBaja()), que el controlador comprueba antes de
  *    encolar para que el operador siga viendo el error en el momento, y
- *  - el método por cuenta, que el job llama una vez por cada una.
+ *  - los métodos por cuenta de baja, suspensión del gestor y reactivación.
  *
- * El estado 'baja' del GestorUser lo escribe ProvisioningOperationService::cerrar(),
- * porque depende de que TODAS las cuentas hayan salido bien y un job por
- * cuenta no puede saberlo.
+ * Los estados de baja y suspensión del GestorUser los escribe
+ * ProvisioningOperationService::cerrar(), porque dependen de que TODAS las
+ * cuentas hayan salido bien y un job por cuenta no puede saberlo.
  */
 class UserOffboardingService
 {
@@ -56,6 +55,14 @@ class UserOffboardingService
     {
         if ($gestorUser->estaDadoDeBaja()) {
             throw new ProvisioningException('El usuario ya está dado de baja.');
+        }
+
+        if ($gestorUser->estaSuspendido()) {
+            throw new ProvisioningException('Reactiva al gestor antes de darlo de baja.');
+        }
+
+        if ($gestorUser->cuentasSuspendidasPorGestor()->exists()) {
+            throw new ProvisioningException('Resuelve la suspensión anterior del gestor antes de darlo de baja.');
         }
     }
 
@@ -146,14 +153,58 @@ class UserOffboardingService
     }
 
     /**
+     * Deshabilita una cuenta que estaba activa al suspender al gestor.
+     *
+     * A diferencia de la baja completa, conserva la cuenta como deshabilitada
+     * en vez de marcarla como borrada y no elimina datos de suspensión propios.
+     *
+     * @return array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}
+     */
+    public function suspenderCuentaPorGestor(UserSubsystemAccount $cuenta): array
+    {
+        if ($cuenta->estado !== SubsystemAccountStatus::Activo) {
+            return $this->resultado($cuenta, true, 'La cuenta ya no estaba activa; se conservó su estado actual.');
+        }
+
+        $servicio = $this->resolver($cuenta);
+
+        if ($servicio === null) {
+            return $this->resultado($cuenta, false, 'No hay ningún driver registrado para el subsistema '.$cuenta->subsystem?->slug.'.');
+        }
+
+        try {
+            $resultado = $servicio->disableUser($cuenta);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->resultado($cuenta, false, $exception->getMessage());
+        }
+
+        if (! $resultado->success) {
+            return $this->resultado($cuenta, false, $resultado->mensaje ?? 'El subsistema no deshabilitó la cuenta.');
+        }
+
+        if (! $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'])) {
+            return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara deshabilitada.');
+        }
+
+        $cuenta->update([
+            'estado' => SubsystemAccountStatus::Deshabilitado,
+            'meta' => $resultado->raw,
+        ]);
+
+        return $this->resultado($cuenta, true, 'Cuenta deshabilitada por la suspensión del gestor.');
+    }
+
+    /**
      * @return array{subsistema: ?string, exito: bool, mensaje: ?string, cuenta: ?UserSubsystemAccount}
      */
     public function reactivarCuenta(UserSubsystemAccount $cuenta): array
     {
         $subsistema = $cuenta->subsystem;
 
-        if ($cuenta->estado !== SubsystemAccountStatus::Borrado) {
-            return $this->resultado($cuenta, true, 'La cuenta ya estaba activa.');
+        if (! in_array($cuenta->estado, [SubsystemAccountStatus::Borrado, SubsystemAccountStatus::Deshabilitado], true)) {
+            return $this->resultado($cuenta, true, 'La cuenta no requiere reactivación.');
         }
 
         $servicio = $this->resolver($cuenta);

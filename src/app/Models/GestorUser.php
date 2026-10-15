@@ -6,6 +6,7 @@ use App\Enums\GestorUserStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Hash;
 
@@ -28,11 +29,16 @@ class GestorUser extends Model
         'estado',
         'baja_at',
         'motivo_baja',
+        'suspendido_at',
+        'motivo_suspension_gestor',
+        'fin_suspension_gestor',
     ];
 
     protected $casts = [
         'estado' => GestorUserStatus::class,
         'baja_at' => 'datetime',
+        'suspendido_at' => 'datetime',
+        'fin_suspension_gestor' => 'datetime',
     ];
 
     /**
@@ -64,7 +70,7 @@ class GestorUser extends Model
 
     /**
      * Filtro por estado. El tipo es el enum, no un string: un valor que no sea
-     * 'activo' ni 'baja' no llega a la consulta.
+     * 'activo', 'suspendido' o 'baja' no llega a la consulta.
      */
     public function scopeDelEstado(Builder $query, ?GestorUserStatus $estado): Builder
     {
@@ -101,6 +107,11 @@ class GestorUser extends Model
         return $this->estado === GestorUserStatus::Baja;
     }
 
+    public function estaSuspendido(): bool
+    {
+        return $this->estado === GestorUserStatus::Suspendido;
+    }
+
     protected $hidden = [
         'password_general',
     ];
@@ -122,6 +133,22 @@ class GestorUser extends Model
     public function subsystemAccounts(): HasMany
     {
         return $this->hasMany(UserSubsystemAccount::class, 'gestor_user_id');
+    }
+
+    /**
+     * Cuentas que estaban activas cuando se suspendió al gestor.
+     *
+     * La relación es una captura explícita: no se deduce del estado actual de
+     * las cuentas, que puede cambiar por acciones independientes.
+     */
+    public function cuentasSuspendidasPorGestor(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            UserSubsystemAccount::class,
+            'gestor_user_suspension_accounts',
+            'gestor_user_id',
+            'user_subsystem_account_id',
+        )->withTimestamps();
     }
 
     /**

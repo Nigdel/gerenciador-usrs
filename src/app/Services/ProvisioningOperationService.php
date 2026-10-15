@@ -31,9 +31,9 @@ use Throwable;
  * El reparto de responsabilidades es el siguiente: el controlador **prepara**
  * (valida y llama a describir() + despachar()), el job **ejecuta** una cuenta y
  * llama a registrarResultado(), y cerrar() es el único sitio que sabe cuándo
- * se acabó todo y puede, por tanto, escribir el estado 'baja' del usuario —que
- * depende de que TODAS las cuentas salieran bien y que un job por cuenta no
- * puede decidir.
+ * se acabó todo y puede, por tanto, escribir el estado de gestor de baja o
+ * suspensión —que depende de que TODAS las cuentas salieran bien y que un job
+ * por cuenta no puede decidir.
  */
 class ProvisioningOperationService
 {
@@ -91,6 +91,10 @@ class ProvisioningOperationService
 
             $operacion->terminada_at = $operacion->estado === OperationStatus::Completada ? now() : null;
             $operacion->save();
+
+            if ($trabajo->isEmpty()) {
+                $this->aplicarEstadoDelUsuario($operacion, 0);
+            }
 
             foreach ($trabajo as $unidad) {
                 ProvisioningOperationAccount::create([
@@ -153,6 +157,10 @@ class ProvisioningOperationService
      */
     public function despachar(ProvisioningOperation $operacion): void
     {
+        if ($operacion->cuentas()->doesntExist()) {
+            return;
+        }
+
         // Antes de despachar, no después: con QUEUE_CONNECTION=sync los jobs
         // corren dentro de este mismo bucle y cerrar() deja la operación en
         // Completada/Fallida. Marcarla EnCurso al final pisaría ese resultado
@@ -292,21 +300,40 @@ class ProvisioningOperationService
             return;
         }
 
-        if ($operacion->tipo === OperationType::Baja) {
-            $usuario->update([
+        match ($operacion->tipo) {
+            OperationType::SuspensionGestor => $usuario->update([
+                'estado' => GestorUserStatus::Suspendido,
+                'suspendido_at' => now(),
+                'motivo_suspension_gestor' => $operacion->payload['motivo_suspension_gestor'] ?? null,
+                'fin_suspension_gestor' => $operacion->payload['fin_suspension_gestor'] ?? null,
+            ]),
+            OperationType::Baja => $usuario->update([
                 'estado' => GestorUserStatus::Baja,
                 'baja_at' => now(),
                 'motivo_baja' => $operacion->payload['motivo_baja'] ?? null,
-            ]);
+                'suspendido_at' => null,
+                'motivo_suspension_gestor' => null,
+                'fin_suspension_gestor' => null,
+            ]),
+            OperationType::ReactivacionGestor => $this->reactivarGestor($usuario),
+            OperationType::Reactivacion => $usuario->update([
+                'estado' => GestorUserStatus::Activo,
+                'baja_at' => null,
+                'motivo_baja' => null,
+            ]),
+            default => null,
+        };
+    }
 
-            return;
-        }
-
+    private function reactivarGestor(GestorUser $usuario): void
+    {
         $usuario->update([
             'estado' => GestorUserStatus::Activo,
-            'baja_at' => null,
-            'motivo_baja' => null,
+            'suspendido_at' => null,
+            'motivo_suspension_gestor' => null,
+            'fin_suspension_gestor' => null,
         ]);
+        $usuario->cuentasSuspendidasPorGestor()->detach();
     }
 
     /**

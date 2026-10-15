@@ -116,6 +116,18 @@ class GestorUserListingTest extends TestCase
             ->assertDontSee('Bruno Baja');
     }
 
+    public function test_se_puede_filtrar_y_mostrar_gestores_suspendidos(): void
+    {
+        $this->usuario(['nombre_completo' => 'Ana Activa']);
+        $this->usuario(['nombre_completo' => 'Bruno Suspendido'])->update(['estado' => 'suspendido']);
+
+        $this->get(route('gestor-users.index', ['estado' => 'suspendido']))
+            ->assertOk()
+            ->assertSee('Bruno Suspendido')
+            ->assertSee('Gestor suspendido')
+            ->assertDontSee('Ana Activa');
+    }
+
     public function test_se_puede_filtrar_por_subsistema(): void
     {
         $adagio = Subsystem::create(['nombre' => 'Adagio', 'slug' => 'adagio', 'activo' => true]);
