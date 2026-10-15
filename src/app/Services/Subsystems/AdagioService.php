@@ -208,7 +208,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         }
 
         try {
-            $response = $this->request($account->subsystem, 'POST', 'kliosAnalise/usuarios/alterarStatus', form: [
+            $response = $this->request($account->subsystem, 'POST', 'proprietarios/internos/alterarStatus', form: [
                 'documento' => $documento,
                 'email' => $account->credencial_usuario,
                 'status' => $activar ? 1 : 0,
@@ -223,9 +223,21 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         }
 
         if ($response->successful()) {
+            $status = $response->json('status');
+
+            if ($status === 'Opção não permitida') {
+                return SubsystemOperationResult::fail('Adagio: Opção não permitida', $response->json() ?? []);
+            }
+
+            $estadoInterno = match ($status) {
+                'Usuário ativado' => 'activo',
+                'Usuário desativado' => 'suspendido',
+                default => $activar ? 'activo' : 'suspendido',
+            };
+
             return SubsystemOperationResult::ok(
-                estado: $activar ? 'activo' : 'suspendido',
-                mensaje: $response->json('status'),
+                estado: $estadoInterno,
+                mensaje: $status,
                 raw: $response->json() ?? [],
             );
         }
@@ -251,7 +263,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
     }
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->request($account->subsystem, 'DELETE', "proprietarios/internos/{$account->external_account_id}");
+        $response = $this->request($account->subsystem, 'POST', "proprietarios/internos/alterarStatus");
 
         if ($response->failed()) {
             return SubsystemOperationResult::fail('No se pudo deshabilitar el propietario en Adagio (endpoint no confirmado)', $response->json() ?? []);
@@ -283,20 +295,19 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
         $usuario = $this->extraerUsuario($response);
 
-        // Adagio responde 200 con {"usuario": null} cuando el usuario está
-        // desactivado o no existe. Esta cuenta ya existía en Adagio, así que
-        // se interpreta como desactivado.
         if (empty($usuario)) {
             return SubsystemOperationResult::ok(
                 estado: 'suspendido',
-                mensaje: 'Adagio no devuelve el usuario (desactivado o inexistente)',
+                mensaje: 'Usuario no encontrado en Adagio',
                 raw: $response->json() ?? [],
             );
         }
 
-        // La presencia del usuario en la respuesta ya indica que está activo,
-        // ya que Adagio devuelve null para usuarios desactivados.
-        $estado = 'activo';
+        // El estado se determina por el campo deleted_at:
+        // null = activo, fecha = desactivado.
+        $estado = isset($usuario['deleted_at']) && $usuario['deleted_at'] !== null
+            ? 'suspendido'
+            : 'activo';
 
         return SubsystemOperationResult::ok(
             externalAccountId: isset($usuario['id']) ? (string) $usuario['id'] : null,
