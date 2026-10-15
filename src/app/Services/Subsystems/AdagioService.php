@@ -281,7 +281,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             );
         }
 
-        $usuario = $response->json('usuario');
+        $usuario = $this->extraerUsuario($response);
 
         // Adagio responde 200 con {"usuario": null} cuando el usuario está
         // desactivado o no existe. Esta cuenta ya existía en Adagio, así que
@@ -294,7 +294,9 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             );
         }
 
-        $estado = empty($usuario['deleted_at']) ? 'activo' : 'suspendido';
+        // La presencia del usuario en la respuesta ya indica que está activo,
+        // ya que Adagio devuelve null para usuarios desactivados.
+        $estado = 'activo';
 
         return SubsystemOperationResult::ok(
             externalAccountId: isset($usuario['id']) ? (string) $usuario['id'] : null,

@@ -7,6 +7,7 @@ use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\User;
 use App\Models\UserSubsystemAccount;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -18,6 +19,7 @@ class SubsystemTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware(PreventRequestForgery::class);
         $this->actingAs(User::factory()->create());
     }
 
@@ -418,6 +420,50 @@ class SubsystemTest extends TestCase
         $this->assertNull($account->inicio_suspension);
         $this->assertNull($account->fin_suspension);
         $this->assertNull($account->motivo_suspension);
+    }
+
+    public function test_adagio_habilita_una_cuenta_sin_consultar_un_estado_remoto_no_disponible(): void
+    {
+        $subsystem = Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'api_url' => 'https://adagio.test/api',
+            'api_config' => [
+                'email' => 'service@example.test',
+                'password' => 'secret',
+            ],
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678900',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez@acme.test',
+            'external_account_id' => '42',
+            'estado' => 'deshabilitado',
+        ]);
+
+        Http::fake(fn ($request) => str_ends_with($request->url(), '/kliosAnalise/login')
+            ? Http::response(['token' => 'adagio-token'])
+            : Http::response(['status' => 'Usuário ativado']));
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'enable',
+        ])->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success');
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/kliosAnalise/usuarios/alterarStatus'));
+        $this->assertDatabaseHas('user_subsystem_accounts', [
+            'id' => $account->id,
+            'estado' => 'activo',
+        ]);
     }
 
     public function test_deshabilitar_no_limpia_el_rastro_de_la_suspension(): void

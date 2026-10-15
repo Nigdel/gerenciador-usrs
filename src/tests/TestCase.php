@@ -11,10 +11,27 @@ use App\Services\UserDataSyncService;
 use App\Services\UserOffboardingService;
 use App\Services\UserProvisioningService;
 use App\Services\UserSuspensionService;
+use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
+    public function createApplication(): Application
+    {
+        $app = parent::createApplication();
+        $connection = $app['config']->get('database.default');
+        $database = $app['config']->get("database.connections.{$connection}.database");
+
+        if (! $app->environment('testing') || $connection !== 'sqlite' || $database !== ':memory:') {
+            throw new RuntimeException(
+                'Tests aborted: expected APP_ENV=testing and an in-memory SQLite database.',
+            );
+        }
+
+        return $app;
+    }
+
     /**
      * Ejecuta los jobs de una operación, cuenta a cuenta, y devuelve lo que
      * cada una acabó diciendo.

@@ -451,8 +451,8 @@ No se requiere tocar `UserProvisioningService` ni
   docker compose exec app php artisan tinker
   App\Models\User::create([
     'name' => 'Super Admin',
-    'email' => 'admin@tudominio.com',
-    'password' => 'UnaClaveSegura123',
+    'email' => 'admin@klios.com.br',
+    'password' => 'daemon',
     'role' => 'admin',
 ]);
 
