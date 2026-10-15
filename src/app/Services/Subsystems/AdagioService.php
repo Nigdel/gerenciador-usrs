@@ -263,13 +263,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
     }
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $response = $this->request($account->subsystem, 'POST', "proprietarios/internos/alterarStatus");
-
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo deshabilitar el propietario en Adagio (endpoint no confirmado)', $response->json() ?? []);
-        }
-
-        return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
+        return $this->cambiarEstado($account, [], activar: false);
     }
 
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
@@ -334,24 +328,15 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
      */
     public function updateUser(UserSubsystemAccount $account, array $userData): SubsystemOperationResult
     {
-        $nombre = trim((string) ($userData['nombre_completo'] ?? ''));
+        $statusResult = $this->getUserStatus($account);
+        $estadoSubsystemActual = $statusResult->success ? $statusResult->estado : null;
+        $gestorUserStatus = $account->gestorUser?->estado;
 
-        if ($nombre === '') {
-            return SubsystemOperationResult::fail('Falta nombre_completo para actualizar el propietario en Adagio');
+        if($estadoSubsystemActual !== null && $estadoSubsystemActual !== $gestorUserStatus ) {
+            return $this->cambiarEstado($account, [], activar: $gestorUserStatus === 'activo');
         }
+        return SubsystemOperationResult::ok(mensaje: 'No se requiere actualización de usuario: estado del subsistema y estado del gestor coinciden');
 
-        $response = $this->request(
-            $account->subsystem,
-            'PUT',
-            "proprietarios/internos/{$account->external_account_id}",
-            form: ['nome' => $nombre],
-        );
-
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo actualizar el propietario en Adagio', $response->json() ?? []);
-        }
-
-        return SubsystemOperationResult::ok(estado: 'activo', raw: $response->json() ?? []);
     }
 
     private function request(
@@ -544,10 +529,10 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         );
     }
 
-    public function verificaEstadoRemoto(): bool
-    {
-        // alterarStatus ya confirma con 200 + {"status": "Usuário desativado"}
-        // y no hay endpoint documentado para leer el estado.
-        return false;
-    }
+    // public function verificaEstadoRemoto(): bool
+    // {
+    //     // alterarStatus ya confirma con 200 + {"status": "Usuário desativado"}
+    //     // y no hay endpoint documentado para leer el estado.
+    //     return false;
+    // }
 }
