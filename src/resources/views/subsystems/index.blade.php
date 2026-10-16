@@ -8,6 +8,7 @@
         $btnBase = 'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2';
         $btnPrimary = $btnBase.' bg-emerald-700 text-white hover:bg-emerald-800';
         $btnSecondary = $btnBase.' border border-[#d9e2dc] bg-white text-[#17211b] hover:bg-[#f7faf8]';
+        $btnWarning = $btnBase.' bg-amber-500 text-white hover:bg-amber-600';
         $input = 'w-full rounded-lg border border-[#d9e2dc] bg-white px-3.5 py-2.5 text-sm text-[#17211b] placeholder:text-[#a3b0a8] transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20';
         $th = 'px-4 py-3.5 font-bold';
     @endphp
@@ -37,6 +38,20 @@
                 @endif
             </div>
         </form>
+
+        {{-- Prueba de conexión a todos los subsistemas activos --}}
+        @can('testAnyConnection', [App\Models\Subsystem::class])
+            <form method="POST" action="{{ route('subsystems.test-connections') }}" class="mb-6 flex justify-end">
+                @csrf
+                {{-- Se reenvía el filtro para que la recarga vuelva a la vista
+                     que el operador estaba mirando, no a la primera página. --}}
+                <input type="hidden" name="q" value="{{ $busqueda }}">
+                <button class="{{ $btnWarning }}" type="submit">
+                    <svg class="h-4 w-4" aria-hidden="true"><use href="#icon-sync"></use></svg>
+                    Testar todos os subsistemas ativos
+                </button>
+            </form>
+        @endcan
 
         @if ($subsystems->isEmpty())
             <div class="grid gap-2 rounded-xl border border-dashed border-[#d9e2dc] bg-[#f7faf8] px-6 py-11 text-center text-[#68756d]">

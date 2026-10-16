@@ -94,6 +94,9 @@ Route::middleware('auth')->group(function () {
     Route::post('subsystems/{subsystem}/test-connection', [SubsystemController::class, 'testConnection'])
         ->name('subsystems.test-connection');
 
+    Route::post('subsystems/test-connections', [SubsystemController::class, 'testConnections'])
+        ->name('subsystems.test-connections');
+
     Route::post('subsystems/{subsystem}/accounts/{userSubsystemAccount}/action', [SubsystemController::class, 'accountAction'])
         ->name('subsystems.accounts.action');
 

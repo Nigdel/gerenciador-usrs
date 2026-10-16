@@ -468,3 +468,5 @@ App\Models\Subsystem::find(15)?->delete();
 borrar las operaciones de provisionamiento
 App\Models\ProvisioningOperation::query()->delete();
 ''' 
+## Comando para testar los subsystemas activos
+docker compose exec -T app php artisan subsystems:test-connection

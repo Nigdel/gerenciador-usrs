@@ -57,4 +57,17 @@ class SubsystemPolicy
     {
         return in_array($user->role, ['admin', 'operador']);
     }
+
+    /**
+     * Probar la conexión de todos los subsistemas de una pasada.
+     *
+     * Mismos roles que probar uno: no es una operación más poderosa, es la
+     * misma repetida sobre todos los subsistemas activos. Solo recibe el
+     * usuario porque se autoriza contra la clase Subsystem, que Laravel
+     * descarta antes de invocar la policy.
+     */
+    public function testAnyConnection(User $user): bool
+    {
+        return in_array($user->role, ['admin', 'operador']);
+    }
 }

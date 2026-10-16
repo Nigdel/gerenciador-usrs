@@ -7,11 +7,13 @@ use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use App\Services\AuditService;
 use App\Services\Subsystems\BaseSubsystemService;
+use App\Services\Subsystems\SubsystemsTestConection;
 use App\Services\SubsystemServiceRegistry;
 use BackedEnum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Throwable;
@@ -28,8 +30,10 @@ class SubsystemController extends Controller
         $this->authorize('viewAny', Subsystem::class);
 
         $busqueda = trim((string) $request->query('q'));
+        $esAdmin = $request->user()->isAdmin();
 
         $subsistemas = Subsystem::query()
+            ->when(! $esAdmin, fn ($query) => $query->where('activo', true))
             ->withCount('accounts')
             ->when($busqueda !== '', fn ($query) => $query->where(
                 fn ($query) => $query->where('nombre', 'like', '%'.$busqueda.'%')
@@ -42,6 +46,7 @@ class SubsystemController extends Controller
         return view('subsystems.index', [
             'subsystems' => $subsistemas,
             'busqueda' => $busqueda,
+            'esAdmin' => $esAdmin,
         ]);
     }
 
@@ -228,6 +233,65 @@ class SubsystemController extends Controller
         }
 
         return redirect()->route('subsystems.show', $subsystem);
+    }
+
+    /**
+     * Prueba la conexión con todos los subsistemas activos de una sola pasada.
+     *
+     * Devuelve al listado con el filtro de búsqueda intacto: el resumen va en
+     * el flash y el detalle se ve en la columna "Último Test", que la propia
+     * pasada acaba de refrescar.
+     */
+    public function testConnections(Request $request, SubsystemsTestConection $subsistemas): RedirectResponse
+    {
+        $this->authorize('testAnyConnection', Subsystem::class);
+
+        $busqueda = trim((string) $request->input('q'));
+        $redirect = redirect()->route('subsystems.index', $busqueda === '' ? [] : ['q' => $busqueda]);
+
+        $resultados = $subsistemas->ejecutar();
+
+        if ($resultados->isEmpty()) {
+            return $redirect->with('warning', 'No hay subsistemas activos que probar.');
+        }
+
+        // Solo cuentan como corte los que se probaron y no conectaron: los que
+        // no admiten prueba (sin driver, o con un driver que no la soporta) se
+        // listan aparte para no hacer creer que están caídos.
+        $fallos = $resultados->where(fn (array $resultado): bool => $resultado['probada'] && ! $resultado['exito']);
+        $noProbados = $resultados->where(fn (array $resultado): bool => ! $resultado['probada']);
+
+        $sinProbar = $this->resumenNoProbados($noProbados);
+
+        if ($fallos->isNotEmpty()) {
+            return $redirect->with('error', rtrim(sprintf(
+                'Sin conexión con %s. %s',
+                $fallos->pluck('slug')->implode(', '),
+                $sinProbar,
+            )));
+        }
+
+        return $redirect->with('success', rtrim(sprintf(
+            'Conectaron %d de %d subsistemas probados. %s',
+            $resultados->where('exito', true)->count(),
+            $resultados->where('probada', true)->count(),
+            $sinProbar,
+        )));
+    }
+
+    /**
+     * @param  Collection<int, array{slug: string, nombre: string, probada: bool, exito: bool, mensaje: string}>  $noProbados
+     */
+    private function resumenNoProbados(Collection $noProbados): string
+    {
+        if ($noProbados->isEmpty()) {
+            return '';
+        }
+
+        return sprintf(
+            'Sin probar: %s.',
+            $noProbados->pluck('slug')->implode(', '),
+        );
     }
 
     public function testConnection(Subsystem $subsystem): RedirectResponse
