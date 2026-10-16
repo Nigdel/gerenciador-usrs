@@ -254,10 +254,7 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
     {
         $input = ['realname' => $userData['nombre_completo']];
 
-        if (! blank($userData['email_personal'] ?? null)) {
-            $input['_useremails'] = [$userData['email_personal']];
-        }
-
+       
         $response = $this->http($account->subsystem)->put('/User/'.$account->external_account_id, ['input' => $input]);
 
         if ($response->failed()) {
