@@ -57,3 +57,7 @@
         @apply border-red-200 bg-red-50 text-red-800;
     }
 }
+
+[x-cloak] {
+    display: none !important;
+}

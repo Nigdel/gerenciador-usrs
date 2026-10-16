@@ -459,4 +459,12 @@ No se requiere tocar `UserProvisioningService` ni
   $user = User::where('email', 'admin@klios.com.br')->first();
   $user->password = Hash::make(env('SUPERADMIN_PASSWORD', 'CambiaEstaClave123'));
   $user->save();
+
+borrar todas las cuentas de un subsystema X=14:
+App\Models\UserSubsystemAccount::where('subsystem_id', 14)->delete();
+
+borrar el subsistema 15 (solo si no tiene cuentas registradas):
+App\Models\Subsystem::find(15)?->delete();
+borrar las operaciones de provisionamiento
+App\Models\ProvisioningOperation::query()->delete();
 ''' 

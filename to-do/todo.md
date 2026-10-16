@@ -1,3 +1,4 @@
 - [ ] Implementar `db:backup` y `db:restore` comandos Artisan.
 - [ ] Configurar el schedule diario para `db:backup`.
 - [ ] Documentar el procedimiento de backup y restauración en el README.
+- [ ] Ajustar el sistema de logs para cuando alguno de los campos ya no estan en la  bd

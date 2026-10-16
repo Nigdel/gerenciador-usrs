@@ -96,7 +96,7 @@
                             @endphp
                             <tr class="align-middle transition hover:bg-[#f7faf8]">
                                 <td class="whitespace-nowrap px-4 py-3.5 font-mono text-[#17211b]">
-                                    {{ $operacion->iniciada_at ? $operacion->iniciada_at->format('d/m/Y H:i') : '—' }}
+                                    {{ $operacion->created_at ? $operacion->created_at->format('d/m/Y H:i') : '—' }}
                                 </td>
                                 <td class="px-4 py-3.5 font-bold text-[#17211b]">
                                     @if ($operacion->usuario)
