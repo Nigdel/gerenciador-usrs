@@ -34,6 +34,13 @@ $abiertas = $operaciones
             <p class="max-w-prose leading-6 text-[#68756d]">Identidad central y cuentas externas vinculadas.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            {{-- Volver vive aquí y no al pie: la ficha es larga y llegar al
+                 listado desde abajo obligaba a bajar hasta el final para
+                 comprobar si había otra acción. Mismo tratamiento de icono que
+                 el resto de la fila, con el texto solo para lectores de pantalla. --}}
+            <a class="{{ $btnSecondary }} {{ $btnIcon }}" href="{{ route('gestor-users.index') }}" aria-label="Volver a usuarios" title="Volver a usuarios"><svg class="h-4 w-4" aria-hidden="true">
+                <use href="#icon-arrow-left"></use>
+            </svg><span class="sr-only">Volver a usuarios</span></a>
             @can('update', $gestorUser)
             <a class="{{ $btnSecondary }} {{ $btnIcon }}" href="{{ route('gestor-users.edit', $gestorUser) }}" aria-label="Editar datos de {{ $gestorUser->nombre_completo }}" title="Editar datos"><svg class="h-4 w-4" aria-hidden="true">
                     <use href="#icon-edit"></use>
@@ -275,20 +282,20 @@ $abiertas = $operaciones
 
                     <div class="mb-6 grid gap-4 sm:grid-cols-2">
                         <div class="sm:col-span-2">
-                            <label class="{{ $label }}" for="motivo_suspension">Motivo</label>
+                            <label class="{{ $label }}" for="motivo_suspension">Motivo*</label>
                             <input id="motivo_suspension" class="{{ $input }}" name="motivo_suspension" type="text" maxlength="500" required value="{{ old('motivo_suspension') }}">
                             @error('motivo_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
                         </div>
                         <div>
-                            <label class="{{ $label }}" for="inicio_suspension">Inicio</label>
+                            <label class="{{ $label }}" for="inicio_suspension">Inicio*</label>
                             <input id="inicio_suspension" class="{{ $input }}" name="inicio_suspension" type="date" value="{{ old('inicio_suspension') }}">
-                            <small class="{{ $hint }}">Si lo dejas vacío, empieza ahora.</small>
+                            <small class="{{ $hint }}">Inicio del periodo de suspensión.</small>
                             @error('inicio_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
                         </div>
                         <div>
-                            <label class="{{ $label }}" for="fin_suspension">Fin</label>
+                            <label class="{{ $label }}" for="fin_suspension">Fin*</label>
                             <input id="fin_suspension" class="{{ $input }}" name="fin_suspension" type="date" value="{{ old('fin_suspension') }}">
-                            <small class="{{ $hint }}">Opcional: sin fin, la suspensión es indefinida.</small>
+                            <small class="{{ $hint }}">Fin del periodo de suspensión.</small>
                             @error('fin_suspension')<small class="{{ $err }}">{{ $message }}</small>@enderror
                         </div>
                     </div>
@@ -549,12 +556,7 @@ $abiertas = $operaciones
 
     {{-- Histórico --}}
     <div class="mt-8">
-        <h2 class="mb-1 text-xl font-bold text-[#17211b]">Histórico</h2> 
-        {{-- El histórico está paginado, no recortado: el enlace es la única vía
-             para llegar a las entradas anteriores a las de esta página. --}}
-        @if ($historial->hasPages())
-        <div class="mt-6">{{ $historial->links() }}</div>
-        @endif
+        <h2 class="mb-1 text-xl font-bold text-[#17211b]">Histórico</h2>
         <p class="mb-4 text-sm text-[#68756d]">Altas, cambios de estado y eliminaciones de sus cuentas en subsistemas.</p>
 
         @if ($historial->isEmpty())
@@ -571,35 +573,63 @@ $abiertas = $operaciones
         </div>
         @endif
         @else
-        <ol class="divide-y divide-[#e8eee9] overflow-hidden rounded-xl border border-[#d9e2dc]">
+        {{-- Acordeón: una sola variable (`abierto`) para todas las entradas, así
+             abrir una cierra la anterior en vez de dejarlas apiladas. El id de
+             la entrada va en el DOM, no en el estado, para que `aria-controls`
+             apunte a algo real. --}}
+        <ol class="divide-y divide-[#e8eee9] overflow-hidden rounded-xl border border-[#d9e2dc]" x-data="{ abierto: null }">
             @foreach ($historial as $entrada)
-            <li class="px-4 py-3.5">
-                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                    <span class="font-bold text-[#17211b]">{{ $entrada->descripcion }}</span>
-                    <span class="font-mono text-xs text-[#68756d]">{{ $entrada->created_at->format('d/m/Y H:i') }}</span>
+            <li>
+                <h3>
+                    <button type="button"
+                        class="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-[#f7faf8] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600"
+                        @click="abierto = abierto === {{ $entrada->id }} ? null : {{ $entrada->id }}"
+                        aria-expanded="false"
+                        {{-- Alpine sobrescribe aria-expanded al iniciar; el literal
+                             es lo que un lector de pantalla lee antes de que el JS
+                             corra (o si no corre), y sin él el botón de un
+                             disclosure no declara su estado. --}}
+                        :aria-expanded="abierto === {{ $entrada->id }} ? 'true' : 'false'"
+                        aria-controls="historial-{{ $entrada->id }}">
+                        <span class="min-w-0">
+                            <span class="block font-bold text-[#17211b]">{{ $entrada->descripcion }}</span>
+                            <span class="mt-0.5 block text-sm text-[#68756d]">
+                                {{ $entrada->subsystem?->nombre ?: 'Subsistema no disponible' }}
+                                · por {{ $entrada->autor() }}
+                                · <span class="uppercase">{{ $entrada->origen }}</span>
+                            </span>
+                        </span>
+                        <span class="flex shrink-0 items-center gap-2">
+                            <span class="font-mono text-xs text-[#68756d]">{{ $entrada->created_at->format('d/m/Y H:i') }}</span>
+                            <svg class="h-4 w-4 text-[#68756d] transition-transform" :class="abierto === {{ $entrada->id }} && 'rotate-180'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m6 9 6 6 6-6"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </h3>
+                <div id="historial-{{ $entrada->id }}"
+                    x-show="abierto === {{ $entrada->id }}"
+                    x-cloak
+                    class="px-4 pb-4 pt-0">
+                    @if ($entrada->cambios)
+                    <dl class="space-y-0.5 rounded-lg bg-[#f7faf8] px-3 py-2 text-sm">
+                        @foreach ($entrada->cambios as $atributo => $cambio)
+                        <div class="flex flex-wrap gap-2">
+                            <dt class="font-bold text-[#68756d]">{{ str_replace('_', ' ', $atributo) }}:</dt>
+                            <dd class="text-[#17211b]">
+                                @if (array_key_exists('desde', $cambio) && $cambio['desde'] !== null)
+                                <span class="text-[#68756d] line-through">{{ $cambio['desde'] }}</span>
+                                <span aria-hidden="true">→</span>
+                                @endif
+                                <span>{{ $cambio['hasta'] ?? '(vacío)' }}</span>
+                            </dd>
+                        </div>
+                        @endforeach
+                    </dl>
+                    @else
+                    <p class="text-sm text-[#68756d]">Esta entrada no registró cambios de atributos.</p>
+                    @endif
                 </div>
-                <div class="mt-1 text-sm text-[#68756d]">
-                    {{ $entrada->subsystem?->nombre ?: 'Subsistema no disponible' }}
-                    · por {{ $entrada->autor() }}
-                    · <span class="uppercase">{{ $entrada->origen }}</span>
-                </div>
-
-                @if ($entrada->cambios)
-                <dl class="mt-2 space-y-0.5 rounded-lg bg-[#f7faf8] px-3 py-2 text-sm">
-                    @foreach ($entrada->cambios as $atributo => $cambio)
-                    <div class="flex flex-wrap gap-2">
-                        <dt class="font-bold text-[#68756d]">{{ str_replace('_', ' ', $atributo) }}:</dt>
-                        <dd class="text-[#17211b]">
-                            @if (array_key_exists('desde', $cambio) && $cambio['desde'] !== null)
-                            <span class="text-[#68756d] line-through">{{ $cambio['desde'] }}</span>
-                            <span aria-hidden="true">→</span>
-                            @endif
-                            <span>{{ $cambio['hasta'] ?? '(vacío)' }}</span>
-                        </dd>
-                    </div>
-                    @endforeach
-                </dl>
-                @endif
             </li>
             @endforeach
         </ol>
@@ -610,10 +640,6 @@ $abiertas = $operaciones
         <div class="mt-6">{{ $historial->links() }}</div>
         @endif
         @endif
-    </div>
-
-    <div class="mt-8 flex gap-2 border-t border-[#d9e2dc] pt-6">
-        <a class="{{ $btnSecondary }}" href="{{ route('gestor-users.index') }}">Volver a usuarios</a>
     </div>
 </section>
 @endsection
