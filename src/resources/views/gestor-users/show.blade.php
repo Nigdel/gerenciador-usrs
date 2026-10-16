@@ -295,7 +295,7 @@ $abiertas = $operaciones
 
                     <div class="flex justify-end gap-3">
                         <button type="button" @click="showSuspension = false" class="{{ $btnSecondary }}">Cancelar</button>
-                        <button class="{{ $btnSecondary }}" type="submit" onclick="return confirm('¿Deseas suspender las cuentas marcadas?');">Suspender</button>
+                        <button class="{{ $btnDanger }}" type="submit" onclick="return confirm('¿Deseas suspender las cuentas marcadas?');">Suspender</button>
                     </div>
                 </form>
             </div>
@@ -549,11 +549,27 @@ $abiertas = $operaciones
 
     {{-- Histórico --}}
     <div class="mt-8">
-        <h2 class="mb-1 text-xl font-bold text-[#17211b]">Histórico</h2>
+        <h2 class="mb-1 text-xl font-bold text-[#17211b]">Histórico</h2> 
+        {{-- El histórico está paginado, no recortado: el enlace es la única vía
+             para llegar a las entradas anteriores a las de esta página. --}}
+        @if ($historial->hasPages())
+        <div class="mt-6">{{ $historial->links() }}</div>
+        @endif
         <p class="mb-4 text-sm text-[#68756d]">Altas, cambios de estado y eliminaciones de sus cuentas en subsistemas.</p>
 
         @if ($historial->isEmpty())
+        @if ($historial->total() === 0)
         <div class="rounded-lg border border-dashed border-[#d9e2dc] bg-[#f7faf8] px-5 py-8 text-center text-sm text-[#68756d]">Aún no hay cambios registrados.</div>
+        @else
+        {{-- Página fuera de rango: hay historial, pero no en esta página.
+                     Decir aquí "Aún no hay cambios registrados" sería mentira: el
+                     total va en cientos y el operador buscaría un motivo que no
+                     existe. --}}
+        <div class="rounded-lg border border-dashed border-[#d9e2dc] bg-[#f7faf8] px-5 py-8 text-center text-sm text-[#68756d]">
+            <p>Esta página del histórico está fuera de rango.</p>
+            <a class="mt-3 inline-flex font-bold text-emerald-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600" href="{{ route('gestor-users.show', $gestorUser) }}">Ir a la primera página</a>
+        </div>
+        @endif
         @else
         <ol class="divide-y divide-[#e8eee9] overflow-hidden rounded-xl border border-[#d9e2dc]">
             @foreach ($historial as $entrada)
@@ -587,6 +603,12 @@ $abiertas = $operaciones
             </li>
             @endforeach
         </ol>
+
+        {{-- El histórico está paginado, no recortado: el enlace es la única vía
+             para llegar a las entradas anteriores a las de esta página. --}}
+        @if ($historial->hasPages())
+        <div class="mt-6">{{ $historial->links() }}</div>
+        @endif
         @endif
     </div>
 

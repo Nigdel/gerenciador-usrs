@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\IdentityProviderInterface;
-use App\Enums\OperationType;
 use App\Enums\GestorUserStatus;
+use App\Enums\OperationType;
 use App\Enums\SubsystemAccountStatus;
 use App\Exceptions\ProvisioningException;
 use App\Http\Requests\GestorUserListRequest;
@@ -33,6 +33,15 @@ use Throwable;
 
 class GestorUserController extends Controller
 {
+    /**
+     * Entradas del histórico por página.
+     *
+     * Vive aquí y no en la vista para que los tests puedan derivar de él el
+     * volumen de datos que necesitan: si el número cambia, los tests siguen
+     * comprobando la paginación en vez de romperse por un literal.
+     */
+    public const HISTORIAL_POR_PAGINA = 10;
+
     public function __construct(
         private readonly UserProvisioningService $provisioningService,
         private readonly UserSuspensionService $suspensionService,
@@ -179,14 +188,24 @@ class GestorUserController extends Controller
         );
     }
 
-    public function show(GestorUser $gestorUser): View
+    public function show(Request $request, GestorUser $gestorUser): View
     {
         $this->authorize('view', $gestorUser);
 
         return view('gestor-users.show', [
             'gestorUser' => $gestorUser->load('subsystemAccounts.subsystem'),
-            // Es un panel de consulta rápida: 50 entradas más recientes.
-            'historial' => $gestorUser->historial()->limit(50)->get(),
+            // El histórico crece sin límite (cada cambio de estado de cada
+            // cuenta escribe una fila), así que va paginado en vez de recortado:
+            // con `limit(50)` el operador no tenía forma de llegar a nada más
+            // reciente que las 50 últimas, ni de ver que había más.
+            // `latest('id')` desempaeta por id además de por fecha: dos cambios
+            // del mismo segundo son indistinguibles al ordenar, y sin un
+            // desempate estable una fila puede repetirse o perderse al pasar de
+            // página.
+            'historial' => $gestorUser->historial()
+                ->latest('id')
+                ->paginate(self::HISTORIAL_POR_PAGINA)
+                ->withQueryString(),
             // Las 10 últimas operaciones con su detalle por cuenta, que es lo
             // que alimenta el polling del panel (Fase 3.2).
             'operaciones' => $gestorUser->operaciones()->with('cuentas')->limit(10)->get(),

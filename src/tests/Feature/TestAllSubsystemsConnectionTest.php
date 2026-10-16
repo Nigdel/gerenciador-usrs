@@ -53,7 +53,7 @@ class TestAllSubsystemsConnectionTest extends TestCase
 
         $this->get(route('subsystems.index'))
             ->assertOk()
-            ->assertSee('Probar conexión de todos los subsistemas activos');
+            ->assertSee('Testar todos os subsistemas ativos');
     }
 
     public function test_auditor_no_ve_el_boton_ni_puede_disparar_la_prueba(): void
@@ -64,7 +64,7 @@ class TestAllSubsystemsConnectionTest extends TestCase
 
         $this->get(route('subsystems.index'))
             ->assertOk()
-            ->assertDontSee('Probar conexión de todos los subsistemas activos');
+            ->assertDontSee('Testar todos os subsistemas ativos');
 
         $this->post(route('subsystems.test-connections'))->assertForbidden();
     }

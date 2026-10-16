@@ -13,7 +13,6 @@ use BackedEnum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Throwable;
@@ -261,7 +260,9 @@ class SubsystemController extends Controller
         $fallos = $resultados->where(fn (array $resultado): bool => $resultado['probada'] && ! $resultado['exito']);
         $noProbados = $resultados->where(fn (array $resultado): bool => ! $resultado['probada']);
 
-        $sinProbar = $this->resumenNoProbados($noProbados);
+        $sinProbar = $noProbados->isEmpty()
+            ? ''
+            : sprintf('Sin probar: %s.', $noProbados->pluck('slug')->implode(', '));
 
         if ($fallos->isNotEmpty()) {
             return $redirect->with('error', rtrim(sprintf(
@@ -277,21 +278,6 @@ class SubsystemController extends Controller
             $resultados->where('probada', true)->count(),
             $sinProbar,
         )));
-    }
-
-    /**
-     * @param  Collection<int, array{slug: string, nombre: string, probada: bool, exito: bool, mensaje: string}>  $noProbados
-     */
-    private function resumenNoProbados(Collection $noProbados): string
-    {
-        if ($noProbados->isEmpty()) {
-            return '';
-        }
-
-        return sprintf(
-            'Sin probar: %s.',
-            $noProbados->pluck('slug')->implode(', '),
-        );
     }
 
     public function testConnection(Subsystem $subsystem): RedirectResponse
