@@ -145,7 +145,7 @@ La CI **no corre `php artisan test --parallel`**: eso exige `brianium/paratest`,
 no es dependencia del proyecto, y la suite tarda unos 8 segundos.
 
 La protección de rama no se configura desde un fichero: para exigir la CI en verde
-antes de mergear hay que activarla en *Settings → Branches → main* dentro de GitHub.
+antes de mergear hay que activarla en _Settings → Branches → main_ dentro de GitHub.
 
 ## Operación del worker
 
@@ -240,23 +240,25 @@ servicio en `docker-compose.yml` y la extensión `phpredis` en
 
 1. Copia estas carpetas dentro de un proyecto Laravel existente (11.x o
    superior recomendado, requiere PHP 8.1+ por los enums):
-   - `app/Models`, `app/Enums`, `app/Contracts`, `app/DTO`,
-     `app/Services`, `app/Http/Controllers/Api`, `app/Http/Requests`,
-     `app/Http/Resources`
-   - `database/migrations`, `database/seeders`
-   - `config/subsystems.php`
-   - Agrega el contenido de `routes/api.php` a tu propio `routes/api.php`.
+    - `app/Models`, `app/Enums`, `app/Contracts`, `app/DTO`,
+      `app/Services`, `app/Http/Controllers/Api`, `app/Http/Requests`,
+      `app/Http/Resources`
+    - `database/migrations`, `database/seeders`
+    - `config/subsystems.php`
+    - Agrega el contenido de `routes/api.php` a tu propio `routes/api.php`.
 
 2. Registra el seeder en `database/seeders/DatabaseSeeder.php`:
-   ```php
-   $this->call(SubsystemSeeder::class);
-   ```
+
+    ```php
+    $this->call(SubsystemSeeder::class);
+    ```
 
 3. Ejecuta:
-   ```bash
-   php artisan migrate
-   php artisan db:seed --class=SubsystemSeeder
-   ```
+
+    ```bash
+    php artisan migrate
+    php artisan db:seed --class=SubsystemSeeder
+    ```
 
 4. Configura en `.env` las credenciales de cada subsistema
    (`ADAGIO_API_URL`, `ADAGIO_API_TOKEN`, `GLPI_API_URL`, etc. — ver
@@ -307,15 +309,15 @@ servicio en `docker-compose.yml` y la extensión `phpredis` en
 
 ```json
 {
-  "cpf": "123.456.789-00",
-  "nombre_completo": "Juan Carlos Perez Gomez",
-  "email_personal": "juan.perez@gmail.com",
-  "telefono_personal": "+55 62 90000-0000",
-  "telefono_trabajo": "+55 62 90000-1111",
-  "direccion_particular": "Rua Exemplo, 123",
-  "empresa": "Acme",
-  "password_general": "una-clave-segura",
-  "subsistemas": ["adagio", "glpi", "entraid"]
+    "cpf": "123.456.789-00",
+    "nombre_completo": "Juan Carlos Perez Gomez",
+    "email_personal": "juan.perez@gmail.com",
+    "telefono_personal": "+55 62 90000-0000",
+    "telefono_trabajo": "+55 62 90000-1111",
+    "direccion_particular": "Rua Exemplo, 123",
+    "empresa": "Acme",
+    "password_general": "una-clave-segura",
+    "subsistemas": ["adagio", "glpi", "entraid"]
 }
 ```
 
@@ -328,11 +330,11 @@ servicio en `docker-compose.yml` y la extensión `phpredis` en
 
 ```json
 {
-  "cpf": "123.456.789-00",
-  "subsistemas": ["glpi"],
-  "motivo_suspension": "Licencia médica",
-  "inicio_suspension": "2026-09-21",
-  "fin_suspension": "2026-10-05"
+    "cpf": "123.456.789-00",
+    "subsistemas": ["glpi"],
+    "motivo_suspension": "Licencia médica",
+    "inicio_suspension": "2026-09-21",
+    "fin_suspension": "2026-10-05"
 }
 ```
 
@@ -348,8 +350,8 @@ persona haría que dos jobs tocaran la misma cuenta a la vez:
 
 ```json
 {
-  "message": "Ya hay una operación en curso para este usuario (Alta, iniciada el 21/09/2026 14:32).",
-  "operacion_id": "0f8b..."
+    "message": "Ya hay una operación en curso para este usuario (Alta, iniciada el 21/09/2026 14:32).",
+    "operacion_id": "0f8b..."
 }
 ```
 
@@ -373,15 +375,25 @@ esta ruta con ese `operacion_id` hasta que `terminado` sea `true`.
 
 ```json
 {
-  "uuid": "0f8b...",
-  "tipo": "alta",
-  "estado": "en_curso",
-  "terminado": false,
-  "resumen": "Sin procesar",
-  "cuentas": [
-    { "subsistema": "email", "estado": "ok", "mensaje": "Cuenta creada", "intentos": 1 },
-    { "subsistema": "glpi",  "estado": "error", "mensaje": "Timeout", "intentos": 3 }
-  ]
+    "uuid": "0f8b...",
+    "tipo": "alta",
+    "estado": "en_curso",
+    "terminado": false,
+    "resumen": "Sin procesar",
+    "cuentas": [
+        {
+            "subsistema": "email",
+            "estado": "ok",
+            "mensaje": "Cuenta creada",
+            "intentos": 1
+        },
+        {
+            "subsistema": "glpi",
+            "estado": "error",
+            "mensaje": "Timeout",
+            "intentos": 3
+        }
+    ]
 }
 ```
 
@@ -406,12 +418,12 @@ docker compose exec app php artisan api:token {integracion} \
 
 ### Códigos de error
 
-| Código | Cuándo | Cuerpo |
-| --- | --- | --- |
-| `401` / `403` | sin token, o sin la ability que exige la ruta | — |
-| `422` | los datos llegaron bien formados pero la situación no lo permite (el nombre no da para un login, no hay `cpf` ni `usuario`, el usuario no existe…) | `{ "message": "…" }` con el motivo |
-| `409` | el usuario ya tiene una operación sin terminar | `{ "message", "operacion_id" }` |
-| `502` | algo se rompió por dentro: Adagio o un subsistema no responden, falta la extensión `ldap`, error de programación | `{ "message": "…" }` genérico |
+| Código        | Cuándo                                                                                                                                             | Cuerpo                             |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `401` / `403` | sin token, o sin la ability que exige la ruta                                                                                                      | —                                  |
+| `422`         | los datos llegaron bien formados pero la situación no lo permite (el nombre no da para un login, no hay `cpf` ni `usuario`, el usuario no existe…) | `{ "message": "…" }` con el motivo |
+| `409`         | el usuario ya tiene una operación sin terminar                                                                                                     | `{ "message", "operacion_id" }`    |
+| `502`         | algo se rompió por dentro: Adagio o un subsistema no responden, falta la extensión `ldap`, error de programación                                   | `{ "message": "…" }` genérico      |
 
 El `422` se distingue del `400` a propósito: es un `422` cuando la misma
 petición puede aceptarse más tarde sin tocar un solo campo, y un `400` cuando
@@ -445,20 +457,20 @@ No se requiere tocar `UserProvisioningService` ni
   resuelve en `UsernameGeneratorService::resolverDominio()`; puedes
   reemplazarlo por una tabla de empresas si manejas varios dominios.
 
-  ## Otros comandos
+    ## Otros comandos
 
-  '''
-  docker compose exec app php artisan tinker
-  App\Models\User::create([
+    '''
+    docker compose exec app php artisan tinker
+    App\Models\User::create([
     'name' => 'Super Admin',
     'email' => 'admin@klios.com.br',
     'password' => 'daemon',
     'role' => 'admin',
-]);
+    ]);
 
-  $user = User::where('email', 'admin@klios.com.br')->first();
-  $user->password = Hash::make(env('SUPERADMIN_PASSWORD', 'CambiaEstaClave123'));
-  $user->save();
+    $user = User::where('email', 'admin@klios.com.br')->first();
+    $user->password = Hash::make(env('SUPERADMIN_PASSWORD', 'CambiaEstaClave123'));
+    $user->save();
 
 borrar todas las cuentas de un subsystema X=14:
 App\Models\UserSubsystemAccount::where('subsystem_id', 14)->delete();
@@ -467,6 +479,37 @@ borrar el subsistema 15 (solo si no tiene cuentas registradas):
 App\Models\Subsystem::find(15)?->delete();
 borrar las operaciones de provisionamiento
 App\Models\ProvisioningOperation::query()->delete();
-''' 
+'''
+
 ## Comando para testar los subsystemas activos
+
 docker compose exec -T app php artisan subsystems:test-connection
+
+## Cambiar el passwd via tinker
+
+Hay dos "usuarios" distintos, así que van las dos formas:
+Usuario del panel (modelo User, tabla users)
+El modelo ya tiene el cast 'password' => 'hashed', así que asignas texto plano y listo.
+docker compose exec app php artisan tinker
+
+Dentro del REPL:
+
+'''
+$u = App\Models\User::where('email', 'admin@klios.com')->first();
+$u->password = 'NovaSenha@123';
+$u->save();
+'''
+
+O en un solo comando (comillas dobles fuera, simples dentro — el quoting nativo de PowerShell 5.1 rompe si mezclas):
+
+'''
+docker compose exec -T app php artisan tinker --execute "`$u = App\Models\User::where('email','admin@klios.com')->first(); `$u->password = 'NovaSenha@123'; `$u->save();"
+'''
+
+Gestor (modelo GestorUser, tabla gestor_users)
+El hash lo pone el hook saving (src/app/Models/GestorUser.php:123), que tampoco se dispara con update(). Además, si tiene cuentas en subsistemas (Samba AD, GLPI...), la contraseña hay que propagarla aparte:
+'''
+$g = App\Models\GestorUser::where('usuario', 'jperez')->first();
+$g->password_general = 'NovaSenha@123'; // el saving() lo hashea solo
+$g->save();
+'''
