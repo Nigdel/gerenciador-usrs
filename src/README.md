@@ -459,7 +459,7 @@ No se requiere tocar `UserProvisioningService` ni
 
     ## Otros comandos
 
-    '''
+    '''bash
     docker compose exec app php artisan tinker
     App\Models\User::create([
     'name' => 'Super Admin',
@@ -494,7 +494,7 @@ docker compose exec app php artisan tinker
 
 Dentro del REPL:
 
-'''
+'''bash
 $u = App\Models\User::where('email', 'admin@klios.com')->first();
 $u->password = 'NovaSenha@123';
 $u->save();
@@ -502,13 +502,13 @@ $u->save();
 
 O en un solo comando (comillas dobles fuera, simples dentro — el quoting nativo de PowerShell 5.1 rompe si mezclas):
 
-'''
+'''bash
 docker compose exec -T app php artisan tinker --execute "`$u = App\Models\User::where('email','admin@klios.com')->first(); `$u->password = 'NovaSenha@123'; `$u->save();"
 '''
 
 Gestor (modelo GestorUser, tabla gestor_users)
 El hash lo pone el hook saving (src/app/Models/GestorUser.php:123), que tampoco se dispara con update(). Además, si tiene cuentas en subsistemas (Samba AD, GLPI...), la contraseña hay que propagarla aparte:
-'''
+'''bash
 $g = App\Models\GestorUser::where('usuario', 'jperez')->first();
 $g->password_general = 'NovaSenha@123'; // el saving() lo hashea solo
 $g->save();
