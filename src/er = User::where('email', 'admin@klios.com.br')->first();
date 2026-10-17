@@ -1,9 +1,0 @@
-[90m= [39m[34;4mApp\Models\User[39;24m {#8206
-    [34mname[39m: [32m"[39m[32mSuper Admin[39m[32m"[39m,
-    [34memail[39m: [32m"[39m[32madmin@klios.com.br[39m[32m"[39m,
-    #[33mpassword[39m: [32m"[39m\$[32m2y[39m\$[32m12[39m\$[32mSwzR6hlL.odAIeNPUgNQmuMa6hjyRoJAJvuVBlke4.VEa4Ruo86bm[39m[32m"[39m,
-    [34mrole[39m: [32m"[39m[32madmin[39m[32m"[39m,
-    [34mupdated_at[39m: [32m"[39m[32m2026-10-14 20:10:49[39m[32m"[39m,
-    [34mcreated_at[39m: [32m"[39m[32m2026-10-14 20:10:49[39m[32m"[39m,
-    [34mid[39m: [35m5[39m,
-  }
