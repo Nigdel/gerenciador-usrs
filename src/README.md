@@ -467,21 +467,25 @@ No se requiere tocar `UserProvisioningService` ni
     'password' => 'daemon',
     'role' => 'admin',
     ]);
-
-    $user = User::where('email', 'admin@klios.com.br')->first();
-    $user->password = Hash::make(env('SUPERADMIN_PASSWORD', 'CambiaEstaClave123'));
-    $user->save();
     ```
 
 borrar todas las cuentas de un subsystema X=14:
+
+```bash
 App\Models\UserSubsystemAccount::where('subsystem_id', 14)->delete();
+```
 
 borrar el subsistema 15 (solo si no tiene cuentas registradas):
-App\Models\Subsystem::find(15)?->delete();
-borrar las operaciones de provisionamiento
-App\Models\ProvisioningOperation::query()->delete();
 
-````
+```bash
+App\Models\Subsystem::find(15)?->delete();
+```
+
+borrar las operaciones de provisionamiento
+
+```bash
+App\Models\ProvisioningOperation::query()->delete();
+```
 
 ## Comando para testar los subsystemas activos
 
@@ -500,7 +504,7 @@ Dentro del REPL:
 $u = App\Models\User::where('email', 'admin@klios.com')->first();
 $u->password = 'NovaSenha@123';
 $u->save();
-````
+```
 
 O en un solo comando (comillas dobles fuera, simples dentro — el quoting nativo de PowerShell 5.1 rompe si mezclas):
 
