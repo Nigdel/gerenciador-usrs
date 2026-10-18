@@ -8,7 +8,19 @@ services:
     working_dir: /var/www
     extra_hosts:
       - "dc1.klios.br:10.1.2.2"
-    command: sh -c "mkdir -p /tmp/laravel-views && chown -R www-data:www-data /tmp/laravel-views && exec php-fpm"
+    # El chmod de storage y bootstrap/cache es el equivalente en desarrollo de
+    # lo que hace docker/php/Dockerfile.prod:124. Aquí va con chmod y no con el
+    # chown de producción porque el código se monta por volumen desde el NTFS del
+    # host (9p/drvfs), donde Docker no puede representar la propiedad: todo
+    # aparece como root:root y solo cuentan los bits de modo.
+    #
+    # Sin esto, storage/ se queda como la deja el checkout —con el directorio de
+    # logs en 777 pero cualquier fichero en 644 root— y el primer artisan que se
+    # ejecuta, que corre como root porque el Dockerfile no declara USER, crea
+    # storage/logs/laravel.log en 644 root. Los workers de php-fpm corren como
+    # www-data y se quedan sin poder escribirlo, que es lo que vuelve cada error
+    # con un UnexpectedValueException sobre el log que no se pudo abrir.
+    command: sh -c "mkdir -p /tmp/laravel-views storage/logs bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache && chown -R www-data:www-data /tmp/laravel-views && exec php-fpm"
     volumes:
       - ./src:/var/www
     networks:
@@ -35,7 +47,10 @@ services:
     working_dir: /var/www
     extra_hosts:
       - "dc1.klios.br:10.1.2.2"
-    command: php artisan schedule:work
+    # Mismo chmod que en el servicio app: los tres comparten el árbol montado, y
+    # el orden de arranque no está garantizado, así que cada uno lo hace en vez
+    # de fiarse de que otro ya lo hizo.
+    command: sh -c "mkdir -p storage/logs bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache && exec php artisan schedule:work"
     volumes:
       - ./src:/var/www
     networks:
@@ -60,7 +75,7 @@ services:
     working_dir: /var/www
     extra_hosts:
       - "dc1.klios.br:10.1.2.2"
-    command: php artisan queue:work --queue=subsistemas,default --tries=3 --verbose
+    command: sh -c "mkdir -p storage/logs bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache && exec php artisan queue:work --queue=subsistemas,default --tries=3 --verbose"
     volumes:
       - ./src:/var/www
     networks:
