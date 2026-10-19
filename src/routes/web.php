@@ -82,6 +82,11 @@ Route::middleware('auth')->group(function () {
     Route::resource('gestor-users', GestorUserController::class)
         ->parameters(['gestor-users' => 'gestorUser']);
 
+    Route::post(
+        'gestor-users/{gestorUser}/accounts/bulk',
+        [UserSubsystemAccountController::class, 'storeMany']
+    )->name('gestor-users.accounts.store-many');
+
     Route::resource('gestor-users.accounts', UserSubsystemAccountController::class)
         ->parameters([
             'gestor-users' => 'gestorUser',

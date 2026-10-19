@@ -24,9 +24,21 @@ $abiertas = $operaciones
 ->filter(fn ($o) => ! $o->estaTerminada())
 ->map(fn ($o) => ['url' => route('gestor-users.operaciones.show', [$gestorUser, $o->uuid])])
 ->values();
+
+// El panel de equipos de Chatwoot solo tiene sentido si ese subsistema está
+// disponible para este gestor.
+$chatwootSubsistema = $subsistemasDisponibles->firstWhere('slug', 'chatwoot');
+
+// Reabre el modal si el error viene de sus propios campos. Se comprueba por
+// prefijo porque los errores de arrays llegan con índice (subsystem_ids.0).
+$crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->keys())->contains(
+    static fn (string $key): bool => str_starts_with($key, 'subsystem_ids')
+        || str_starts_with($key, 'password_patron')
+        || str_starts_with($key, 'subsystem_config'),
+);
 @endphp
 
-<section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title" x-data="{ showSuspension: false, showManagerSuspension: false, showOffboard: false }">
+<section class="w-full max-w-6xl rounded-xl border border-emerald-900/10 bg-white p-6 shadow-[0_24px_60px_rgba(23,52,37,0.12)] sm:p-10" aria-labelledby="page-title" x-data="{ showSuspension: false, showManagerSuspension: false, showOffboard: false, showCreateAccount: {{ $crearCuentaConErrores ? 'true' : 'false' }} }">
     {{-- Cabecera --}}
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -312,6 +324,90 @@ $abiertas = $operaciones
     @endcan
 
 
+    {{-- Crear cuenta --}}
+    @can('createAccount', $gestorUser)
+    <div x-show="showCreateAccount"
+        x-cloak
+        x-transition
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+
+        {{-- Backdrop --}}
+        <div class="absolute inset-0 bg-[#17211b]/60 backdrop-blur-sm" @click="showCreateAccount = false"></div>
+
+        {{-- Modal Content --}}
+        <div class="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#d9e2dc] bg-white shadow-2xl">
+            <div class="flex items-center justify-between border-b border-[#d9e2dc] bg-[#f7faf8] px-6 py-4">
+                <h2 class="text-xl font-bold text-[#17211b]">Nuevas cuentas</h2>
+                <button type="button" @click="showCreateAccount = false" class="text-[#68756d] hover:text-[#17211b]" aria-label="Cerrar">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6">
+                @if ($subsistemasDisponibles->isEmpty())
+                <p class="text-sm text-[#68756d]">Este gestor ya tiene cuenta en todos los subsistemas activos.</p>
+                <div class="mt-6 flex justify-end">
+                    <button type="button" @click="showCreateAccount = false" class="{{ $btnSecondary }}">Cerrar</button>
+                </div>
+                @else
+                <form action="{{ route('gestor-users.accounts.store-many', $gestorUser) }}" method="POST">
+                    @csrf
+
+                    <fieldset class="mb-4">
+                        <legend class="{{ $label }}">Subsistemas*</legend>
+                        <p class="mb-3 text-xs text-[#68756d]">Se crearán cuentas con los datos del gestor en los subsistemas activos en los que aún no tiene cuenta. El ID externo y el estado se toman del resultado de la creación.</p>
+
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            @foreach ($subsistemasDisponibles as $subsystem)
+                            <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d9e2dc] bg-white px-3.5 py-2.5 text-sm text-[#17211b] transition hover:bg-[#f7faf8] has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/50" for="nueva-cuenta-subsistema-{{ $subsystem->id }}">
+                                <input
+                                    id="nueva-cuenta-subsistema-{{ $subsystem->id }}"
+                                    class="h-4 w-4 rounded border-[#d9e2dc] text-emerald-700 focus:ring-emerald-600"
+                                    name="subsystem_ids[]"
+                                    type="checkbox"
+                                    value="{{ $subsystem->id }}"
+                                    @checked(in_array($subsystem->id, (array) old('subsystem_ids', [])))
+                                >
+                                <span>{{ $subsystem->nombre }}</span>
+                            </label>
+                            @endforeach
+                        </div>
+                        @error('subsystem_ids')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                        @error('subsystem_ids.*')<small class="{{ $err }}">{{ $message }}</small>@enderror
+
+                        @if ($chatwootSubsistema)
+                        <div id="nueva-cuenta-chatwoot-panel" class="mt-3 hidden rounded-lg border border-[#d9e2dc] bg-slate-50 p-3">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <strong class="text-xs text-[#17211b]">Equipos disponibles</strong>
+                                <small id="nueva-cuenta-chatwoot-status" class="text-[10px] text-[#68756d]">Marca Chatwoot para seleccionar equipos.</small>
+                            </div>
+                            <div id="nueva-cuenta-chatwoot-options" class="grid w-full gap-2"></div>
+                            @error('subsystem_config.chatwoot.teams.*')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                        </div>
+                        @endif
+                    </fieldset>
+
+                    <div class="mb-6">
+                        <label class="{{ $label }}" for="nueva_cuenta_password_patron">Contraseña patrón</label>
+                        <input id="nueva_cuenta_password_patron" class="{{ $input }}" name="password_patron" type="password" minlength="8" maxlength="255" autocomplete="new-password">
+                        <small class="{{ $hint }}">Si el subsistema necesita contraseña, se usará esta al crear las cuentas. La contraseña del gestor no se reutiliza porque está guardada con hash.</small>
+                        @error('password_patron')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="showCreateAccount = false" class="{{ $btnSecondary }}">Cancelar</button>
+                        <button class="{{ $btnPrimary }}" type="submit">Crear cuentas</button>
+                    </div>
+                </form>
+                @endif
+            </div>
+        </div>
+    </div>
+    @endcan
+
+
 
     {{-- Cuentas en subsistemas --}}
     <div class="mt-8">
@@ -327,9 +423,9 @@ $abiertas = $operaciones
                 @endif
                 @endcan
                 @can('createAccount', $gestorUser)
-                <a class="{{ $btnPrimary }}" href="{{ route('gestor-users.accounts.create', $gestorUser) }}"><svg class="h-4 w-4" aria-hidden="true">
+                <button class="{{ $btnPrimary }}" type="button" @click="showCreateAccount = true" aria-label="Crear cuenta para {{ $gestorUser->nombre_completo }}" title="Crear cuenta"><svg class="h-4 w-4" aria-hidden="true">
                         <use href="#icon-user-plus"></use>
-                    </svg><span class="sr-only">Crear cuenta</span></a>
+                    </svg><span class="sr-only">Crear cuenta</span></button>
                 @endcan
                 @can('resetPassword', $gestorUser)
                 <form action="{{ route('gestor-users.reset-password', $gestorUser) }}" method="POST" onsubmit="return confirm('¿Deseas restablecer las contraseñas de todas las cuentas?');">
@@ -643,3 +739,18 @@ $abiertas = $operaciones
     </div>
 </section>
 @endsection
+
+@if ($chatwootSubsistema)
+    @include('gestor-users._chatwoot-teams-script', [
+        'chatwootCheckboxSelector' => '#nueva-cuenta-subsistema-'.$chatwootSubsistema->id,
+        'chatwootPanelSelector' => '#nueva-cuenta-chatwoot-panel',
+        'chatwootOptionsSelector' => '#nueva-cuenta-chatwoot-options',
+        'chatwootStatusSelector' => '#nueva-cuenta-chatwoot-status',
+        'chatwootTeamsRoute' => route('subsystems.chatwoot.teams', $chatwootSubsistema),
+        'chatwootEmpresa' => $gestorUser->empresa,
+        'chatwootEmpresaSelector' => null,
+        'chatwootInitialStatus' => 'Marca Chatwoot para seleccionar equipos.',
+        'chatwootEmptyEmpresaMessage' => 'El gestor no tiene empresa informada.',
+        'chatwootSelectedTeams' => old('subsystem_config.chatwoot.teams', []),
+    ])
+@endif

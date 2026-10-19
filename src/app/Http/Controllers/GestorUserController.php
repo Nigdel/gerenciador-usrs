@@ -201,8 +201,18 @@ class GestorUserController extends Controller
     {
         $this->authorize('view', $gestorUser);
 
+        $gestorUser->load('subsystemAccounts.subsystem');
+
         return view('gestor-users.show', [
-            'gestorUser' => $gestorUser->load('subsystemAccounts.subsystem'),
+            'gestorUser' => $gestorUser,
+            // Solo se pueden vincular subsistemas activos en los que el gestor
+            // todavía no tiene cuenta: el alta de una cuenta es única por
+            // gestor y subsistema.
+            'subsistemasDisponibles' => Subsystem::query()
+                ->activos()
+                ->whereNotIn('id', $gestorUser->subsystemAccounts->pluck('subsystem_id'))
+                ->orderBy('nombre')
+                ->get(),
             // El histórico crece sin límite (cada cambio de estado de cada
             // cuenta escribe una fila), así que va paginado en vez de recortado:
             // con `limit(50)` el operador no tenía forma de llegar a nada más

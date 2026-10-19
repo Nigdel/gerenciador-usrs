@@ -98,7 +98,7 @@
                                         @if ($subsystem->slug === 'adagio')
                                             <input type="hidden" name="subsistemas[]" value="adagio">
                                         @endif
-                                        <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" class="rounded border-[#d9e2dc] text-emerald-600 focus:ring-emerald-600" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio') @if ($subsystem->slug === 'chatwoot') data-chatwoot-route="{{ route('subsystems.chatwoot.teams', $subsystem) }}" @endif>
+                                        <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" class="rounded border-[#d9e2dc] text-emerald-600 focus:ring-emerald-600" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio')>
                                     </div>
                                     <div class="flex-1">
                                         <strong class="block text-sm text-[#17211b]">{{ $subsystem->nombre }}</strong>
@@ -118,12 +118,12 @@
                                      equipo se active el checkbox de Chatwoot y se
                                      borre la selección. --}}
                                 @if ($subsystem->slug === 'chatwoot')
-                                    <div class="chatwoot-team-panel mx-4 mb-4 hidden rounded-lg border border-[#d9e2dc] bg-slate-50 p-3">
+                                    <div id="chatwoot-team-panel-{{ $subsystem->id }}" class="chatwoot-team-panel mx-4 mb-4 hidden rounded-lg border border-[#d9e2dc] bg-slate-50 p-3">
                                         <div class="mb-2 flex items-center justify-between gap-2">
                                             <strong class="text-xs text-[#17211b]">Equipos disponibles</strong>
-                                            <small class="chatwoot-team-status text-[10px] text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
+                                            <small id="chatwoot-team-status-{{ $subsystem->id }}" class="chatwoot-team-status text-[10px] text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
                                         </div>
-                                        <div class="chatwoot-team-options grid w-full gap-2"></div>
+                                        <div id="chatwoot-team-options-{{ $subsystem->id }}" class="chatwoot-team-options grid w-full gap-2"></div>
                                     </div>
                                 @endif
                             </div>
@@ -154,134 +154,9 @@
                 usuario: document.getElementById('usuario'),
                 empresa: document.getElementById('empresa'),
             };
-            const chatwootLabel = document.querySelector('[data-subsystem-slug="chatwoot"]');
-            const chatwootCheckbox = chatwootLabel ? chatwootLabel.querySelector('input[name="subsistemas[]"][value="chatwoot"]') : null;
-            const chatwootRoute = chatwootCheckbox ? chatwootCheckbox.dataset.chatwootRoute || '' : '';
-            const chatwootPanel = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-panel') : null;
-            const chatwootTeamOptions = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-options') : null;
-            const chatwootTeamStatus = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-status') : null;
             let requestNumber = 0;
-            let teamRequestNumber = 0;
             let usuarioEncontradoEnAdagio = false; // Flag para saber si el usuario existe en Adagio
             let ultimoCpfConsultado = ''; // Para evitar consultas duplicadas
-
-            const clearChatwootTeams = () => {
-                if (!chatwootTeamOptions) {
-                    return;
-                }
-
-                chatwootTeamOptions.querySelectorAll('input[type="checkbox"][name="subsystem_config[chatwoot][teams][]"]').forEach((checkbox) => {
-                    checkbox.checked = false;
-                });
-            };
-
-            const hideChatwootTeams = () => {
-                if (!chatwootPanel) {
-                    return;
-                }
-
-                chatwootPanel.classList.add('hidden');
-                clearChatwootTeams();
-                if (chatwootTeamStatus) {
-                    chatwootTeamStatus.textContent = 'Selecciona una empresa y marca Chatwoot.';
-                }
-            };
-
-            const renderChatwootTeams = (teams) => {
-                if (!chatwootTeamOptions) {
-                    return;
-                }
-
-                chatwootTeamOptions.innerHTML = '';
-
-                if (!Array.isArray(teams) || teams.length === 0) {
-                    if (chatwootTeamStatus) {
-                        chatwootTeamStatus.textContent = 'No se encontraron equipos disponibles para la empresa seleccionada.';
-                    }
-                    return;
-                }
-
-                if (chatwootTeamStatus) {
-                    chatwootTeamStatus.textContent = `${teams.length} equipos disponibles.`;
-                }
-
-                teams.forEach((team) => {
-                    const label = document.createElement('label');
-                    label.className = 'flex items-center gap-2 rounded-md border border-[#d9e2dc] bg-white p-2 text-sm text-[#17211b]';
-
-                    const input = document.createElement('input');
-                    input.type = 'checkbox';
-                    input.name = 'subsystem_config[chatwoot][teams][]';
-                    input.value = team.id;
-                    input.checked = false;
-
-                    const span = document.createElement('span');
-                    span.textContent = team.name;
-
-                    label.appendChild(input);
-                    label.appendChild(span);
-                    chatwootTeamOptions.appendChild(label);
-                });
-            };
-
-            const loadChatwootTeams = async () => {
-                if (!chatwootCheckbox || !chatwootCheckbox.checked || !fields.empresa || !fields.empresa.value || !chatwootRoute) {
-                    hideChatwootTeams();
-                    return;
-                }
-
-                if (!chatwootPanel || !chatwootTeamStatus) {
-                    return;
-                }
-
-                chatwootPanel.classList.remove('hidden');
-                chatwootTeamStatus.textContent = 'Consultando equipos de Chatwoot...';
-                clearChatwootTeams();
-
-                const requestId = ++teamRequestNumber;
-
-                try {
-                    const response = await fetch(`${chatwootRoute}?empresa=${encodeURIComponent(fields.empresa.value)}`, {
-                        headers: { Accept: 'application/json' },
-                    });
-
-                    if (requestId !== teamRequestNumber) {
-                        return;
-                    }
-
-                    if (!response.ok) {
-                        throw new Error('chatwoot-teams-error');
-                    }
-
-                    const result = await response.json();
-                    renderChatwootTeams(Array.isArray(result.teams) ? result.teams : []);
-                } catch (error) {
-                    if (requestId !== teamRequestNumber) {
-                        return;
-                    }
-
-                    chatwootTeamStatus.textContent = 'No se pudieron cargar los equipos para la empresa seleccionada.';
-                    clearChatwootTeams();
-                }
-            };
-
-            if (chatwootCheckbox) {
-                chatwootCheckbox.addEventListener('change', () => {
-                    if (!chatwootCheckbox.checked) {
-                        hideChatwootTeams();
-                        return;
-                    }
-
-                    loadChatwootTeams();
-                });
-            }
-
-            if (fields.empresa) {
-                fields.empresa.addEventListener('change', () => {
-                    clearChatwootTeams();
-                    loadChatwootTeams();
-                });
-            }
 
             // Validación para aceptar solo números en el campo CPF
             cpfInput.addEventListener('input', (e) => {
@@ -486,6 +361,8 @@
                     const empresa = determinarEmpresaPorEmail(email);
                     if (empresa && fields.empresa) {
                         fields.empresa.value = empresa;
+                        // Avisa a los paneles que dependen de la empresa (p. ej. equipos de Chatwoot).
+                        fields.empresa.dispatchEvent(new Event('change'));
                     }
 
                     status.textContent = 'Datos encontrados en Adagio. Revisa y completa los campos restantes.';
@@ -505,3 +382,18 @@
         })();
     </script>
 @endpush
+
+@if ($chatwootSubsystem)
+    @include('gestor-users._chatwoot-teams-script', [
+        'chatwootCheckboxSelector' => '#subsystem-'.$chatwootSubsystem->id,
+        'chatwootPanelSelector' => '#chatwoot-team-panel-'.$chatwootSubsystem->id,
+        'chatwootOptionsSelector' => '#chatwoot-team-options-'.$chatwootSubsystem->id,
+        'chatwootStatusSelector' => '#chatwoot-team-status-'.$chatwootSubsystem->id,
+        'chatwootTeamsRoute' => route('subsystems.chatwoot.teams', $chatwootSubsystem),
+        'chatwootEmpresa' => null,
+        'chatwootEmpresaSelector' => '#empresa',
+        'chatwootInitialStatus' => 'Selecciona una empresa y marca Chatwoot.',
+        'chatwootEmptyEmpresaMessage' => 'Selecciona una empresa y marca Chatwoot.',
+        'chatwootSelectedTeams' => old('subsystem_config.chatwoot.teams', []),
+    ])
+@endif
