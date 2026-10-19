@@ -78,6 +78,17 @@ class AccountsReconcileCommand extends Command
             /** @var BaseSubsystemService $service */
             $service = app($serviceClass);
 
+            // Los drivers que no pueden verificar el estado remoto (Chatwoot no
+            // tiene estados de suspensión o deshabilitado: desactivar es
+            // quitarle el acceso al agente) no se concilian: su "estado
+            // remoto" no es comparable con el local y todo se reportaría como
+            // discrepancia.
+            if (! $service->verificaEstadoRemoto()) {
+                $this->components->warn("El subsistema {$subsystem->slug} no permite verificar el estado remoto; se omite la cuenta {$cuenta->id}.");
+
+                continue;
+            }
+
             try {
                 $resultado = $service->getUserStatus($cuenta);
                 if (! $resultado->success || $resultado->estado === null) {

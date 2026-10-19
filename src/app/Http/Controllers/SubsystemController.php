@@ -205,6 +205,19 @@ class SubsystemController extends Controller
                 ? $userSubsystemAccount->atributosAlReactivar()
                 : ['estado' => $expectedState];
 
+            // La configuración guardada de la cuenta (cajas de entrada y
+            // equipos) se actualiza con lo que devuelve el subsistema al
+            // reactivar, para que siga reflejando los accesos reales.
+            if ($result->configuracionAdicional !== []) {
+                $atributos['configuracion_adicional'] = $result->configuracionAdicional;
+            }
+
+            // Si el subsistema devuelve un id de agente nuevo —Chatwoot lo
+            // recrea cuando ya no existe— se guarda: el anterior ya no vale.
+            if (! blank($result->externalAccountId)) {
+                $atributos['external_account_id'] = $result->externalAccountId;
+            }
+
             $userSubsystemAccount->update($atributos + ['meta' => $result->raw]);
         }
 

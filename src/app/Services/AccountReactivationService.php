@@ -91,10 +91,15 @@ class AccountReactivationService
             ];
         }
 
-        // Igual que en la suspensión: se confirma antes de escribir en la BD.
-        $estadoRemoto = $servicio->getUserStatus($cuenta);
+        // Cuando el subsistema devuelve un id nuevo (Chatwoot recrea al agente
+        // cuando ya no existe) se apunta antes de confirmar: la confirmación
+        // se consulta sobre ese id.
+        if (! blank($resultado->externalAccountId)) {
+            $cuenta->external_account_id = $resultado->externalAccountId;
+        }
 
-        if (! $estadoRemoto->success || $estadoRemoto->estado !== 'activo') {
+        // Igual que en la suspensión: se confirma antes de escribir en la BD.
+        if (! $this->confirmar($servicio, $cuenta, $resultado->estado, ['activo'])) {
             return [
                 'subsistema' => $subsistema->slug,
                 'exito' => false,
@@ -102,12 +107,47 @@ class AccountReactivationService
             ];
         }
 
-        $cuenta->update($cuenta->atributosAlReactivar());
+        $atributos = $cuenta->atributosAlReactivar();
+
+        if (! blank($resultado->externalAccountId)) {
+            $atributos['external_account_id'] = $resultado->externalAccountId;
+        }
+
+        // La configuración guardada de la cuenta (cajas de entrada y equipos) se
+        // actualiza con lo que el subsistema devuelve al reactivar.
+        if ($resultado->configuracionAdicional !== []) {
+            $atributos['configuracion_adicional'] = $resultado->configuracionAdicional;
+        }
+
+        $cuenta->update($atributos);
 
         return [
             'subsistema' => $subsistema->slug,
             'exito' => true,
             'mensaje' => 'Cuenta reactivada.',
         ];
+    }
+
+    /**
+     * Confirma que la cuenta quedó activa en el subsistema.
+     *
+     * Se consulta el estado remoto, salvo que el driver no pueda verificarlo
+     * (Chatwoot no tiene estados de suspensión o deshabilitado): en ese caso
+     * se confirma con el estado que devuelve la propia operación.
+     *
+     * @param  array<int, string>  $estadosAceptados
+     */
+    private function confirmar(mixed $servicio, UserSubsystemAccount $cuenta, ?string $estadoOperacion, array $estadosAceptados): bool
+    {
+        if (is_callable([$servicio, 'verificaEstadoRemoto'])
+            && ! call_user_func([$servicio, 'verificaEstadoRemoto'])) {
+            return $estadoOperacion !== null
+                && in_array($estadoOperacion, $estadosAceptados, true);
+        }
+
+        $estadoRemoto = $servicio->getUserStatus($cuenta);
+
+        return $estadoRemoto->success
+            && in_array($estadoRemoto->estado, $estadosAceptados, true);
     }
 }

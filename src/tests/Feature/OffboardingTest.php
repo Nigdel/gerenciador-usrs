@@ -254,22 +254,28 @@ class OffboardingTest extends TestCase
             ->assertSee('Reactivar usuario');
     }
 
-    public function test_en_chatwoot_la_baja_crea_de_nuevo_el_agente_al_reactivar(): void
+    public function test_en_chatwoot_la_baja_le_quita_el_acceso_al_agente_y_la_reactivacion_se_lo_devuelve(): void
     {
         $gestorUser = $this->gestor();
-        $cuenta = $this->cuenta($gestorUser, $this->subsistema('chatwoot', ['accounts' => ['klios' => 77]]));
+        $cuenta = $this->cuenta($gestorUser, $this->subsistema('chatwoot', ['accounts' => ['klios' => 77], 'inboxes' => ['klios' => 16]]));
+        $cuenta->update([
+            'external_account_id' => '42',
+            'configuracion_adicional' => [
+                'account_id' => 77,
+                'role' => 'agent',
+                'team_ids' => [4],
+                'inbox_ids' => [16],
+            ],
+        ]);
         Http::preventStrayRequests();
         Http::fake([
-            'https://chatwoot.test/api/v1/accounts/77/agents/chatwoot-42' => Http::sequence()
-                ->push([])                                      // baja: elimina al agente
-                ->push(['error' => 'not found'], 404),          // baja: confirma (ya no existe)
-            'https://chatwoot.test/api/v1/accounts/77/agents' => Http::sequence()
-                ->push(['id' => 99])                            // reactivación: crea el agente
-                ->push(['id' => 99, 'availability' => 'online']), // reactivación: confirma
-            // La confirmación de la reactivación ya va contra el agente nuevo: si
-            // se consultara el id viejo, el servicio no llegaría a confirmar y la
-            // baja aparecería como fallida aunque la reactivación funcionase.
-            'https://chatwoot.test/api/v1/accounts/77/agents/99' => Http::response(['id' => 99, 'availability' => 'online']),
+            // La baja le quita el acceso: desasocia al agente de su inbox y
+            // de sus equipos.
+            'https://chatwoot.test/api/v1/accounts/77/inbox_members' => Http::response([]),
+            'https://chatwoot.test/api/v1/accounts/77/teams/4/team_members' => Http::response([]),
+            // El agente sigue existiendo, así que la reactivación solo tiene
+            // que devolverle esos mismos accesos.
+            'https://chatwoot.test/api/v1/accounts/77/agents/42' => Http::response(['id' => 42]),
         ]);
 
         $this->darDeBaja($gestorUser, 'Renuncia');
@@ -277,10 +283,10 @@ class OffboardingTest extends TestCase
 
         $this->assertTrue($resultado['resultados'][0]['exito']);
 
-        // Chatwoot no tiene estado "deshabilitado": el agente se elimina y al
-        // reactivar hay que crearlo de nuevo. Por eso el id externo cambia, y
-        // guardarlo es lo que permite operar sobre el agente nuevo después.
-        $this->assertSame('99', $cuenta->fresh()->external_account_id);
+        // Chatwoot no tiene estado "deshabilitado": la baja le quita el acceso
+        // al agente sin borrarlo, y la reactivación se lo devuelve. Por eso el
+        // id externo no cambia.
+        $this->assertSame('42', $cuenta->fresh()->external_account_id);
         $this->assertSame(SubsystemAccountStatus::Activo, $cuenta->fresh()->estado);
     }
 

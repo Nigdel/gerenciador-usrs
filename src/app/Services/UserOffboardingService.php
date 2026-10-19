@@ -132,7 +132,7 @@ class UserOffboardingService
             return $this->resultado($cuenta, false, $resultado->mensaje ?? 'El subsistema no deshabilitó la cuenta.');
         }
 
-        $confirmado = $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido']);
+        $confirmado = $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'], $resultado->estado);
 
         if (! $confirmado) {
             return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara deshabilitada.');
@@ -184,7 +184,7 @@ class UserOffboardingService
             return $this->resultado($cuenta, false, $resultado->mensaje ?? 'El subsistema no deshabilitó la cuenta.');
         }
 
-        if (! $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'])) {
+        if (! $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'], $resultado->estado)) {
             return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara deshabilitada.');
         }
 
@@ -234,12 +234,19 @@ class UserOffboardingService
         // confirma, como en el resto de los casos.
         $atributos = $cuenta->atributosAlReactivar() + ['meta' => $resultado->raw];
 
+        // La configuración guardada de la cuenta (cajas de entrada y equipos) se
+        // actualiza con lo que el subsistema devuelve al reactivar: si el
+        // agente se tuvo que recrear, es la que dejó el alta nueva.
+        if ($resultado->configuracionAdicional !== []) {
+            $atributos['configuracion_adicional'] = $resultado->configuracionAdicional;
+        }
+
         if (! blank($resultado->externalAccountId)) {
             $atributos['external_account_id'] = $resultado->externalAccountId;
             $cuenta->external_account_id = $resultado->externalAccountId;
         }
 
-        $confirmado = $this->confirmar($servicio, $cuenta, ['activo']);
+        $confirmado = $this->confirmar($servicio, $cuenta, ['activo'], $resultado->estado);
 
         if (! $confirmado) {
             return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara activa.');
@@ -253,11 +260,24 @@ class UserOffboardingService
     }
 
     /**
-     * Consulta el estado remoto para no dar por buena una operación que el
-     * subsistema aceptó pero no aplicó.
+     * Confirma que la operación se aplicó de verdad en el subsistema.
+     *
+     * La confirmación normal es consultar el estado remoto de la cuenta. Pero
+     * hay drivers que no pueden verificarlo —Chatwoot no tiene estados de
+     * suspensión o deshabilitado, desactivar es quitarle el acceso al
+     * agente— y en ese caso se confirma con el estado que devuelve la propia
+     * operación, que es el único dato que hay.
+     *
+     * @param  array<int, string>  $estadosAceptados
      */
-    private function confirmar(mixed $servicio, UserSubsystemAccount $cuenta, array $estadosAceptados): bool
+    private function confirmar(mixed $servicio, UserSubsystemAccount $cuenta, array $estadosAceptados, ?string $estadoOperacion = null): bool
     {
+        if (is_callable([$servicio, 'verificaEstadoRemoto'])
+            && ! call_user_func([$servicio, 'verificaEstadoRemoto'])) {
+            return $estadoOperacion !== null
+                && in_array($estadoOperacion, $estadosAceptados, true);
+        }
+
         $estadoRemoto = $servicio->getUserStatus($cuenta);
 
         return $estadoRemoto->success

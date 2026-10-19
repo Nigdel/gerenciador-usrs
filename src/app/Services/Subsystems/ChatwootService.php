@@ -10,6 +10,7 @@ use App\Models\UserSubsystemAccount;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 /**
  * Chatwoot: se gerencian 2 cuentas distintas dentro de la misma instancia
@@ -23,6 +24,13 @@ use RuntimeException;
  * recibe la cuenta (UserSubsystemAccount), se resuelve por la empresa del
  * GestorUser dueño de esa cuenta ($account->user->empresa) — así no hace
  * falta guardar el account_id por separado en cada fila.
+ *
+ * Chatwoot no tiene estados de suspensión ni de deshabilitado para un agente:
+ * desactivar una cuenta es quitarle el acceso (desasociarlo de su caja de
+ * entrada y de sus equipos) y el estado vive en nuestro sistema. Por eso
+ * suspender y deshabilitar **no borran** al agente —eso es deleteUser()— y la
+ * reactivación solo tiene que devolverle los accesos que tenía guardados en
+ * configuracion_adicional.
  */
 class ChatwootService extends BaseSubsystemService implements SubsystemConnectionInterface, UsernameAvailabilityInterface
 {
@@ -59,7 +67,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $accountId = $this->resolverAccountId($subsystem, $userData['empresa'] ?? null);
-        $inboxId = $this->resolverInboxId($subsystem, $userData['empresa'] ?? null); // falla rápido, antes de crear nada
+        $inboxIds = $this->resolverInboxIdsDeAlta($userData, $subsystem); // falla rápido, antes de crear nada
 
         $payload = [
             'name' => $userData['nombre_completo'],
@@ -80,16 +88,16 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         $agentId = $response->json('id');
-        $raw = array_merge($response->json() ?? [], ['account_id' => $accountId, 'inbox_id' => $inboxId]);
+        $raw = array_merge($response->json() ?? [], ['account_id' => $accountId, 'inbox_id' => $inboxIds[0] ?? null, 'inbox_ids' => $inboxIds]);
 
-        $asignacion = $this->asignarAInbox($subsystem, $accountId, $inboxId, $agentId);
+        $asignacion = $this->asignarAInboxes($subsystem, $accountId, $inboxIds, $agentId);
         $asignacionEquipos = $this->asignarAEquipos($subsystem, $accountId, $agentId, $teamIds);
 
         $configuracionAdicional = [
             'account_id' => $accountId,
             'role' => 'agent',
             'team_ids' => $teamIds,
-            'inbox_ids' => [$inboxId],
+            'inbox_ids' => $inboxIds,
             'inbox_asignado' => $asignacion->success,
             'teams_asignados' => $asignacionEquipos->success,
         ];
@@ -102,7 +110,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             // para que no quede huérfano y se pueda reintentar solo la asignación.
             $this->log('Agente creado pero no se pudo añadir al inbox', [
                 'agent_id' => $agentId,
-                'inbox_id' => $inboxId,
+                'inbox_ids' => $inboxIds,
                 'raw' => $asignacion->raw,
             ]);
 
@@ -136,79 +144,103 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         );
     }
 
-    public function suspendUser(UserSubsystemAccount $account, array $suspensionData): SubsystemOperationResult
+    /**
+     * Chatwoot no tiene un estado remoto de "suspendido" ni de "deshabilitado"
+     * para un agente: desactivarlo es quitarle el acceso (caja de entrada y
+     * equipos) y el estado vive en nuestro sistema.
+     *
+     * Por eso este driver no verifica el estado remoto: la confirmación se hace
+     * contra lo que devuelve la propia operación.
+     */
+    public function verificaEstadoRemoto(): bool
     {
-        return $this->disableUser($account); // Chatwoot no distingue suspendido de deshabilitado a nivel de agente
+        return false;
     }
 
     /**
-     * Reactivar en Chatwoot es **volver a crear el agente**, no hacer un PATCH.
+     * Suspender en Chatwoot es **quitarle el acceso** al agente, no borrarlo.
      *
-     * Chatwoot no tiene un estado "deshabilitado" para un agente: disableUser()
-     * lo elimina del account, así que el PATCH de availability que se usaba
-     * antes ibas sobre un id que ya no existía y la reactivación no llegaba a
-     * hacer nada. El alta se delega en createUser() para no duplicar el payload
-     * (equipos, empresa, email), y el nuevo external_account_id se devuelve en
-     * el resultado para que quien reactiva lo persista: el id anterior ya no
-     * vale.
+     * Chatwoot no tiene estados de suspensión ni de deshabilitado para un
+     * agente, así que la desactivación se hace desasociándolo de su caja de
+     * entrada y de sus equipos. El agente sigue existiendo, lo que deja la
+     * operación reversible: la reactivación solo tiene que devolverle esos
+     * mismos accesos (ver reactivateUser()).
      */
-    public function reactivateUser(UserSubsystemAccount $account): SubsystemOperationResult
+    public function suspendUser(UserSubsystemAccount $account, array $suspensionData): SubsystemOperationResult
     {
-        $usuario = $account->user;
-
-        if ($usuario === null) {
-            return SubsystemOperationResult::fail('La cuenta de Chatwoot no tiene un usuario gestionado asociado');
-        }
-
-        $configuracion = $account->configuracion_adicional;
-        $teamIds = is_array($configuracion) ? ($configuracion['team_ids'] ?? []) : [];
-
-        $resultado = $this->createUser([
-            'nombre_completo' => $usuario->nombre_completo,
-            'usuario' => $usuario->usuario,
-            'email_personal' => $usuario->email_personal,
-            'empresa' => $usuario->empresa,
-            // El agente se recrea desde cero: sin esto perdería los equipos
-            // que tenía asignados antes de la baja, que están guardados en la
-            // propia cuenta. Las cuentas creadas antes de guardar la
-            // configuración no tienen el campo y se tratan como sin equipos.
-            'subsystem_config' => [
-                'chatwoot' => [
-                    'teams' => $teamIds,
-                ],
-            ],
-        ], $account->subsystem);
+        $resultado = $this->desactivarAgente($account);
 
         if (! $resultado->success) {
             return $resultado;
         }
 
         return SubsystemOperationResult::ok(
-            externalAccountId: $resultado->externalAccountId,
-            estado: 'activo',
-            mensaje: 'Agente recreado en Chatwoot.',
+            externalAccountId: $account->external_account_id,
+            estado: 'suspendido',
+            mensaje: 'Agente desasociado de su caja de entrada y de sus equipos en Chatwoot.',
             raw: $resultado->raw,
-            configuracionAdicional: $resultado->configuracionAdicional,
         );
     }
 
+    /**
+     * Deshabilitar en Chatwoot es lo mismo que suspender: quitarle el acceso al
+     * agente. La diferencia entre los dos estados es solo local (suspendido o
+     * deshabilitado), porque en Chatwoot no existe esa distinción.
+     */
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $accountId = $this->resolverAccountIdDeCuenta($account);
+        $resultado = $this->desactivarAgente($account);
 
-        // El DELETE es correcto aquí y no un descuido: es la única forma de
-        // quitarle el acceso a un agente de Chatwoot. La contrapartida es que
-        // la baja en este subsistema sí es una eliminación real, y por eso la
-        // reactivación consiste en crear el agente de nuevo.
-        $response = $this->http($account->subsystem)->delete(
-            "/api/v1/accounts/{$accountId}/agents/{$account->external_account_id}",
-        );
-
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('No se pudo eliminar el agente en Chatwoot', $response->json() ?? []);
+        if (! $resultado->success) {
+            return $resultado;
         }
 
-        return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
+        return SubsystemOperationResult::ok(
+            externalAccountId: $account->external_account_id,
+            estado: 'deshabilitado',
+            mensaje: 'Agente desasociado de su caja de entrada y de sus equipos en Chatwoot.',
+            raw: $resultado->raw,
+        );
+    }
+
+    /**
+     * Reactivar en Chatwoot es **devolverle al agente sus accesos**.
+     *
+     * Como suspender y deshabilitar no borran al agente, lo normal es
+     * reencontrarlo y volver a asignarle la caja de entrada y los equipos que
+     * tenía guardados en configuracion_adicional. Si ya no existe (se borró a
+     * mano en Chatwoot), se crea de nuevo y se le asigna lo mismo: el id nuevo
+     * se devuelve en el resultado para que quien reactiva lo persista, porque
+     * el anterior ya no vale.
+     */
+    public function reactivateUser(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        $subsistema = $account->subsystem;
+
+        if (! $subsistema instanceof Subsystem) {
+            return SubsystemOperationResult::fail('La cuenta no tiene un subsistema válido en Chatwoot.');
+        }
+
+        if (blank($account->external_account_id)) {
+            return $this->crearAgente($account);
+        }
+
+        $accountId = $this->resolverAccountIdDeCuenta($account);
+        $agentId = $account->external_account_id;
+
+        $response = $this->http($subsistema)->get("/api/v1/accounts/{$accountId}/agents/{$agentId}");
+
+        // 404/410: el agente ya no está en Chatwoot. No es un fallo, se crea
+        // de nuevo con los mismos accesos.
+        if (in_array($response->status(), [404, 410], true)) {
+            return $this->crearAgente($account);
+        }
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo verificar el agente en Chatwoot', $response->json() ?? []);
+        }
+
+        return $this->asignarAccesos($account, $accountId, $agentId);
     }
 
     public function supportsDeleteUser(): bool
@@ -217,29 +249,36 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     }
 
     /**
-     * Eliminar la cuenta es la misma llamada que disableUser(): Chatwoot no
-     * tiene un estado "deshabilitado" para el agente, así que DELETE /agents/{id}
-     * es lo único que le quita el acceso. Se delega para no duplicar el
-     * endpoint; solo cambia el estado que se informa al orquestador.
+     * Eliminar la cuenta sí es una eliminación real: borra al agente del
+     * account de Chatwoot (DELETE /agents/{id}).
      *
-     * Sin esto el borrado desde la pantalla de cuentas eliminaba solo la fila
-     * local y dejaba al agente vivo dentro de Chatwoot.
+     * Esto es distinto de disableUser(), que solo le quita el acceso: borrar
+     * al agente es definitivo y no se puede deshacer reactivando.
      */
     public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
-        $resultado = $this->disableUser($account);
+        $accountId = $this->resolverAccountIdDeCuenta($account);
 
-        if (! $resultado->success) {
-            return $resultado;
+        $response = $this->http($account->subsystem)->delete(
+            "/api/v1/accounts/{$accountId}/agents/{$account->external_account_id}",
+        );
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo eliminar el agente en Chatwoot', $response->json() ?? []);
         }
 
-        return SubsystemOperationResult::ok(
-            estado: 'eliminado',
-            mensaje: $resultado->mensaje,
-            raw: $resultado->raw,
-        );
+        return SubsystemOperationResult::ok(estado: 'eliminado', raw: $response->json() ?? []);
     }
 
+    /**
+     * Estado del agente en Chatwoot.
+     *
+     * No es un estado de cuenta: la disponibilidad es de la sesión y un agente
+     * al que se le han quitado los accesos sigue existiendo. Por eso este
+     * driver no verifica el estado remoto (verificaEstadoRemoto() es false) y
+     * la confirmación de una suspensión o de una reactivación se hace contra el
+     * resultado de la propia operación.
+     */
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
     {
         $accountId = $this->resolverAccountIdDeCuenta($account);
@@ -250,8 +289,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         // 404/410 como "deshabilitado" y no como error: en Chatwoot el agente
         // que no existe está deshabilitado, porque no hay otro estado para
-        // expresarlo. Sin esto, la baja (Fase 2.6) nunca se confirmaría y el
-        // usuario quedaría sin marcar pese a haber perdido el acceso.
+        // expresarlo.
         if (in_array($response->status(), [404, 410], true)) {
             return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
         }
@@ -375,7 +413,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         foreach ($teamIds as $teamId) {
             $response = $this->http($subsystem)->post(
                 "/api/v1/accounts/{$accountId}/teams/{$teamId}/team_members",
-                ['user_ids' => [(int) $agentId]],
+                ['user_ids' => [$this->normalizarId($agentId)]],
             );
 
             if ($response->failed()) {
@@ -402,7 +440,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             "/api/v1/accounts/{$accountId}/inbox_members",
             [
                 'inbox_id' => (int) $inboxId,
-                'user_ids' => [(int) $agentId],
+                'user_ids' => [$this->normalizarId($agentId)],
             ],
         );
 
@@ -414,6 +452,386 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         return SubsystemOperationResult::ok(raw: $response->json() ?? []);
+    }
+
+    /**
+     * Asigna el agente a todas sus cajas de entrada.
+     *
+     * Se intentan todas aunque una falle, para no dejar al agente sin acceso
+     * a una inbox por un error puntual en otra.
+     *
+     * @param  array<int, int>  $inboxIds
+     */
+    private function asignarAInboxes(Subsystem $subsystem, int|string $accountId, array $inboxIds, int|string $agentId): SubsystemOperationResult
+    {
+        $fallos = [];
+
+        foreach ($inboxIds as $inboxId) {
+            $resultado = $this->asignarAInbox($subsystem, $accountId, $inboxId, $agentId);
+
+            if (! $resultado->success) {
+                $fallos[$inboxId] = $resultado->raw;
+            }
+        }
+
+        if ($fallos !== []) {
+            return SubsystemOperationResult::fail(
+                'No se pudo añadir el agente a la caja de entrada de Chatwoot',
+                $fallos,
+            );
+        }
+
+        return SubsystemOperationResult::ok();
+    }
+
+    // -----------------------------------------------------------------
+    // Desasociación: quitarle el acceso al agente
+    // -----------------------------------------------------------------
+
+    /**
+     * Le quita el acceso al agente: lo desasocia de su caja de entrada y de
+     * todos los equipos en los que estuviera.
+     *
+     * El agente **no** se borra (eso lo hace deleteUser()): aquí solo se
+     * deshacen las asignaciones, que es lo que en Chatwoot equivale a "no
+     * tener acceso", y es reversible con una reactivación.
+     */
+    private function desactivarAgente(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        $subsistema = $account->subsystem;
+
+        if (! $subsistema instanceof Subsystem) {
+            return SubsystemOperationResult::fail('La cuenta no tiene un subsistema válido en Chatwoot.');
+        }
+
+        if (blank($account->external_account_id)) {
+            return SubsystemOperationResult::fail('La cuenta no tiene un ID externo de agente en Chatwoot.');
+        }
+
+        $accountId = $this->resolverAccountIdDeCuenta($account);
+        $configuracion = $this->configuracionDe($account);
+        $inboxIds = $this->inboxIdsDe($account, $configuracion);
+        $teamIds = $this->teamIdsDeDesactivacion($account, $configuracion);
+        $agentId = $account->external_account_id;
+
+        $fallos = [];
+
+        $desasociacionInbox = $this->desasociarDeInboxes($subsistema, $accountId, $inboxIds, $agentId);
+
+        if (! $desasociacionInbox->success) {
+            $fallos['inbox'] = $desasociacionInbox->raw;
+        }
+
+        $desasociacionEquipos = $this->desasociarDeEquipos($subsistema, $accountId, $agentId, $teamIds);
+
+        if (! $desasociacionEquipos->success) {
+            $fallos['teams'] = $desasociacionEquipos->raw;
+        }
+
+        if ($fallos !== []) {
+            return SubsystemOperationResult::fail('No se pudo quitar el acceso al agente en Chatwoot', $fallos);
+        }
+
+        return SubsystemOperationResult::ok(raw: [
+            'inbox_ids' => $inboxIds,
+            'team_ids' => $teamIds,
+        ]);
+    }
+
+    /**
+     * @param  array<int, int>  $inboxIds
+     */
+    private function desasociarDeInboxes(Subsystem $subsystem, int|string $accountId, array $inboxIds, int|string $agentId): SubsystemOperationResult
+    {
+        $fallos = [];
+
+        foreach ($inboxIds as $inboxId) {
+            $response = $this->http($subsystem)->delete(
+                "/api/v1/accounts/{$accountId}/inbox_members",
+                [
+                    'inbox_id' => (int) $inboxId,
+                    'user_ids' => [$this->normalizarId($agentId)],
+                ],
+            );
+
+            // 404/410: el agente ya no estaba en esa inbox. El objetivo —que
+            // no tenga acceso— se cumple igual, así que no cuenta como fallo.
+            if ($response->failed() && ! in_array($response->status(), [404, 410], true)) {
+                $fallos[$inboxId] = $response->json() ?? ['status' => $response->status()];
+            }
+        }
+
+        if ($fallos !== []) {
+            return SubsystemOperationResult::fail(
+                'No se pudo quitar el agente de la caja de entrada de Chatwoot',
+                $fallos,
+            );
+        }
+
+        return SubsystemOperationResult::ok();
+    }
+
+    /**
+     * @param  array<int, int>  $teamIds
+     */
+    private function desasociarDeEquipos(Subsystem $subsystem, int|string $accountId, int|string $agentId, array $teamIds): SubsystemOperationResult
+    {
+        $fallos = [];
+
+        foreach ($teamIds as $teamId) {
+            $response = $this->http($subsystem)->delete(
+                "/api/v1/accounts/{$accountId}/teams/{$teamId}/team_members",
+                ['user_ids' => [$this->normalizarId($agentId)]],
+            );
+
+            if ($response->failed() && ! in_array($response->status(), [404, 410], true)) {
+                $fallos[$teamId] = $response->json() ?? ['status' => $response->status()];
+            }
+        }
+
+        if ($fallos !== []) {
+            return SubsystemOperationResult::fail(
+                'No se pudo quitar el agente de uno o más equipos de Chatwoot',
+                $fallos,
+            );
+        }
+
+        return SubsystemOperationResult::ok();
+    }
+
+    /**
+     * Devuelve al agente a la caja de entrada y a los equipos que tenía
+     * guardados en la cuenta.
+     */
+    private function asignarAccesos(UserSubsystemAccount $account, int|string $accountId, int|string $agentId): SubsystemOperationResult
+    {
+        $subsistema = $account->subsystem;
+        $configuracion = $this->configuracionDe($account);
+        $inboxIds = $this->inboxIdsDe($account, $configuracion);
+        $teamIds = $this->teamIdsDe($configuracion);
+
+        if ($inboxIds === []) {
+            return SubsystemOperationResult::fail('No hay ninguna caja de entrada configurada para esta empresa en Chatwoot');
+        }
+
+        $fallos = [];
+
+        $asignacionInbox = $this->asignarAInboxes($subsistema, $accountId, $inboxIds, $agentId);
+
+        if (! $asignacionInbox->success) {
+            $fallos['inbox'] = $asignacionInbox->raw;
+        }
+
+        $asignacionEquipos = $this->asignarAEquipos($subsistema, $accountId, $agentId, $teamIds);
+
+        if (! $asignacionEquipos->success) {
+            $fallos['teams'] = $asignacionEquipos->raw;
+        }
+
+        if ($fallos !== []) {
+            return SubsystemOperationResult::fail('No se pudo devolver el acceso al agente en Chatwoot', $fallos);
+        }
+
+        return SubsystemOperationResult::ok(
+            externalAccountId: (string) $agentId,
+            estado: 'activo',
+            mensaje: 'Agente reactivado en Chatwoot.',
+            raw: [
+                'inbox_ids' => $inboxIds,
+                'team_ids' => $teamIds,
+            ],
+            configuracionAdicional: array_merge($configuracion, [
+                'account_id' => $accountId,
+                'inbox_ids' => $inboxIds,
+                'team_ids' => $teamIds,
+                'inbox_asignado' => true,
+                'teams_asignados' => true,
+            ]),
+        );
+    }
+
+    /**
+     * Crea el agente de nuevo —el anterior ya no existe en Chatwoot— y le
+     * asigna los mismos accesos que tenía guardados en la cuenta.
+     */
+    private function crearAgente(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        $usuario = $account->user;
+
+        if ($usuario === null) {
+            return SubsystemOperationResult::fail('La cuenta de Chatwoot no tiene un usuario gestionado asociado');
+        }
+
+        $configuracion = $this->configuracionDe($account);
+        $inboxIds = $this->inboxIdsDe($account, $configuracion);
+
+        if ($inboxIds === []) {
+            return SubsystemOperationResult::fail('No hay ninguna caja de entrada configurada para esta empresa en Chatwoot');
+        }
+
+        $resultado = $this->createUser([
+            'nombre_completo' => $usuario->nombre_completo,
+            'usuario' => $usuario->usuario,
+            'email_personal' => $usuario->email_personal,
+            'empresa' => $usuario->empresa,
+            // El agente se crea desde cero: sin esto perdería los equipos y la
+            // caja de entrada que tenía antes, que están guardados en la
+            // propia cuenta.
+            'subsystem_config' => [
+                'chatwoot' => [
+                    'teams' => $this->teamIdsDe($configuracion),
+                    'inbox_ids' => $inboxIds,
+                ],
+            ],
+        ], $account->subsystem);
+
+        if (! $resultado->success) {
+            return $resultado;
+        }
+
+        return SubsystemOperationResult::ok(
+            externalAccountId: $resultado->externalAccountId,
+            estado: 'activo',
+            mensaje: 'Agente recreado en Chatwoot con sus mismos accesos.',
+            raw: $resultado->raw,
+            configuracionAdicional: $resultado->configuracionAdicional,
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Configuración guardada de la cuenta (cajas de entrada y equipos)
+    // -----------------------------------------------------------------
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function configuracionDe(UserSubsystemAccount $account): array
+    {
+        $configuracion = $account->configuracion_adicional;
+
+        return is_array($configuracion) ? $configuracion : [];
+    }
+
+    /**
+     * Cajas de entrada a las que el agente tenía acceso.
+     *
+     * Lo normal es que estén guardadas en configuracion_adicional (es lo que
+     * deja registrado el alta). Las cuentas creadas antes de que ese campo
+     * existieran no lo tienen, y para ellas se usa la inbox configurada para
+     * la empresa.
+     *
+     * @param  array<string, mixed>  $configuracion
+     * @return array<int, int>
+     */
+    private function inboxIdsDe(UserSubsystemAccount $account, array $configuracion): array
+    {
+        $guardadas = $configuracion['inbox_ids'] ?? [];
+
+        if (is_array($guardadas) && $guardadas !== []) {
+            return $this->normalizarIds($guardadas);
+        }
+
+        try {
+            return [(int) $this->resolverInboxId($account->subsystem, $account->user?->empresa)];
+        } catch (Throwable $exception) {
+            $this->log('No se pudo resolver la caja de entrada de Chatwoot de la cuenta', [
+                'cuenta_id' => $account->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $configuracion
+     * @return array<int, int>
+     */
+    private function teamIdsDe(array $configuracion): array
+    {
+        $guardados = $configuracion['team_ids'] ?? [];
+
+        return is_array($guardados) ? $this->normalizarIds($guardados) : [];
+    }
+
+    /**
+     * Equipos de los que hay que quitar al agente.
+     *
+     * Son los que la cuenta tiene guardados. Si no los tiene (cuentas creadas
+     * antes de que existiera configuracion_adicional), se listan los equipos
+     * del account y se intenta quitarlo de todos: dejar al agente en un equipo
+     * es dejarle acceso.
+     *
+     * @param  array<string, mixed>  $configuracion
+     * @return array<int, int>
+     */
+    private function teamIdsDeDesactivacion(UserSubsystemAccount $account, array $configuracion): array
+    {
+        $guardados = $this->teamIdsDe($configuracion);
+
+        if ($guardados !== []) {
+            return $guardados;
+        }
+
+        try {
+            $equipos = $this->listTeams($account->subsystem, $account->user?->empresa);
+        } catch (Throwable $exception) {
+            $this->log('No se pudieron listar los equipos de Chatwoot para quitarle el acceso al agente', [
+                'cuenta_id' => $account->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        return $this->normalizarIds(array_column($equipos, 'id'));
+    }
+
+    /**
+     * Cajas de entrada a las que se asigna el agente en el alta.
+     *
+     * Lo normal es la inbox configurada para la empresa en api_config.inboxes.
+     * La reactivación de Chatwoot usa la que tenía guardada la cuenta, que es
+     * la que la desactivación le quitó.
+     *
+     * @return array<int, int>
+     */
+    private function resolverInboxIdsDeAlta(array $userData, Subsystem $subsystem): array
+    {
+        $guardadas = $userData['subsystem_config']['chatwoot']['inbox_ids']
+            ?? $userData['subsystem_config'][$subsystem->slug]['inbox_ids']
+            ?? $userData['subsystem_config']['inbox_ids']
+            ?? [];
+
+        if (is_array($guardadas) && $guardadas !== []) {
+            return $this->normalizarIds($guardadas);
+        }
+
+        return [(int) $this->resolverInboxId($subsystem, $userData['empresa'] ?? null)];
+    }
+
+    /**
+     * @param  array<int, mixed>  $ids
+     * @return array<int, int>
+     */
+    private function normalizarIds(array $ids): array
+    {
+        $normalizados = array_values(array_unique(array_map(
+            static fn ($id): int => (int) $id,
+            array_filter($ids, static fn ($id): bool => is_scalar($id)),
+        )));
+
+        return array_values(array_filter($normalizados, static fn (int $id): bool => $id > 0));
+    }
+
+    /**
+     * Los ids de Chatwoot son numéricos, pero external_account_id es una
+     * columna de texto: solo se castea cuando el valor lo es, para no mandar
+     * un 0 a la API.
+     */
+    private function normalizarId(int|string $id): int|string
+    {
+        return is_numeric($id) ? (int) $id : $id;
     }
 
     // -----------------------------------------------------------------
@@ -489,7 +907,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
                 "/platform/api/v1/users/{$account->external_account_id}",
                 ['password' => $newPassword],
             );
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             report($e);
 
             return SubsystemOperationResult::fail('Error de comunicación con Chatwoot al cambiar la contraseña');
@@ -551,7 +969,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         try {
             $response = $this->http($subsystem)->get("/api/v1/accounts/{$accountId}/agents", ['page' => 1]);
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             $this->log('No se pudo comprobar la disponibilidad del login en Chatwoot', [
                 'login' => $login,
                 'error' => $exception->getMessage(),
