@@ -59,9 +59,11 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     public function createUser(array $userData, Subsystem $subsystem): SubsystemOperationResult
     {
         $accountId = $this->resolverAccountId($subsystem, $userData['empresa'] ?? null);
+        $inboxId = $this->resolverInboxId($subsystem, $userData['empresa'] ?? null); // falla rápido, antes de crear nada
+
         $payload = [
             'name' => $userData['nombre_completo'],
-            'email' => $userData['email_personal'] ?? $userData['usuario'].'@'.($userData['empresa'] ?? 'empresa'),
+            'email' => $userData['email_personal'] ?? $userData['usuario'] . '@' . ($userData['empresa'] ?? 'empresa'),
             'role' => 'agent',
         ];
 
@@ -76,11 +78,39 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             return SubsystemOperationResult::fail('Chatwoot rechazó la creación del agente', $response->json() ?? []);
         }
 
+        $agentId = $response->json('id');
+        $raw = array_merge($response->json() ?? [], ['account_id' => $accountId, 'inbox_id' => $inboxId]);
+
+        $asignacion = $this->asignarAInbox($subsystem, $accountId, $inboxId, $agentId);
+
+        if (! $asignacion->success) {
+            // El agente ya existe en Chatwoot: se informa el problema sin perder su id,
+            // para que no quede huérfano y se pueda reintentar solo la asignación.
+            $this->log('Agente creado pero no se pudo añadir al inbox', [
+                'agent_id' => $agentId,
+                'inbox_id' => $inboxId,
+                'raw' => $asignacion->raw,
+            ]);
+
+            $raw['inbox_asignado'] = false;
+            $raw['inbox_error'] = $asignacion->raw;
+
+            return SubsystemOperationResult::ok(
+                credencialUsuario: $userData['usuario'],
+                externalAccountId: (string) $agentId,
+                estado: 'activo',
+                mensaje: 'Agente creado, pero no se pudo añadir a la caja de entrada.',
+                raw: $raw,
+            );
+        }
+
+        $raw['inbox_asignado'] = true;
+
         return SubsystemOperationResult::ok(
             credencialUsuario: $userData['usuario'],
-            externalAccountId: (string) $response->json('id'),
+            externalAccountId: (string) $agentId,
             estado: 'activo',
-            raw: array_merge($response->json() ?? [], ['account_id' => $accountId]),
+            raw: $raw,
         );
     }
 
@@ -260,6 +290,28 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         return $teams;
     }
+    //-----------------------------------------------------------------
+    // Asignación de agente a inbox (caja de entrada)
+    //-----------------------------------------------------------------
+    private function asignarAInbox(Subsystem $subsystem, int|string $accountId, int|string $inboxId, int|string $agentId): SubsystemOperationResult
+    {
+        $response = $this->http($subsystem)->post(
+            "/api/v1/accounts/{$accountId}/inbox_members",
+            [
+                'inbox_id' => (int) $inboxId,
+                'user_ids' => [(int) $agentId],
+            ],
+        );
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail(
+                'No se pudo añadir el agente a la caja de entrada de Chatwoot',
+                $response->json() ?? [],
+            );
+        }
+
+        return SubsystemOperationResult::ok(raw: $response->json() ?? []);
+    }
 
     // -----------------------------------------------------------------
     // Resolución de cuenta (account_id) según empresa
@@ -272,7 +324,26 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     {
         return $subsystem->api_config['accounts'] ?? [];
     }
+    // -----------------------------------------------------------------
+    // Determina la caja de entrada de la cuenta (Inbox_id) según empresa
+    // -----------------------------------------------------------------
+    private function resolverInboxId(Subsystem $subsystem, ?string $empresa): int|string
+    {
+        $clave = strtolower((string) $empresa);
+        $inboxes = $subsystem->api_config['inboxes'] ?? [];
 
+        if (! isset($inboxes[$clave])) {
+            throw new RuntimeException(
+                "[Chatwoot] No hay inbox configurado para la empresa '{$empresa}'. "
+                .'Configura api_config.inboxes en el subsistema, ej.: {"klios": 16, "federal": 13}. '
+                .'Empresas configuradas: '.implode(', ', array_keys($inboxes)),
+            );
+        }
+
+        return $inboxes[$clave];
+    }
+    
+    
     private function resolverAccountId(Subsystem $subsystem, ?string $empresa): int|string
     {
         $clave = strtolower((string) $empresa);
