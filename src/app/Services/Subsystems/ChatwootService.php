@@ -1027,4 +1027,24 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             ->timeout((int) ($config['timeout'] ?? 15))
             ->withHeaders(['api_access_token' => $config['platform_token']]);
     }
+
+    private function buscarAgente(Subsystem $s, int|string $accountId, int|string $agentId, ?string $email = null): ?array
+    {
+        $response = $this->http($s)->get("/api/v1/accounts/{$accountId}/agents");
+
+        if ($response->failed()) {
+            // No confundir "no pude listar" con "no existe": si no, se recrearía por error.
+            throw new RuntimeException('No se pudo listar los agentes de Chatwoot');
+        }
+
+        $agentes = $response->json('payload') ?? $response->json() ?? [];
+
+        foreach ($agentes as $a) {
+            if (! is_array($a)) continue;
+            if ((string) ($a['id'] ?? '') === (string) $agentId) return $a;
+            if ($email && strcasecmp((string) ($a['email'] ?? ''), $email) === 0) return $a;
+        }
+
+        return null;
+    }
 }
