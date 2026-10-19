@@ -22,6 +22,7 @@ class UserSubsystemAccount extends Model
         'fin_suspension',
         'motivo_suspension',
         'meta',
+        'configuracion_adicional',
     ];
 
     protected $casts = [
@@ -29,6 +30,7 @@ class UserSubsystemAccount extends Model
         'inicio_suspension' => 'datetime',
         'fin_suspension' => 'datetime',
         'meta' => 'array',
+        'configuracion_adicional' => 'array',
         'estado' => SubsystemAccountStatus::class,
     ];
 

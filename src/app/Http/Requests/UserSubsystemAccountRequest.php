@@ -40,6 +40,7 @@ class UserSubsystemAccountRequest extends FormRequest
             'inicio_suspension' => ['nullable', 'date'],
             'fin_suspension' => ['nullable', 'date'],
             'motivo_suspension' => ['nullable', 'string', 'max:500'],
+            'configuracion_adicional' => ['nullable', 'array'],
         ];
     }
 }
