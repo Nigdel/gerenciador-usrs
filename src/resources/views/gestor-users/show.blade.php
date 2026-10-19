@@ -456,6 +456,7 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
                         <th scope="col" class="{{ $th }}">Subsistema</th>
                         <th scope="col" class="{{ $th }}">Credencial</th>
                         <th scope="col" class="{{ $th }}">ID externo</th>
+                        <th scope="col" class="{{ $th }}">Configuración adicional</th>
                         <th scope="col" class="{{ $th }}">Estado</th>
                         <th scope="col" class="{{ $th }}">Suspensión</th>
                         <th scope="col" class="{{ $th }}"><span class="sr-only">Acciones</span></th>
@@ -473,6 +474,9 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
                         </td>
                         <td class="px-4 py-3.5 font-mono text-[#17211b]">{{ $account->credencial_usuario }}</td>
                         <td class="px-4 py-3.5 font-mono {{ $account->external_account_id ? 'text-[#17211b]' : 'text-[#a3b0a8]' }}">{{ $account->external_account_id ?: 'No informado' }}</td>
+                        <td class="px-4 py-3.5 align-top">
+                            @include('components.account-additional-config', ['config' => $account->configuracion_adicional])
+                        </td>
                         <td class="px-4 py-3.5">@include('components.account-status', ['status' => $account->estado])</td>
                         <td class="px-4 py-3.5">
                             @if ($account->motivo_suspension || $account->inicio_suspension || $account->fin_suspension)

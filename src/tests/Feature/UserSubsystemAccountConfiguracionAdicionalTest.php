@@ -6,6 +6,7 @@ use App\Contracts\SubsystemServiceInterface;
 use App\DTO\SubsystemOperationResult;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\UserProvisioningService;
@@ -266,5 +267,47 @@ class UserSubsystemAccountConfiguracionAdicionalTest extends TestCase
             ['profile' => 'Super-Admin'],
             $resultado['cuenta']->configuracion_adicional,
         );
+    }
+
+    public function test_la_ficha_del_gestor_muestra_la_configuracion_adicional_de_la_cuenta(): void
+    {
+        $subsistema = Subsystem::create([
+            'nombre' => 'Chatwoot',
+            'slug' => 'chatwoot',
+            'api_url' => 'https://chatwoot.test',
+            'api_config' => [],
+            'activo' => true,
+        ]);
+
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678909',
+            'password_general' => 'Password123!',
+            'usuario' => 'ana.silva',
+            'empresa' => 'klios',
+        ]);
+
+        UserSubsystemAccount::create([
+            'gestor_user_id' => $gestorUser->id,
+            'subsystem_id' => $subsistema->id,
+            'credencial_usuario' => 'ana.silva',
+            'external_account_id' => '42',
+            'estado' => 'activo',
+            'configuracion_adicional' => [
+                'team_ids' => [4, 8],
+                'perfil' => 'Super-Admin',
+                'administrador' => true,
+            ],
+        ]);
+
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->get(route('gestor-users.show', $gestorUser))
+            ->assertOk()
+            ->assertSee('Configuración adicional')
+            ->assertSee('team_ids')
+            ->assertSee('4, 8')
+            ->assertSee('Super-Admin')
+            ->assertSee('Sí');
     }
 }
