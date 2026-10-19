@@ -16,6 +16,7 @@ use App\Http\Requests\SyncGestorUserRequest;
 use App\Models\GestorUser;
 use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
+use App\Rules\Cpf;
 use App\Services\AuditService;
 use App\Services\ProvisioningOperationService;
 use App\Services\SubsystemServiceRegistry;
@@ -91,8 +92,16 @@ class GestorUserController extends Controller
     {
         $this->authorize('create', GestorUser::class);
 
+        // Mismo criterio que GestorUserRequest: la búsqueda y el alta tienen
+        // que validar la misma cadena. Sin esto, un CPF con dígitos
+        // verificadores inválidos llegaba a Adagio, devolvía "no encontrado"
+        // y el operador solo descubría el problema al enviar el formulario.
+        if (is_string($request->input('cpf'))) {
+            $request->merge(['cpf' => preg_replace('/\D/', '', $request->input('cpf'))]);
+        }
+
         $cpf = $request->validate([
-            'cpf' => ['required', 'string', 'max:20'],
+            'cpf' => ['required', 'string', 'max:20', new Cpf],
         ])['cpf'];
 
         try {

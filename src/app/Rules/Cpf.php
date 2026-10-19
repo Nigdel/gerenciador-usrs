@@ -38,7 +38,7 @@ class Cpf implements ValidationRule
         }
 
         if (! $this->esValido($value)) {
-            $fail('El CPF no es válido.');
+            $fail('El CPF no es válido: revisa los dígitos verificadores.');
         }
     }
 

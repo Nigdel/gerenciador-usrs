@@ -97,9 +97,35 @@ class GestorUserTest extends TestCase
             return Http::response([]);
         });
 
-        $this->get(route('gestor-users.lookup-cpf', ['cpf' => '99999999999']))
+        // CPF válido que no existe en Adagio: el alta manual debe seguir
+        // disponible. Un CPF con dígitos verificadores inválidos ya no llega
+        // hasta aquí (ver el test siguiente).
+        $this->get(route('gestor-users.lookup-cpf', ['cpf' => '390.533.447-05']))
             ->assertOk()
             ->assertJson(['found' => false]);
+    }
+
+    public function test_cpf_lookup_rejects_an_invalid_cpf_before_querying_adagio(): void
+    {
+        Subsystem::create([
+            'nombre' => 'Adagio',
+            'slug' => 'adagio',
+            'api_url' => 'https://adagio.test',
+            'api_config' => [
+                'email' => 'test@example.com',
+                'password' => 'secret',
+            ],
+            'es_proveedor_identidad' => true,
+            'activo' => true,
+        ]);
+        Http::fake();
+
+        $this->getJson(route('gestor-users.lookup-cpf', ['cpf' => '99999999999']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cpf')
+            ->assertJsonPath('errors.cpf.0', 'El CPF no es válido: revisa los dígitos verificadores.');
+
+        Http::assertNothingSent();
     }
 
     public function test_chatwoot_team_list_is_loaded_for_the_selected_company(): void

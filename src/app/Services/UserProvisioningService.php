@@ -43,7 +43,7 @@ class UserProvisioningService
     /**
      * @param  array  $payload  Formato esperado:
      *                          [
-     *                          'cpf' => '123.456.789-00',
+     *                          'cpf' => '123.456.789-09',
      *                          'nombre_completo' => 'Juan Carlos Perez Gomez', // requerido si no existe en Adagio
      *                          'email_personal' => '...', 'telefono_personal' => '...', 'telefono_trabajo' => '...',
      *                          'direccion_particular' => '...', 'empresa' => 'Acme', 'password_general' => '...',

@@ -18,8 +18,8 @@ class GestorUserRequest extends FormRequest
      * El CPF se guarda siempre en dígitos, sin puntos ni guiones.
      *
      * Es la clave de búsqueda contra Adagio y una unique local, así que el
-     * formato tiene que ser uno solo: si se guardara '123.456.789-01' la
-     * búsqueda por 12345678901 no lo encontraría y el unique no detectaría que
+     * formato tiene que ser uno solo: si se guardara '123.456.789-09' la
+     * búsqueda por 12345678909 no lo encontraría y el unique no detectaría que
      * esa misma persona ya está dada de alta con otro formato.
      */
     protected function prepareForValidation(): void

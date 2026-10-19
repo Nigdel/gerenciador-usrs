@@ -281,7 +281,7 @@ curl -X POST http://localhost:8085/api/usuarios/provisionar \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 0f8b1c2e-..." \
   -d '{
-        "cpf": "123.456.789-00",
+        "cpf": "123.456.789-09",
         "empresa": "Acme",
         "subsistemas": ["adagio", "glpi"]
       }'
@@ -289,7 +289,7 @@ curl -X POST http://localhost:8085/api/usuarios/provisionar \
 
 ```json
 {
-    "cpf": "123.456.789-00",
+    "cpf": "123.456.789-09",
     "nombre_completo": "Juan Carlos Perez Gomez",
     "email_personal": "juan.perez@gmail.com",
     "telefono_personal": "+55 62 90000-0000",
@@ -316,7 +316,7 @@ curl -X POST http://localhost:8085/api/usuarios/provisionar \
 
 ```json
 {
-    "cpf": "123.456.789-00",
+    "cpf": "123.456.789-09",
     "subsistemas": ["glpi"],
     "motivo_suspension": "Licencia médica",
     "inicio_suspension": "2026-09-21",
@@ -330,7 +330,7 @@ curl -X POST http://localhost:8085/api/usuarios/suspender \
   -H "Accept: application/json" \
   -H "Content-Type: application/json" \
   -d '{
-        "cpf": "123.456.789-00",
+        "cpf": "123.456.789-09",
         "subsistemas": ["glpi"],
         "motivo_suspension": "Licencia médica"
       }'

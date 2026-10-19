@@ -35,7 +35,7 @@
             <div class="grid gap-6 sm:grid-cols-2">
                 <div class="">
                     <label class="{{ $label }}" for="cpf">CPF <span aria-hidden="true" class="text-red-500">*</span></label>
-                    <input id="cpf" name="cpf" type="text" pattern="\d{11}" minlength="11" maxlength="11" class="{{ $input }}" value="{{ old('cpf') }}" autocomplete="off" placeholder="Solo 11 dígitos" required>
+                    <input id="cpf" name="cpf" type="text" pattern="\d{11}" minlength="11" maxlength="18" class="{{ $input }}" value="{{ old('cpf') }}" autocomplete="off" placeholder="Solo 11 dígitos" title="CPF con 11 dígitos y dígitos verificadores válidos" required>
                     <small id="cpf-status" class="{{ $hint }}" aria-live="polite">Insira o CPF para consultar no Adagio.</small>
                     @error('cpf')<small class="{{ $err }}">{{ $message }}</small>@enderror
                 </div>
@@ -376,7 +376,9 @@
             };
 
             const lookup = async () => {
-                const cpf = cpfInput.value.trim();
+                // Acepta también un CPF pegado con puntos y guiones; el
+                // backend recibe siempre los once dígitos.
+                const cpf = cpfInput.value.replace(/\D/g, '');
 
                 if (!cpf) {
                     status.textContent = 'Ingresa el CPF para consultar Adagio.';
@@ -420,7 +422,29 @@
                     }
 
                     if (!response.ok) {
-                        throw new Error('lookup-failed');
+                        let message = 'No se pudo consultar Adagio. Completa los datos manualmente.';
+
+                        try {
+                            const errorPayload = await response.json();
+                            message = errorPayload.errors?.cpf?.[0] ?? errorPayload.message ?? message;
+                        } catch (parseError) {
+                            // Respuesta sin JSON: se conserva el mensaje genérico.
+                        }
+
+                        if (currentRequest !== requestNumber) {
+                            return;
+                        }
+
+                        usuarioEncontradoEnAdagio = false;
+                        status.textContent = message;
+
+                        if (adagioDescription) {
+                            adagioDescription.textContent = 'Revisa el CPF antes de continuar';
+                            adagioDescription.classList.remove('text-[#1f5d49]', 'text-[#68756d]');
+                            adagioDescription.classList.add('text-amber-700');
+                        }
+
+                        return;
                     }
 
                     const result = await response.json();
