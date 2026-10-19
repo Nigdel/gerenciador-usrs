@@ -211,6 +211,35 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         return SubsystemOperationResult::ok(estado: 'deshabilitado', raw: $response->json() ?? []);
     }
 
+    public function supportsDeleteUser(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Eliminar la cuenta es la misma llamada que disableUser(): Chatwoot no
+     * tiene un estado "deshabilitado" para el agente, así que DELETE /agents/{id}
+     * es lo único que le quita el acceso. Se delega para no duplicar el
+     * endpoint; solo cambia el estado que se informa al orquestador.
+     *
+     * Sin esto el borrado desde la pantalla de cuentas eliminaba solo la fila
+     * local y dejaba al agente vivo dentro de Chatwoot.
+     */
+    public function deleteUser(UserSubsystemAccount $account): SubsystemOperationResult
+    {
+        $resultado = $this->disableUser($account);
+
+        if (! $resultado->success) {
+            return $resultado;
+        }
+
+        return SubsystemOperationResult::ok(
+            estado: 'eliminado',
+            mensaje: $resultado->mensaje,
+            raw: $resultado->raw,
+        );
+    }
+
     public function getUserStatus(UserSubsystemAccount $account): SubsystemOperationResult
     {
         $accountId = $this->resolverAccountIdDeCuenta($account);

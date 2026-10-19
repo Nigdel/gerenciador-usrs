@@ -212,6 +212,46 @@ class SubsystemTest extends TestCase
         ]);
     }
 
+    public function test_deleting_a_subsystem_account_removes_the_remote_chatwoot_agent(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $subsystem = Subsystem::create([
+            'nombre' => 'Chatwoot',
+            'slug' => 'chatwoot',
+            'api_url' => 'https://chatwoot.test',
+            'api_config' => ['accounts' => ['acme' => 77]],
+            'activo' => true,
+        ]);
+        $user = GestorUser::create([
+            'nombre_completo' => 'Ana Pérez',
+            'cpf' => '12345678909',
+            'password_general' => 'secret',
+            'usuario' => 'ana.perez',
+            'empresa' => 'Acme',
+        ]);
+        $account = UserSubsystemAccount::create([
+            'gestor_user_id' => $user->id,
+            'subsystem_id' => $subsystem->id,
+            'credencial_usuario' => 'ana.perez',
+            'external_account_id' => 'chatwoot-42',
+            'estado' => 'activo',
+        ]);
+
+        Http::preventStrayRequests();
+        Http::fake(['https://chatwoot.test/api/v1/accounts/77/agents/chatwoot-42' => Http::response([], 204)]);
+
+        $this->post(route('subsystems.accounts.action', [$subsystem, $account]), [
+            'operation' => 'delete',
+        ])->assertRedirect(route('subsystems.show', $subsystem))
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), '/api/v1/accounts/77/agents/chatwoot-42'));
+
+        $this->assertDatabaseMissing('user_subsystem_accounts', ['id' => $account->id]);
+    }
+
     public function test_entra_id_retries_state_confirmation_after_graph_propagation(): void
     {
         $subsystem = Subsystem::create([
