@@ -335,7 +335,7 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
         <div class="absolute inset-0 bg-[#17211b]/60 backdrop-blur-sm" @click="showCreateAccount = false"></div>
 
         {{-- Modal Content --}}
-        <div class="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#d9e2dc] bg-white shadow-2xl">
+        <div class="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[#d9e2dc] bg-white shadow-2xl">
             <div class="flex items-center justify-between border-b border-[#d9e2dc] bg-[#f7faf8] px-6 py-4">
                 <h2 class="text-xl font-bold text-[#17211b]">Nuevas cuentas</h2>
                 <button type="button" @click="showCreateAccount = false" class="text-[#68756d] hover:text-[#17211b]" aria-label="Cerrar">
@@ -383,7 +383,7 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
                                 <strong class="text-xs text-[#17211b]">Equipos disponibles</strong>
                                 <small id="nueva-cuenta-chatwoot-status" class="text-[10px] text-[#68756d]">Marca Chatwoot para seleccionar equipos.</small>
                             </div>
-                            <div id="nueva-cuenta-chatwoot-options" class="grid w-full gap-2"></div>
+                            <div id="nueva-cuenta-chatwoot-options" class="grid w-full gap-2 sm:grid-cols-2"></div>
                             @error('subsystem_config.chatwoot.teams.*')<small class="{{ $err }}">{{ $message }}</small>@enderror
                         </div>
                         @endif

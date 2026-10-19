@@ -123,7 +123,7 @@
                                             <strong class="text-xs text-[#17211b]">Equipos disponibles</strong>
                                             <small id="chatwoot-team-status-{{ $subsystem->id }}" class="chatwoot-team-status text-[10px] text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
                                         </div>
-                                        <div id="chatwoot-team-options-{{ $subsystem->id }}" class="chatwoot-team-options grid w-full gap-2"></div>
+                                        <div id="chatwoot-team-options-{{ $subsystem->id }}" class="chatwoot-team-options grid w-full gap-2 sm:grid-cols-2"></div>
                                     </div>
                                 @endif
                             </div>
