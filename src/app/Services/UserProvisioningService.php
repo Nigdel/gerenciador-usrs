@@ -4,9 +4,9 @@ namespace App\Services;
 
 use App\Contracts\IdentityProviderInterface;
 use App\DTO\SubsystemOperationResult;
+use App\Enums\GestorUserStatus;
 use App\Enums\OperationAccountStatus;
 use App\Enums\OperationType;
-use App\Enums\GestorUserStatus;
 use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
@@ -164,6 +164,23 @@ class UserProvisioningService
         $servicio = $this->registry->resolve($subsystem->slug);
         $resultado = $servicio->createUser($datosParaSubsistema, $subsystem);
 
+        // Lo que el driver haya podido confirmar (equipos, inbox, perfil...)
+        // manda; si no devuelve nada, se conserva al menos la configuración
+        // extra que el operador eligió para ese subsistema al dar el alta.
+        $configuracionAdicional = $resultado->configuracionAdicional;
+        if ($configuracionAdicional === []) {
+            $extras = $datosParaSubsistema['subsystem_config'] ?? [];
+
+            // mergeSubsystemConfig() guarda la configuración del subsistema ya
+            // desempaquetada, pero si el payload ya traía el mapa completo se
+            // conserva tal cual. Se aceptan las dos formas.
+            if (isset($extras[$subsystem->slug]) && is_array($extras[$subsystem->slug])) {
+                $extras = $extras[$subsystem->slug];
+            }
+
+            $configuracionAdicional = is_array($extras) ? $extras : [];
+        }
+
         $account = UserSubsystemAccount::updateOrCreate(
             ['gestor_user_id' => $gestorUser->id, 'subsystem_id' => $subsystem->id],
             [
@@ -172,6 +189,7 @@ class UserProvisioningService
                 'fecha_creacion' => now(),
                 'estado' => $resultado->success ? ($resultado->estado ?? 'activo') : 'deshabilitado',
                 'meta' => $resultado->raw,
+                'configuracion_adicional' => $configuracionAdicional ?: null,
             ],
         );
 

@@ -16,6 +16,7 @@ class SubsystemOperationResult
         public readonly ?string $estado = null,
         public readonly ?string $mensaje = null,
         public readonly array $raw = [],
+        public readonly array $configuracionAdicional = [],
     ) {}
 
     public static function ok(
@@ -24,12 +25,13 @@ class SubsystemOperationResult
         ?string $estado = null,
         ?string $mensaje = null,
         array $raw = [],
+        array $configuracionAdicional = [],
     ): self {
-        return new self(true, $credencialUsuario, $externalAccountId, $estado, $mensaje, $raw);
+        return new self(true, $credencialUsuario, $externalAccountId, $estado, $mensaje, $raw, $configuracionAdicional);
     }
 
-    public static function fail(string $mensaje, array $raw = []): self
+    public static function fail(string $mensaje, array $raw = [], array $configuracionAdicional = []): self
     {
-        return new self(false, mensaje: $mensaje, raw: $raw);
+        return new self(false, mensaje: $mensaje, raw: $raw, configuracionAdicional: $configuracionAdicional);
     }
 }

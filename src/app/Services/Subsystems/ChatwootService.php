@@ -63,7 +63,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         $payload = [
             'name' => $userData['nombre_completo'],
-            'email' => $userData['email_personal'] ?? $userData['usuario'] . '@' . ($userData['empresa'] ?? 'empresa'),
+            'email' => $userData['email_personal'] ?? $userData['usuario'].'@'.($userData['empresa'] ?? 'empresa'),
             'role' => 'agent',
         ];
 
@@ -83,6 +83,14 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         $asignacion = $this->asignarAInbox($subsystem, $accountId, $inboxId, $agentId);
 
+        $configuracionAdicional = [
+            'account_id' => $accountId,
+            'role' => 'agent',
+            'team_ids' => $teamIds,
+            'inbox_ids' => [$inboxId],
+            'inbox_asignado' => $asignacion->success,
+        ];
+
         if (! $asignacion->success) {
             // El agente ya existe en Chatwoot: se informa el problema sin perder su id,
             // para que no quede huérfano y se pueda reintentar solo la asignación.
@@ -101,6 +109,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
                 estado: 'activo',
                 mensaje: 'Agente creado, pero no se pudo añadir a la caja de entrada.',
                 raw: $raw,
+                configuracionAdicional: $configuracionAdicional,
             );
         }
 
@@ -111,6 +120,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             externalAccountId: (string) $agentId,
             estado: 'activo',
             raw: $raw,
+            configuracionAdicional: $configuracionAdicional,
         );
     }
 
@@ -290,9 +300,10 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         return $teams;
     }
-    //-----------------------------------------------------------------
+
+    // -----------------------------------------------------------------
     // Asignación de agente a inbox (caja de entrada)
-    //-----------------------------------------------------------------
+    // -----------------------------------------------------------------
     private function asignarAInbox(Subsystem $subsystem, int|string $accountId, int|string $inboxId, int|string $agentId): SubsystemOperationResult
     {
         $response = $this->http($subsystem)->post(
@@ -324,6 +335,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     {
         return $subsystem->api_config['accounts'] ?? [];
     }
+
     // -----------------------------------------------------------------
     // Determina la caja de entrada de la cuenta (Inbox_id) según empresa
     // -----------------------------------------------------------------
@@ -342,8 +354,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
 
         return $inboxes[$clave];
     }
-    
-    
+
     private function resolverAccountId(Subsystem $subsystem, ?string $empresa): int|string
     {
         $clave = strtolower((string) $empresa);
