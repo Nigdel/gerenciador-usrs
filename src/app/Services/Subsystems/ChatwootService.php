@@ -68,10 +68,11 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         ];
 
         $teamIds = $this->resolverTeamIds($userData, $subsystem);
-        if (! empty($teamIds)) {
-            $payload['team_ids'] = $teamIds;
-        }
 
+        // `team_ids` no se manda en el alta: Chatwoot solo acepta
+        // name/email/role/availability/auto_offline en POST /agents y descarta
+        // el resto en silencio. La pertenencia a equipos se crea después con
+        // team_members (ver asignarAEquipos()).
         $response = $this->http($subsystem)->post("/api/v1/accounts/{$accountId}/agents", $payload);
 
         if ($response->failed()) {
@@ -82,6 +83,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         $raw = array_merge($response->json() ?? [], ['account_id' => $accountId, 'inbox_id' => $inboxId]);
 
         $asignacion = $this->asignarAInbox($subsystem, $accountId, $inboxId, $agentId);
+        $asignacionEquipos = $this->asignarAEquipos($subsystem, $accountId, $agentId, $teamIds);
 
         $configuracionAdicional = [
             'account_id' => $accountId,
@@ -89,7 +91,11 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             'team_ids' => $teamIds,
             'inbox_ids' => [$inboxId],
             'inbox_asignado' => $asignacion->success,
+            'teams_asignados' => $asignacionEquipos->success,
         ];
+
+        $raw['inbox_asignado'] = $asignacion->success;
+        $raw['teams_asignados'] = $asignacionEquipos->success;
 
         if (! $asignacion->success) {
             // El agente ya existe en Chatwoot: se informa el problema sin perder su id,
@@ -100,25 +106,31 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
                 'raw' => $asignacion->raw,
             ]);
 
-            $raw['inbox_asignado'] = false;
             $raw['inbox_error'] = $asignacion->raw;
-
-            return SubsystemOperationResult::ok(
-                credencialUsuario: $userData['usuario'],
-                externalAccountId: (string) $agentId,
-                estado: 'activo',
-                mensaje: 'Agente creado, pero no se pudo añadir a la caja de entrada.',
-                raw: $raw,
-                configuracionAdicional: $configuracionAdicional,
-            );
         }
 
-        $raw['inbox_asignado'] = true;
+        if (! $asignacionEquipos->success) {
+            $this->log('Agente creado pero no se pudo añadir a uno o más equipos', [
+                'agent_id' => $agentId,
+                'team_ids' => $teamIds,
+                'raw' => $asignacionEquipos->raw,
+            ]);
+
+            $raw['teams_error'] = $asignacionEquipos->raw;
+        }
+
+        $mensaje = match (true) {
+            ! $asignacion->success && ! $asignacionEquipos->success => 'Agente creado, pero no se pudo añadir a la caja de entrada ni a los equipos.',
+            ! $asignacion->success => 'Agente creado, pero no se pudo añadir a la caja de entrada.',
+            ! $asignacionEquipos->success => 'Agente creado, pero no se pudo añadir a uno o más equipos.',
+            default => null,
+        };
 
         return SubsystemOperationResult::ok(
             credencialUsuario: $userData['usuario'],
             externalAccountId: (string) $agentId,
             estado: 'activo',
+            mensaje: $mensaje,
             raw: $raw,
             configuracionAdicional: $configuracionAdicional,
         );
@@ -148,11 +160,23 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             return SubsystemOperationResult::fail('La cuenta de Chatwoot no tiene un usuario gestionado asociado');
         }
 
+        $configuracion = $account->configuracion_adicional;
+        $teamIds = is_array($configuracion) ? ($configuracion['team_ids'] ?? []) : [];
+
         $resultado = $this->createUser([
             'nombre_completo' => $usuario->nombre_completo,
             'usuario' => $usuario->usuario,
             'email_personal' => $usuario->email_personal,
             'empresa' => $usuario->empresa,
+            // El agente se recrea desde cero: sin esto perdería los equipos
+            // que tenía asignados antes de la baja, que están guardados en la
+            // propia cuenta. Las cuentas creadas antes de guardar la
+            // configuración no tienen el campo y se tratan como sin equipos.
+            'subsystem_config' => [
+                'chatwoot' => [
+                    'teams' => $teamIds,
+                ],
+            ],
         ], $account->subsystem);
 
         if (! $resultado->success) {
@@ -164,6 +188,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
             estado: 'activo',
             mensaje: 'Agente recreado en Chatwoot.',
             raw: $resultado->raw,
+            configuracionAdicional: $resultado->configuracionAdicional,
         );
     }
 
@@ -248,6 +273,9 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     {
         $selectedTeams = $userData['subsystem_config']['chatwoot']['teams']
             ?? $userData['subsystem_config'][$subsystem->slug]['teams']
+            // Forma ya filtrada que algunos llamadores pasan directamente:
+            // ['subsystem_config' => ['teams' => [...]]].
+            ?? $userData['subsystem_config']['teams']
             ?? $userData['teams']
             ?? $userData['team_ids']
             ?? [];
@@ -299,6 +327,41 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         return $teams;
+    }
+
+    /**
+     * Asocia el agente recién creado a los equipos seleccionados.
+     *
+     * El alta de agentes de Chatwoot no acepta `team_ids`, así que cada
+     * pertenencia se crea con POST /teams/{team_id}/team_members. Se intentan
+     * todos los equipos aunque uno falle, para no dejar sin asignar los demás
+     * por un error puntual.
+     *
+     * @param  array<int, int>  $teamIds
+     */
+    private function asignarAEquipos(Subsystem $subsystem, int|string $accountId, int|string $agentId, array $teamIds): SubsystemOperationResult
+    {
+        $fallos = [];
+
+        foreach ($teamIds as $teamId) {
+            $response = $this->http($subsystem)->post(
+                "/api/v1/accounts/{$accountId}/teams/{$teamId}/team_members",
+                ['user_ids' => [(int) $agentId]],
+            );
+
+            if ($response->failed()) {
+                $fallos[$teamId] = $response->json() ?? ['status' => $response->status()];
+            }
+        }
+
+        if ($fallos !== []) {
+            return SubsystemOperationResult::fail(
+                'No se pudo añadir el agente a uno o más equipos de Chatwoot',
+                $fallos,
+            );
+        }
+
+        return SubsystemOperationResult::ok();
     }
 
     // -----------------------------------------------------------------

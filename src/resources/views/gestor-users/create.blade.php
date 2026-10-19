@@ -92,26 +92,33 @@
                 @else
                     <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($subsystems as $subsystem)
-                            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-[#d9e2dc] p-4 transition hover:bg-[#f7faf8] {{ $subsystem->slug === 'adagio' ? 'opacity-75' : '' }}" for="subsystem-{{ $subsystem->id }}" data-subsystem-slug="{{ $subsystem->slug }}">
-                                <div class="mt-1">
-                                    @if ($subsystem->slug === 'adagio')
-                                        <input type="hidden" name="subsistemas[]" value="adagio">
-                                    @endif
-                                    <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" class="rounded border-[#d9e2dc] text-emerald-600 focus:ring-emerald-600" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio') @if ($subsystem->slug === 'chatwoot') data-chatwoot-route="{{ route('subsystems.chatwoot.teams', $subsystem) }}" @endif>
-                                </div>
-                                <div class="flex-1">
-                                    <strong class="block text-sm text-[#17211b]">{{ $subsystem->nombre }}</strong>
-                                    <small class="block text-xs text-[#68756d]" data-original-text="{{ $subsystem->descripcion ?: $subsystem->slug }}">
+                            <div class="rounded-xl border border-[#d9e2dc] transition hover:bg-[#f7faf8] {{ $subsystem->slug === 'adagio' ? 'opacity-75' : '' }}" data-subsystem-slug="{{ $subsystem->slug }}">
+                                <label class="flex cursor-pointer items-start gap-3 p-4" for="subsystem-{{ $subsystem->id }}">
+                                    <div class="mt-1">
                                         @if ($subsystem->slug === 'adagio')
-                                            Consultando disponibilidad...
-                                        @else
-                                            {{ $subsystem->descripcion ?: $subsystem->slug }}
+                                            <input type="hidden" name="subsistemas[]" value="adagio">
                                         @endif
-                                    </small>
-                                </div>
+                                        <input id="subsystem-{{ $subsystem->id }}" name="subsistemas[]" type="checkbox" value="{{ $subsystem->slug }}" class="rounded border-[#d9e2dc] text-emerald-600 focus:ring-emerald-600" @checked($subsystem->slug === 'adagio' || in_array($subsystem->slug, old('subsistemas', []), true)) @disabled($subsystem->slug === 'adagio') @if ($subsystem->slug === 'chatwoot') data-chatwoot-route="{{ route('subsystems.chatwoot.teams', $subsystem) }}" @endif>
+                                    </div>
+                                    <div class="flex-1">
+                                        <strong class="block text-sm text-[#17211b]">{{ $subsystem->nombre }}</strong>
+                                        <small class="block text-xs text-[#68756d]" data-original-text="{{ $subsystem->descripcion ?: $subsystem->slug }}">
+                                            @if ($subsystem->slug === 'adagio')
+                                                Consultando disponibilidad...
+                                            @else
+                                                {{ $subsystem->descripcion ?: $subsystem->slug }}
+                                            @endif
+                                        </small>
+                                    </div>
+                                </label>
 
+                                {{-- Fuera del <label> a propósito: un panel con sus
+                                     propios checkboxes dentro del label del
+                                     subsistema hace que al pulsar el nombre de un
+                                     equipo se active el checkbox de Chatwoot y se
+                                     borre la selección. --}}
                                 @if ($subsystem->slug === 'chatwoot')
-                                    <div class="chatwoot-team-panel mt-3 hidden w-full rounded-lg border border-[#d9e2dc] bg-slate-50 p-3">
+                                    <div class="chatwoot-team-panel mx-4 mb-4 hidden rounded-lg border border-[#d9e2dc] bg-slate-50 p-3">
                                         <div class="mb-2 flex items-center justify-between gap-2">
                                             <strong class="text-xs text-[#17211b]">Equipos disponibles</strong>
                                             <small class="chatwoot-team-status text-[10px] text-[#68756d]">Selecciona una empresa y marca Chatwoot.</small>
@@ -119,7 +126,7 @@
                                         <div class="chatwoot-team-options grid w-full gap-2"></div>
                                     </div>
                                 @endif
-                            </label>
+                            </div>
                         @endforeach
                     </div>
                 @endif
@@ -147,7 +154,7 @@
                 usuario: document.getElementById('usuario'),
                 empresa: document.getElementById('empresa'),
             };
-            const chatwootLabel = document.querySelector('label[data-subsystem-slug="chatwoot"]');
+            const chatwootLabel = document.querySelector('[data-subsystem-slug="chatwoot"]');
             const chatwootCheckbox = chatwootLabel ? chatwootLabel.querySelector('input[name="subsistemas[]"][value="chatwoot"]') : null;
             const chatwootRoute = chatwootCheckbox ? chatwootCheckbox.dataset.chatwootRoute || '' : '';
             const chatwootPanel = chatwootLabel ? chatwootLabel.querySelector('.chatwoot-team-panel') : null;
@@ -352,7 +359,7 @@
             };
 
             // Buscar el checkbox y label de Adagio usando el atributo data-subsystem-slug
-            const adagioLabel = document.querySelector('label[data-subsystem-slug="adagio"]');
+            const adagioLabel = document.querySelector('[data-subsystem-slug="adagio"]');
             const adagioCheckbox = adagioLabel ? adagioLabel.querySelector('input[type="checkbox"]') : null;
             const adagioDescription = adagioLabel ? adagioLabel.querySelector('small') : null;
 

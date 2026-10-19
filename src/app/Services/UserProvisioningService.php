@@ -203,11 +203,23 @@ class UserProvisioningService
 
     private function mergeSubsystemConfig(array $datos, Subsystem $subsystem, array $subsystemConfig): array
     {
-        if (empty($subsystemConfig[$subsystem->slug] ?? null)) {
+        $configuracion = $subsystemConfig[$subsystem->slug] ?? null;
+
+        if (! is_array($configuracion) || $configuracion === []) {
+            // El payload de la operación lleva el mapa completo (todos los
+            // subsistemas). Si este no eligió nada hay que quitarlo: dejarlo
+            // intacto hacía que el driver de Adagio, al no devolver
+            // configuración propia, se quedara con la de Chatwoot y la
+            // guardara en su cuenta.
+            unset($datos['subsystem_config']);
+
             return $datos;
         }
 
-        $datos['subsystem_config'] = $subsystemConfig[$subsystem->slug];
+        // Se conserva la forma con slug para que los drivers lean siempre el
+        // mismo contrato (`subsystem_config.{slug}`), venga la configuración
+        // del payload completo o ya filtrada.
+        $datos['subsystem_config'] = [$subsystem->slug => $configuracion];
 
         return $datos;
     }
