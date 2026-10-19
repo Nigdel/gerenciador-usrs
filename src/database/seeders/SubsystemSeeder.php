@@ -52,6 +52,12 @@ class SubsystemSeeder extends Seeder
                         'klios' => (int) env('CHATWOOT_ACCOUNT_ID_KLIOS', 1),
                         'federal' => (int) env('CHATWOOT_ACCOUNT_ID_FEDERAL', 2),
                     ],
+                    // Inbox (canal) por empresa. Misma forma que `accounts`
+                    // (empresa => id) para que se resuelva con la misma clave.
+                    'inboxes' => [
+                        'klios' => (int) env('CHATWOOT_ACCOUNT_KLIOS_INBOX', 16),
+                        'federal' => (int) env('CHATWOOT_ACCOUNT_FEDERAL_INBOX', 13),
+                    ],
                 ],
                 'external_subsystem_id' => 'chatwoot-01',
             ],
