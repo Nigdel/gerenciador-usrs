@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\GestorUserStatus;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Collection;
@@ -14,6 +15,10 @@ use Throwable;
  * histórico de la suspensión (su limpieza es otra tarea, la 2.5). Como sólo se
  * reactivan las que están en estado 'suspendido', el paso es idempotente: una
  * cuenta ya reactivada no vuelve a entrar en la consulta.
+ *
+ * Solo se reactivan las cuentas de gestores **activos**: si el gestor fue
+ * suspendido o dado de baja después, devolverle el acceso a una cuenta suelta
+ * por haber vencido su propio plazo contradiría el estado del gestor.
  *
  * Igual que en UserSuspensionService, la escritura en la BD sólo ocurre si el
  * subsistema confirma el nuevo estado: un fallo remoto no debe dejar la cuenta
@@ -36,16 +41,17 @@ class AccountReactivationService
     public function cuentasVencidas(): Collection
     {
         return UserSubsystemAccount::query()
-            ->with('subsystem')
+            ->with(['subsystem', 'user'])
             ->where('estado', 'suspendido')
             ->whereNotNull('fin_suspension')
             ->where('fin_suspension', '<=', now())
+            ->whereHas('user', fn ($q) => $q->where('estado', GestorUserStatus::Activo))
             ->orderBy('id')
             ->get();
     }
 
     /**
-     * @return Collection<int, array{subsistema: string, exito: bool, mensaje: string}>
+     * @return Collection<int, array{subsistema: string, exito: bool, mensaje: string, cuenta: ?UserSubsystemAccount}>
      */
     public function reactivarVencidas(): Collection
     {
@@ -55,11 +61,18 @@ class AccountReactivationService
     }
 
     /**
-     * @return array{subsistema: string, exito: bool, mensaje: string}
+     * Reactiva una cuenta en su subsistema y, si el subsistema lo confirma,
+     * la deja activa en la base de datos.
+     *
+     * Es pública para que la llame quien registra la operación en el
+     * historial. No lanza excepciones: los errores vuelven como
+     * `exito => false` con su mensaje.
+     *
+     * @return array{subsistema: string, exito: bool, mensaje: string, cuenta: ?UserSubsystemAccount}
      */
-    private function reactivarCuenta(UserSubsystemAccount $cuenta): array
+    public function reactivarCuenta(UserSubsystemAccount $cuenta): array
     {
-        /** @var Subsystem $subsistema */
+        /** @var Subsystem|null $subsistema */
         $subsistema = $cuenta->subsystem;
 
         if (! $subsistema) {
@@ -67,6 +80,7 @@ class AccountReactivationService
                 'subsistema' => '(desconocido)',
                 'exito' => false,
                 'mensaje' => 'La cuenta no tiene subsistema asociado.',
+                'cuenta' => $cuenta,
             ];
         }
 
@@ -79,7 +93,10 @@ class AccountReactivationService
             return [
                 'subsistema' => $subsistema->slug,
                 'exito' => false,
-                'mensaje' => $exception->getMessage(),
+                'mensaje' => $exception->getMessage() !== ''
+                    ? $exception->getMessage()
+                    : 'Error inesperado: '.$exception::class,
+                'cuenta' => $cuenta,
             ];
         }
 
@@ -88,6 +105,7 @@ class AccountReactivationService
                 'subsistema' => $subsistema->slug,
                 'exito' => false,
                 'mensaje' => $resultado->mensaje ?? 'El subsistema no pudo reactivar la cuenta.',
+                'cuenta' => $cuenta,
             ];
         }
 
@@ -99,11 +117,20 @@ class AccountReactivationService
         }
 
         // Igual que en la suspensión: se confirma antes de escribir en la BD.
-        if (! $this->confirmar($servicio, $cuenta, $resultado->estado, ['activo'])) {
+        try {
+            $confirmado = $this->confirmar($servicio, $cuenta, $resultado->estado, ['activo']);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            $confirmado = false;
+        }
+
+        if (! $confirmado) {
             return [
                 'subsistema' => $subsistema->slug,
                 'exito' => false,
                 'mensaje' => 'El subsistema no confirmó la reactivación de la cuenta.',
+                'cuenta' => $cuenta,
             ];
         }
 
@@ -124,7 +151,10 @@ class AccountReactivationService
         return [
             'subsistema' => $subsistema->slug,
             'exito' => true,
-            'mensaje' => 'Cuenta reactivada.',
+            // El mensaje del driver manda: dice si el agente se recreó o solo
+            // se le devolvieron los accesos.
+            'mensaje' => $resultado->mensaje ?? 'Cuenta reactivada.',
+            'cuenta' => $cuenta->fresh() ?? $cuenta,
         ];
     }
 

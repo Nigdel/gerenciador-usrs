@@ -717,11 +717,14 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
                         <div class="flex flex-wrap gap-2">
                             <dt class="font-bold text-[#68756d]">{{ str_replace('_', ' ', $atributo) }}:</dt>
                             <dd class="text-[#17211b]">
+                                {{-- Algunos atributos (p. ej. configuracion_adicional) son
+                                JSON: el diff llega como array y `e()` falla al
+                                intentar escaparlo como string. --}}
                                 @if (array_key_exists('desde', $cambio) && $cambio['desde'] !== null)
-                                <span class="text-[#68756d] line-through">{{ $cambio['desde'] }}</span>
+                                <span class="text-[#68756d] line-through">{{ is_array($cambio['desde']) ? json_encode($cambio['desde'], JSON_UNESCAPED_UNICODE) : $cambio['desde'] }}</span>
                                 <span aria-hidden="true">→</span>
                                 @endif
-                                <span>{{ $cambio['hasta'] ?? '(vacío)' }}</span>
+                                <span>{{ isset($cambio['hasta']) ? (is_array($cambio['hasta']) ? json_encode($cambio['hasta'], JSON_UNESCAPED_UNICODE) : $cambio['hasta']) : '(vacío)' }}</span>
                             </dd>
                         </div>
                         @endforeach

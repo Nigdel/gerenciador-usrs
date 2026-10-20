@@ -18,6 +18,12 @@ enum OperationType: string
     case Baja = 'baja';
     case Reactivacion = 'reactivacion';
     case ReactivacionGestor = 'reactivacion_gestor';
+    /**
+     * Reactivación de una cuenta suelta (p. ej. la que hace el scheduler al
+     * vencer fin_suspension). A diferencia de Reactivacion, NO cambia el
+     * estado del GestorUser: no figura en queCambianElEstadoDelUsuario().
+     */
+    case ReactivacionCuenta = 'reactivacion_cuenta';
     case Sincronizacion = 'sincronizacion';
     case ResetPassword = 'reset_password';
 
@@ -33,6 +39,7 @@ enum OperationType: string
             self::Baja => 'Baja',
             self::Reactivacion => 'Reactivación',
             self::ReactivacionGestor => 'Reactivación del gestor',
+            self::ReactivacionCuenta => 'Reactivación de cuenta',
             self::Sincronizacion => 'Sincronización de datos',
             // En minúsculas y con guion a propósito: a diferencia de los otros
             // cinco, este nunca lo ve un operador en un botón —nace ya
@@ -59,6 +66,7 @@ enum OperationType: string
             self::Baja => 'La baja está en curso',
             self::Reactivacion => 'La reactivación está en curso',
             self::ReactivacionGestor => 'La reactivación del gestor está en curso',
+            self::ReactivacionCuenta => 'La reactivación de la cuenta está en curso',
             self::Sincronizacion => 'La sincronización está en curso',
             // No hay aviso porque nunca se encola: ver el docblock.
             self::ResetPassword => 'El restablecimiento está en curso',
@@ -82,7 +90,7 @@ enum OperationType: string
             self::Suspension => 'suspend',
             self::SuspensionGestor => 'suspendManager',
             self::Baja => 'offboard',
-            self::Reactivacion, self::Sincronizacion => 'update',
+            self::Reactivacion, self::ReactivacionCuenta, self::Sincronizacion => 'update',
             self::ReactivacionGestor => 'reactivateManager',
             self::ResetPassword => 'resetPassword',
         };
@@ -93,6 +101,9 @@ enum OperationType: string
      *
      * Las operaciones por cuenta no cambian el estado del gestor. Las
      * operaciones de gestor esperan a que todas las cuentas terminen.
+     *
+     * ReactivacionCuenta queda fuera a propósito: reactivar una cuenta suelta
+     * no debe reactivar al gestor (Reactivacion sí lo hace).
      *
      * @return array<int, self>
      */

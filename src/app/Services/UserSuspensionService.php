@@ -8,6 +8,7 @@ use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Orquesta la suspensión de un usuario en uno, varios, o todos los
@@ -95,6 +96,9 @@ class UserSuspensionService
      * contenedor `scheduler`, que ya está fuera de la petición. Encolar desde
      * aquí no aportaría nada y partiría la confirmación en dos sitios.
      *
+     * suspenderCuenta() no lanza excepciones, así que una cuenta con error no
+     * aborta el resto del lote.
+     *
      * @return array<int, array>
      */
     public function suspenderPendientesVencidas(): array
@@ -125,10 +129,30 @@ class UserSuspensionService
             ->get();
     }
 
+    /**
+     * Suspende una cuenta en su subsistema y, si el subsistema lo confirma,
+     * apunta el estado, el motivo y las fechas en la cuenta.
+     *
+     * No lanza excepciones: cualquier error del subsistema (configuración
+     * ausente, red caída...) vuelve como `exito => false` con su mensaje, para
+     * que quien itera —el scheduler o el job— pueda registrarlo y seguir con
+     * las demás cuentas.
+     *
+     * @return array{subsistema: string, exito: bool, mensaje: ?string, cuenta: UserSubsystemAccount}
+     */
     public function suspenderCuenta(UserSubsystemAccount $account, array $datosSuspension): array
     {
-        /** @var Subsystem $subsystem */
+        /** @var Subsystem|null $subsystem */
         $subsystem = $account->subsystem;
+
+        if (! $subsystem) {
+            return [
+                'subsistema' => '(desconocido)',
+                'exito' => false,
+                'mensaje' => 'La cuenta no tiene subsistema asociado.',
+                'cuenta' => $account,
+            ];
+        }
 
         // Sin fecha de inicio explícita se suspende ahora mismo. El job la
         // manda siempre como ISO o como null, de ahí el default.
@@ -164,34 +188,64 @@ class UserSuspensionService
             ];
         }
 
-        $servicio = $this->registry->resolve($subsystem->slug);
-        
-        $resultado = $servicio->suspendUser($account, $datosSuspension);
+        try {
+            $servicio = $this->registry->resolve($subsystem->slug);
+            $resultado = $servicio->suspendUser($account, $datosSuspension);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [
+                'subsistema' => $subsystem->slug,
+                'exito' => false,
+                'mensaje' => $exception->getMessage() !== ''
+                    ? $exception->getMessage()
+                    : 'Error inesperado: '.$exception::class,
+                'cuenta' => $account->fresh() ?? $account,
+            ];
+        }
+
         $confirmado = false;
         $detalleVerificacion = null;
 
         if ($resultado->success) {
-            if (is_callable([$servicio, 'verificaEstadoRemoto'])
-                && call_user_func([$servicio, 'verificaEstadoRemoto'])) {
-                $estadoRemoto = $servicio->getUserStatus($account);
-                $confirmado = $estadoRemoto->success
-                    && in_array($estadoRemoto->estado, ['suspendido', 'deshabilitado'], true);
+            try {
+                if (is_callable([$servicio, 'verificaEstadoRemoto'])
+                    && call_user_func([$servicio, 'verificaEstadoRemoto'])) {
+                    $estadoRemoto = $servicio->getUserStatus($account);
+                    $confirmado = $estadoRemoto->success
+                        && in_array($estadoRemoto->estado, ['suspendido', 'deshabilitado'], true);
 
-                if (! $confirmado) {
-                    $detalleVerificacion = $estadoRemoto->mensaje
-                        ?: 'estado remoto: '.json_encode($estadoRemoto->estado);
+                    if (! $confirmado) {
+                        $detalleVerificacion = $estadoRemoto->mensaje
+                            ?: 'estado remoto: '.json_encode($estadoRemoto->estado);
+                    }
+                } else {
+                    $confirmado = $resultado->estado === 'suspendido';
                 }
-            } else {
-                $confirmado = $resultado->estado === 'suspendido';
+            } catch (Throwable $exception) {
+                report($exception);
+
+                $confirmado = false;
+                $detalleVerificacion = $exception->getMessage();
             }
 
             if ($confirmado) {
-                $account->update([
+                $atributos = [
                     'estado' => 'suspendido',
                     'inicio_suspension' => $datosSuspension['inicio_suspension'],
                     'fin_suspension' => $datosSuspension['fin_suspension'],
                     'motivo_suspension' => $datosSuspension['motivo_suspension'],
-                ]);
+                ];
+
+                // La foto de accesos que el driver quitó (en Chatwoot, la
+                // caja de entrada y los equipos) se guarda para que la
+                // reactivación pueda devolverlos. Solo si viene con algo: un
+                // resultado vacío no debe borrar lo que la cuenta ya tenía.
+                if ($resultado->configuracionAdicional !== []) {
+                    $atributos['configuracion_adicional'] = $resultado->configuracionAdicional;
+                }
+
+                $account->update($atributos);
             }
         }
 
