@@ -221,6 +221,14 @@ class UserProvisioningService
         // del payload completo o ya filtrada.
         $datos['subsystem_config'] = [$subsystem->slug => $configuracion];
 
+        // Adagio lee la entidad en la raíz de los datos (es la que resuelve el
+        // contexto_id), no dentro de subsystem_config. Se copia para que la
+        // configuración adicional documentada en GET /api/subsistema/{id}
+        // funcione igual que la del formulario web.
+        if ($subsystem->slug === 'adagio' && isset($configuracion['entidad'])) {
+            $datos['entidad'] = $configuracion['entidad'];
+        }
+
         return $datos;
     }
 

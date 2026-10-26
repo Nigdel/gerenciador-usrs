@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\ApiAbility;
 use App\Rules\Cpf;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ProvisionUserRequest extends FormRequest
 {
@@ -42,6 +43,18 @@ class ProvisionUserRequest extends FormRequest
             'usuario' => ['sometimes', 'nullable', 'string', 'max:255'],
             'subsistemas' => ['sometimes', 'array'],
             'subsistemas.*' => ['string', 'exists:subsystems,slug'],
+
+            // Configuración adicional por subsistema. Viaja dentro del payload
+            // de la operación y el driver la lee al dar de alta. Las claves
+            // admitidas salen de GET /api/subsistema/{id}.
+            'subsystem_config' => ['sometimes', 'array'],
+            'subsystem_config.adagio' => ['sometimes', 'array'],
+            'subsystem_config.adagio.entidad' => ['sometimes', 'string', Rule::in(['klios', 'federal'])],
+            'subsystem_config.chatwoot' => ['sometimes', 'array'],
+            'subsystem_config.chatwoot.teams' => ['sometimes', 'array'],
+            'subsystem_config.chatwoot.teams.*' => ['integer', 'min:1'],
+            'subsystem_config.chatwoot.inbox_ids' => ['sometimes', 'array'],
+            'subsystem_config.chatwoot.inbox_ids.*' => ['integer', 'min:1'],
         ];
     }
 }

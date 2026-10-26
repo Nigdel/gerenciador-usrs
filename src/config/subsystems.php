@@ -30,4 +30,15 @@ return [
 
     // Slug del subsistema que actúa como proveedor de identidad (Adagio).
     'proveedor_identidad_slug' => 'adagio',
+
+    /*
+    |--------------------------------------------------------------------
+    | Empresas aceptadas
+    |--------------------------------------------------------------------
+    | Las que se pueden indicar en el campo "empresa" del alta. Se exponen
+    | en GET /api/empresas para que las integraciones no tengan que
+    | adivinar el valor. El slug en minúsculas es el que usan los drivers
+    | para resolver configuración por empresa (ej. Adagio: klios, federal).
+    */
+    'empresas' => ['Klios', 'Federal'],
 ];

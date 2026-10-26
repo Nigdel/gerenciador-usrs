@@ -12,6 +12,7 @@ use App\Models\Subsystem;
 use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use App\Services\ProvisioningOperationService;
+use App\Services\UserProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -190,6 +191,84 @@ class ProvisioningContractTest extends TestCase
             ['adagio', 'email'],
             $respuesta->json('subsistemas.*.subsistema'),
         );
+    }
+
+    public function test_el_alta_acepta_configuracion_adicional_por_subsistema(): void
+    {
+        $this->adagioSinElUsuario();
+
+        $config = ['chatwoot' => ['teams' => [3, 5], 'inbox_ids' => [16]]];
+
+        $respuesta = $this->conToken([ApiAbility::Provisionar])
+            ->postJson('/api/usuarios/provisionar', $this->payloadAlta([
+                'subsistemas' => ['email'],
+                'subsystem_config' => $config,
+            ]))
+            ->assertCreated();
+
+        $operacion = ProvisioningOperation::query()
+            ->where('uuid', $respuesta->json('operacion_id'))
+            ->sole();
+
+        $this->assertSame($config, $operacion->payload['subsystem_config']);
+    }
+
+    public function test_la_entidad_de_adagio_puede_venir_en_la_configuracion_adicional(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://adagio.test/kliosAnalise/login' => Http::response(['token' => 'fake-token']),
+            // GET: el documento no existe; POST: se crea con el contexto pedido.
+            'https://adagio.test/proprietarios/internos*' => Http::sequence()
+                ->push(null, 404)
+                ->push(['usuario' => ['id' => 77, 'email' => 'ana.silva@empresa.com.br']], 200),
+        ]);
+
+        $gestorUser = GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678909',
+            'password_general' => 'Password123!',
+            'usuario' => 'ana.silva',
+            'empresa' => 'klios',
+        ]);
+
+        app(UserProvisioningService::class)->crearEnSubsistema(
+            $gestorUser,
+            $this->adagio,
+            [
+                'usuario' => 'ana.silva',
+                'nombre_completo' => 'Ana Silva',
+                'cpf' => '12345678909',
+                'password_general' => 'Password123!',
+                'empresa' => 'klios',
+            ],
+            ['adagio' => ['entidad' => 'federal']],
+        );
+
+        // 'federal' se resuelve al contexto 72 de Adagio; sin el lift desde
+        // subsystem_config se usaría el entidad_default ('klios' = 64).
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/proprietarios/internos')
+            && preg_match('/name="contexto_id"\r?\n\r?\n72\r?\n/', $request->body()) === 1);
+    }
+
+    public function test_la_configuracion_adicional_se_valida_antes_de_encolar(): void
+    {
+        $this->conToken([ApiAbility::Provisionar])
+            ->postJson('/api/usuarios/provisionar', $this->payloadAlta([
+                'subsystem_config' => ['chatwoot' => ['teams' => ['no-es-un-id']]],
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('subsystem_config.chatwoot.teams.0');
+
+        $this->conToken([ApiAbility::Provisionar])
+            ->postJson('/api/usuarios/provisionar', $this->payloadAlta([
+                'subsystem_config' => ['adagio' => ['entidad' => 'otra']],
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('subsystem_config.adagio.entidad');
+
+        $this->assertSame(0, ProvisioningOperation::query()->count());
     }
 
     public function test_sin_subsistemas_da_de_alta_en_todos_los_activos(): void
