@@ -164,6 +164,51 @@ class OffboardingTest extends TestCase
         $this->assertFalse($gestorUser->fresh()->estaDadoDeBaja());
     }
 
+    /**
+     * Graph es eventualmente consistente: el primer GET puede devolver todavía
+     * accountEnabled=true con el usuario ya deshabilitado. La baja no puede
+     * darse por fallida en esa primera lectura.
+     */
+    public function test_entra_id_confirma_la_baja_aunque_graph_tarde_en_propagar_el_cambio(): void
+    {
+        $gestorUser = $this->gestor();
+        $cuenta = $this->cuenta($gestorUser, $this->subsistema('entraid', [
+            'accounts' => ['klios' => [
+                'tenant_id' => 'tenant-1',
+                'client_id' => 'client-1',
+                'client_secret' => 'secret-1',
+            ]],
+            // Sin espera entre lecturas: se comprueban los reintentos, no el sleep.
+            'state_confirmation_delay_ms' => 0,
+        ]));
+
+        $lecturas = 0;
+
+        Http::preventStrayRequests();
+        Http::fake(function ($request) use (&$lecturas) {
+            if (str_contains($request->url(), '/oauth2/v2.0/token')) {
+                return Http::response(['access_token' => 'entra-token', 'expires_in' => 3600]);
+            }
+
+            if ($request->method() === 'PATCH') {
+                return Http::response([], 204);
+            }
+
+            $lecturas++;
+
+            // La primera lectura todavía ve la cuenta activa: Graph aún no
+            // propagó el PATCH.
+            return Http::response(['accountEnabled' => $lecturas === 1]);
+        });
+
+        $resultado = $this->darDeBaja($gestorUser, 'Renuncia');
+
+        $this->assertTrue($resultado['resultados'][0]['exito']);
+        $this->assertSame(2, $lecturas);
+        $this->assertSame(SubsystemAccountStatus::Borrado, $cuenta->fresh()->estado);
+        $this->assertTrue($gestorUser->fresh()->estaDadoDeBaja());
+    }
+
     public function test_la_reactivacion_devuelve_el_usuario_a_activo(): void
     {
         $gestorUser = $this->gestor();

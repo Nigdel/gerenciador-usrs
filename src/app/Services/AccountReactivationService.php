@@ -28,6 +28,7 @@ class AccountReactivationService
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
+        private readonly AccountStateConfirmationService $confirmaciones,
     ) {}
 
     /**
@@ -118,7 +119,7 @@ class AccountReactivationService
 
         // Igual que en la suspensión: se confirma antes de escribir en la BD.
         try {
-            $confirmado = $this->confirmar($servicio, $cuenta, $resultado->estado, ['activo']);
+            $confirmado = $this->confirmaciones->confirmar($servicio, $cuenta, ['activo'], $resultado->estado)['confirmado'];
         } catch (Throwable $exception) {
             report($exception);
 
@@ -156,28 +157,5 @@ class AccountReactivationService
             'mensaje' => $resultado->mensaje ?? 'Cuenta reactivada.',
             'cuenta' => $cuenta->fresh() ?? $cuenta,
         ];
-    }
-
-    /**
-     * Confirma que la cuenta quedó activa en el subsistema.
-     *
-     * Se consulta el estado remoto, salvo que el driver no pueda verificarlo
-     * (Chatwoot no tiene estados de suspensión o deshabilitado): en ese caso
-     * se confirma con el estado que devuelve la propia operación.
-     *
-     * @param  array<int, string>  $estadosAceptados
-     */
-    private function confirmar(mixed $servicio, UserSubsystemAccount $cuenta, ?string $estadoOperacion, array $estadosAceptados): bool
-    {
-        if (is_callable([$servicio, 'verificaEstadoRemoto'])
-            && ! call_user_func([$servicio, 'verificaEstadoRemoto'])) {
-            return $estadoOperacion !== null
-                && in_array($estadoOperacion, $estadosAceptados, true);
-        }
-
-        $estadoRemoto = $servicio->getUserStatus($cuenta);
-
-        return $estadoRemoto->success
-            && in_array($estadoRemoto->estado, $estadosAceptados, true);
     }
 }

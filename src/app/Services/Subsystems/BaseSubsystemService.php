@@ -85,4 +85,22 @@ abstract class BaseSubsystemService implements SubsystemServiceInterface
     {
         return true; // por defecto, los demás subsistemas siguen verificando
     }
+
+    /**
+     * Cuántas veces se consulta el estado remoto antes de dar por fallida la
+     * confirmación de un cambio de estado, y cuánto se espera entre lecturas.
+     *
+     * Un subsistema de consistencia inmediata no necesita reintentar; uno que
+     * replica (Entra ID) sí, y lo declara en su driver. api_config puede
+     * pisarlo con state_confirmation_attempts / state_confirmation_delay_ms.
+     */
+    public function intentosConfirmacionEstado(): int
+    {
+        return 1;
+    }
+
+    public function retardoConfirmacionEstadoMs(): int
+    {
+        return 0;
+    }
 }

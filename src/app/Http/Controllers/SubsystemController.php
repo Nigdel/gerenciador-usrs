@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Contracts\SubsystemConnectionInterface;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use App\Services\AccountStateConfirmationService;
 use App\Services\AuditService;
 use App\Services\Subsystems\BaseSubsystemService;
 use App\Services\Subsystems\SubsystemsTestConection;
@@ -22,6 +23,7 @@ class SubsystemController extends Controller
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
         private readonly AuditService $audit,
+        private readonly AccountStateConfirmationService $confirmaciones,
     ) {}
 
     public function index(Request $request): View
@@ -162,35 +164,13 @@ class SubsystemController extends Controller
                 ->with('error', $exception->getMessage());
         }
 
-        $confirmed = false;
         $expectedState = $operation === 'enable' ? 'activo' : 'deshabilitado';
         $acceptedStates = $operation === 'enable'
             ? ['activo']
             : ['deshabilitado', 'suspendido'];
         if ($result->success) {
-            $verifiesRemoteState = is_callable([$service, 'verificaEstadoRemoto'])
-                && call_user_func([$service, 'verificaEstadoRemoto']);
-
-            if ($verifiesRemoteState) {
-                $config = $subsystem->api_config ?? [];
-                $attempts = max(1, min((int) ($config['state_confirmation_attempts'] ?? 1), 10));
-                $delayMilliseconds = max(0, min((int) ($config['state_confirmation_delay_ms'] ?? 0), 5000));
-
-                for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-                    $confirmation = $service->getUserStatus($userSubsystemAccount);
-
-                    if ($confirmation->success && in_array($confirmation->estado, $acceptedStates, true)) {
-                        $confirmed = true;
-                        break;
-                    }
-
-                    if ($attempt < $attempts && $delayMilliseconds > 0) {
-                        usleep($delayMilliseconds * 1000);
-                    }
-                }
-            } else {
-                $confirmed = in_array($result->estado, $acceptedStates, true);
-            }
+            $confirmed = $this->confirmaciones
+                ->confirmar($service, $userSubsystemAccount, $acceptedStates, $result->estado)['confirmado'];
 
             if (! $confirmed) {
                 return $this->accountActionRedirect($request, $subsystem, $userSubsystemAccount)

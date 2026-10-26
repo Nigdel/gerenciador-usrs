@@ -23,6 +23,7 @@ class UserSuspensionService
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
+        private readonly AccountStateConfirmationService $confirmaciones,
     ) {}
 
     /**
@@ -209,19 +210,15 @@ class UserSuspensionService
 
         if ($resultado->success) {
             try {
-                if (is_callable([$servicio, 'verificaEstadoRemoto'])
-                    && call_user_func([$servicio, 'verificaEstadoRemoto'])) {
-                    $estadoRemoto = $servicio->getUserStatus($account);
-                    $confirmado = $estadoRemoto->success
-                        && in_array($estadoRemoto->estado, ['suspendido', 'deshabilitado'], true);
+                $confirmacion = $this->confirmaciones->confirmar(
+                    $servicio,
+                    $account,
+                    ['suspendido', 'deshabilitado'],
+                    $resultado->estado,
+                );
 
-                    if (! $confirmado) {
-                        $detalleVerificacion = $estadoRemoto->mensaje
-                            ?: 'estado remoto: '.json_encode($estadoRemoto->estado);
-                    }
-                } else {
-                    $confirmado = $resultado->estado === 'suspendido';
-                }
+                $confirmado = $confirmacion['confirmado'];
+                $detalleVerificacion = $confirmacion['detalle'];
             } catch (Throwable $exception) {
                 report($exception);
 

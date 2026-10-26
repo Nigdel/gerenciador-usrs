@@ -334,6 +334,22 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
     }
 
     /**
+     * Graph es eventualmente consistente: el GET que sigue al PATCH puede
+     * devolver todavía el accountEnabled anterior. Con una sola lectura, una
+     * baja que sí deshabilitó al usuario se reportaba como no confirmada, así
+     * que se le da a la confirmación unos segundos de margen.
+     */
+    public function intentosConfirmacionEstado(): int
+    {
+        return 4;
+    }
+
+    public function retardoConfirmacionEstadoMs(): int
+    {
+        return 1000;
+    }
+
+    /**
      * Restablece la contraseña de un usuario en Entra ID.
      */
     public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult

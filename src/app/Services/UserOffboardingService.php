@@ -44,6 +44,7 @@ class UserOffboardingService
 {
     public function __construct(
         private readonly SubsystemServiceRegistry $registry,
+        private readonly AccountStateConfirmationService $confirmaciones,
     ) {}
 
     /**
@@ -132,10 +133,10 @@ class UserOffboardingService
             return $this->resultado($cuenta, false, $resultado->mensaje ?? 'El subsistema no deshabilitó la cuenta.');
         }
 
-        $confirmado = $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'], $resultado->estado);
+        $confirmacion = $this->confirmaciones->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'], $resultado->estado);
 
-        if (! $confirmado) {
-            return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara deshabilitada.');
+        if (! $confirmacion['confirmado']) {
+            return $this->resultado($cuenta, false, $this->mensajeDeConfirmacion('El subsistema no confirmó que la cuenta quedara deshabilitada.', $confirmacion['detalle']));
         }
 
         // Se marca 'borrado' y no 'deshabilitado' porque para el usuario final
@@ -184,8 +185,10 @@ class UserOffboardingService
             return $this->resultado($cuenta, false, $resultado->mensaje ?? 'El subsistema no deshabilitó la cuenta.');
         }
 
-        if (! $this->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'], $resultado->estado)) {
-            return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara deshabilitada.');
+        $confirmacion = $this->confirmaciones->confirmar($servicio, $cuenta, ['deshabilitado', 'suspendido'], $resultado->estado);
+
+        if (! $confirmacion['confirmado']) {
+            return $this->resultado($cuenta, false, $this->mensajeDeConfirmacion('El subsistema no confirmó que la cuenta quedara deshabilitada.', $confirmacion['detalle']));
         }
 
         $cuenta->update([
@@ -246,10 +249,10 @@ class UserOffboardingService
             $cuenta->external_account_id = $resultado->externalAccountId;
         }
 
-        $confirmado = $this->confirmar($servicio, $cuenta, ['activo'], $resultado->estado);
+        $confirmacion = $this->confirmaciones->confirmar($servicio, $cuenta, ['activo'], $resultado->estado);
 
-        if (! $confirmado) {
-            return $this->resultado($cuenta, false, 'El subsistema no confirmó que la cuenta quedara activa.');
+        if (! $confirmacion['confirmado']) {
+            return $this->resultado($cuenta, false, $this->mensajeDeConfirmacion('El subsistema no confirmó que la cuenta quedara activa.', $confirmacion['detalle']));
         }
 
         // atributosAlReactivar() (Fase 2.5) deja la cuenta en 'activo' y limpia
@@ -260,28 +263,13 @@ class UserOffboardingService
     }
 
     /**
-     * Confirma que la operación se aplicó de verdad en el subsistema.
-     *
-     * La confirmación normal es consultar el estado remoto de la cuenta. Pero
-     * hay drivers que no pueden verificarlo —Chatwoot no tiene estados de
-     * suspensión o deshabilitado, desactivar es quitarle el acceso al
-     * agente— y en ese caso se confirma con el estado que devuelve la propia
-     * operación, que es el único dato que hay.
-     *
-     * @param  array<int, string>  $estadosAceptados
+     * Añade a qué se debió la falta de confirmación: es lo que el operador
+     * necesita para saber si merece la pena reintentar. La confirmación en sí
+     * vive en AccountStateConfirmationService.
      */
-    private function confirmar(mixed $servicio, UserSubsystemAccount $cuenta, array $estadosAceptados, ?string $estadoOperacion = null): bool
+    private function mensajeDeConfirmacion(string $mensaje, ?string $detalle): string
     {
-        if (is_callable([$servicio, 'verificaEstadoRemoto'])
-            && ! call_user_func([$servicio, 'verificaEstadoRemoto'])) {
-            return $estadoOperacion !== null
-                && in_array($estadoOperacion, $estadosAceptados, true);
-        }
-
-        $estadoRemoto = $servicio->getUserStatus($cuenta);
-
-        return $estadoRemoto->success
-            && in_array($estadoRemoto->estado, $estadosAceptados, true);
+        return $detalle === null ? $mensaje : $mensaje.' ('.$detalle.')';
     }
 
     private function resolver(UserSubsystemAccount $cuenta): ?SubsystemServiceInterface
