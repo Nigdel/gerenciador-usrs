@@ -561,6 +561,7 @@ El contenedor `scheduler` corre `schedule:work`. Lo programado, tal cual está h
 | ----------- | ------------------------------------ | ----------------------------------------------------------------- |
 | */10 min    | `accounts:reactivate-expired`        | Reactiva las cuentas cuya suspensión ya venció                     |
 | */10 min    | `accounts:apply-pending-suspensions`  | Aplica las suspensiones agendadas cuya fecha de inicio ya pasó      |
+| */10 min    | `gestor-users:reactivate-expired`     | Reactiva a los gestores suspendidos cuya fecha de fin ya venció    |
 | cada hora   | `operations:prune-secrets`           | Borra la contraseña general del payload de operaciones vencidas    |
 | cada hora   | `idempotency:prune`                  | Elimina las claves de idempotencia caducadas                       |
 | a diario    | `db:backup`                          | Volcado cifrado de MySQL                                            |
@@ -572,6 +573,26 @@ lenta no se pisa con la siguiente. Para verlas:
 ```bash
 docker compose exec app php artisan schedule:list
 ```
+
+Para reactivar a mano sin esperar a la pasada del scheduler (por ejemplo, tras
+corregir un problema en un subsistema), usa el mismo comando que corre la tarea:
+
+```bash
+# Ver qué gestores se reactivarían, sin tocar nada
+docker compose exec app php artisan gestor-users:reactivate-expired --dry-run
+
+# Encolar la reactivación de todos los gestores con la fecha de fin vencida
+docker compose exec app php artisan gestor-users:reactivate-expired
+```
+
+El comando encola la misma operación que el botón «Reactivar gestor» de la
+ficha: reactiva las cuentas que se capturaron al suspenderlo y, si todas
+terminan bien, devuelve al gestor a `activo` y limpia motivo y fechas. Si
+alguna cuenta falla, el gestor sigue suspendido; se puede reintentar la
+operación desde el historial de la ficha o volver a lanzar el comando.
+
+Si la fecha de fin todavía no llegó, el comando no toca al gestor: para
+adelantar la reactivación hay que usar el botón de la ficha.
 
 ### Operaciones atascadas
 

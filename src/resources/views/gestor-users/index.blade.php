@@ -98,6 +98,17 @@
                                         <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800" title="Gestor suspendido">
                                             <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspendido
                                         </span>
+                                        <span class="mt-1 block max-w-[18rem] text-xs leading-5 text-[#68756d]">
+                                            @if ($gestorUser->motivo_suspension_gestor)
+                                                {{ $gestorUser->motivo_suspension_gestor }}
+                                            @endif
+                                            @if ($gestorUser->suspendido_at)
+                                                · desde {{ $gestorUser->suspendido_at->format('d/m/Y') }}
+                                            @endif
+                                            @if ($gestorUser->fin_suspension_gestor)
+                                                · fin {{ $gestorUser->fin_suspension_gestor->format('d/m/Y') }}
+                                            @endif
+                                        </span>
                                     @else
                                         <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
                                             <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Activo

@@ -228,4 +228,22 @@ class GestorUserListingTest extends TestCase
         $this->get(route('gestor-users.index', ['q' => 'ana', 'estado' => 'activo']))
             ->assertOk();
     }
+
+    public function test_el_listado_muestra_los_datos_de_la_suspension_del_gestor(): void
+    {
+        $this->usuario([
+            'nombre_completo' => 'Ana Silva',
+            'estado' => 'suspendido',
+            'motivo_suspension_gestor' => 'Atestado médico',
+            'suspendido_at' => '2026-10-26 13:23:26',
+            'fin_suspension_gestor' => '2026-10-27',
+        ]);
+
+        $this->get(route('gestor-users.index'))
+            ->assertOk()
+            ->assertSee('Suspendido')
+            ->assertSee('Atestado médico')
+            ->assertSee('26/10/2026')
+            ->assertSee('27/10/2026');
+    }
 }

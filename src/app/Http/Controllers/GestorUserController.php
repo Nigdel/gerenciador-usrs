@@ -18,6 +18,7 @@ use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
 use App\Rules\Cpf;
 use App\Services\AuditService;
+use App\Services\GestorUserReactivationService;
 use App\Services\ProvisioningOperationService;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\UserDataSyncService;
@@ -49,6 +50,7 @@ class GestorUserController extends Controller
         private readonly UserOffboardingService $offboardingService,
         private readonly UserDataSyncService $syncService,
         private readonly ProvisioningOperationService $operationService,
+        private readonly GestorUserReactivationService $gestorReactivationService,
         private readonly SubsystemServiceRegistry $registry,
         private readonly AuditService $audit,
     ) {}
@@ -422,28 +424,7 @@ class GestorUserController extends Controller
         $this->authorize('reactivateManager', $gestorUser);
 
         try {
-            $operacion = DB::transaction(function () use ($gestorUser) {
-                $usuario = GestorUser::query()
-                    ->whereKey($gestorUser->getKey())
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                if (! $usuario->estaSuspendido()) {
-                    throw new ProvisioningException('El gestor no está suspendido.');
-                }
-
-                $cuentas = $usuario->cuentasSuspendidasPorGestor()
-                    ->with('subsystem')
-                    ->where('user_subsystem_accounts.estado', SubsystemAccountStatus::Deshabilitado)
-                    ->orderBy('user_subsystem_accounts.id')
-                    ->get();
-
-                return $this->operationService->describir(
-                    OperationType::ReactivacionGestor,
-                    $usuario,
-                    $cuentas,
-                );
-            });
+            $operacion = $this->gestorReactivationService->reactivar($gestorUser);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -451,15 +432,6 @@ class GestorUserController extends Controller
                 ->route('gestor-users.show', $gestorUser)
                 ->with('error', $this->mensajeAlOperador($exception));
         }
-
-        $this->operationService->despachar($operacion);
-
-        $this->audit->log(AuditService::USUARIO_REACTIVADO_GESTOR, [
-            'gestor_user_id' => $gestorUser->id,
-            'nombre_completo' => $gestorUser->nombre_completo,
-            'operacion_id' => $operacion->uuid,
-            'cuentas' => $operacion->cuentas()->pluck('subsistema')->all(),
-        ]);
 
         return $this->redirigirTrasEncolar($gestorUser, $operacion);
     }

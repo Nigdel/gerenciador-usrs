@@ -23,6 +23,16 @@ Schedule::command('accounts:reactivate-expired')
     ->onOneServer();
 
 /*
+ * Reactivación automática de gestores suspendidos: cuando llega la fecha de
+ * fin de la suspensión, se encola la misma operación que dispara el botón
+ * manual. El gestor vuelve a 'activo' cuando sus cuentas cierran sin errores.
+ */
+Schedule::command('gestor-users:reactivate-expired')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+/*
  * Suspensión programada (Fase 2.3): aplica las suspensiones agendadas
  * (estado 'pendiente') cuando ya pasó su fecha de inicio.
  */

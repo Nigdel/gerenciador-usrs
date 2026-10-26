@@ -183,7 +183,9 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
         <p class="mt-2 text-sm text-[#68756d]">Suspensión registrada el {{ $gestorUser->suspendido_at->format('d/m/Y') }}.</p>
         @endif
         @if ($gestorUser->fin_suspension_gestor)
-        <p class="mt-2 text-sm text-[#68756d]">Fin previsto de la suspensión: {{ $gestorUser->fin_suspension_gestor->format('d/m/Y') }}.</p>
+        <p class="mt-2 text-sm text-[#68756d]">Fin previsto de la suspensión: {{ $gestorUser->fin_suspension_gestor->format('d/m/Y') }}. La reactivación será automática en esa fecha.</p>
+        @else
+        <p class="mt-2 text-sm text-[#68756d]">Suspensión sin fecha de fin: no se reactivará automáticamente.</p>
         @endif
         @if ($gestorUser->motivo_suspension_gestor)
         <p class="mt-2 text-sm text-[#68756d]">Motivo: {{ $gestorUser->motivo_suspension_gestor }}</p>
