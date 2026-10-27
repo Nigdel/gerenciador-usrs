@@ -574,6 +574,41 @@ lenta no se pisa con la siguiente. Para verlas:
 docker compose exec app php artisan schedule:list
 ```
 
+#### Cambiar la frecuencia
+
+`schedule:work` despierta cada minuto y lanza lo que esté vencido, así que
+`everyTenMinutes()` significa «como mucho una pasada cada 10 minutos»; no hace
+falta un cron externo. La programación vive en `routes/console.php`, y cada
+tarea se puede ajustar por separado:
+
+```php
+// routes/console.php
+Schedule::command('gestor-users:reactivate-expired')
+    ->everyTenMinutes()   // ->everyMinute(), ->everyFiveMinutes(),
+    ->withoutOverlapping() // ->everyFifteenMinutes(), ->everyThirtyMinutes(),
+    ->onOneServer();       // ->hourly(), ->dailyAt('02:00'), ->cron('*/20 * * * *')
+```
+
+Las tres tareas de suspensión (`accounts:reactivate-expired`,
+`accounts:apply-pending-suspensions` y `gestor-users:reactivate-expired`) son
+bloques independientes: se puede acelerar solo la de gestores sin tocar las
+otras.
+
+Tras editar el archivo hay que reiniciar el contenedor del scheduler para que
+relea la programación (aquí la opcache no revalida timestamps) y confirmar con
+`schedule:list`:
+
+```bash
+docker compose restart scheduler
+docker compose exec app php artisan schedule:list
+```
+
+Las fechas de fin (`fin_suspension`, `fin_suspension_gestor`) se guardan como
+`YYYY-MM-DD` a las 00:00 y la comparación es `<= ahora`. Por eso la reactivación
+ocurre en la primera pasada después de la medianoche del día de fin: con
+`everyTenMinutes()` son hasta 10 minutos después, no al final de ese día. Para
+reactivar antes de esa fecha hay que usar el botón de la ficha (ver abajo).
+
 Para reactivar a mano sin esperar a la pasada del scheduler (por ejemplo, tras
 corregir un problema en un subsistema), usa el mismo comando que corre la tarea:
 

@@ -1,0 +1,11 @@
+Commits del 2026-10-26 - nigdel.pena@gmail.com
+Repositorio: /home/nigdel/gerenciador-usrs
+Total: 3
+------------------------------------------------------------
+
+[b4bf3af] 10:22 - ajustado error de Entraid al Intentar dar de baja gestor user mostraba que el sistema no podia confirmar el cambio en Entrid
+
+[d42252b] 11:09 - arreglado el probblema de la reactivacion del gestor user
+
+[7e16589] 12:16 - adicionado parametros y autenticacion a los endpoints de la api, /health, subsistems, y subsistems/id
+
