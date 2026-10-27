@@ -30,6 +30,7 @@ operación](#el-flujo-de-una-operación).
   - [Uso diario](#uso-diario)
 - [3. API](#3-api)
   - [Autenticación](#autenticación)
+  - [`GET /api/usuarios/consultar`](#get-apiusuariosconsultar)
   - [`POST /api/usuarios/provisionar`](#post-apiusuariosprovisionar)
   - [`POST /api/usuarios/suspender`](#post-apiusuariosuspender)
   - [`GET /api/operaciones/{uuid}`](#get-apioperacionesuuid)
@@ -230,11 +231,12 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 
 ## 3. API
 
-Tres endpoints, definidos en `src/routes/api.php` y cerrados con
+Cuatro endpoints, definidos en `src/routes/api.php` y cerrados con
 `auth:sanctum`.
 
 | Método | Ruta                        | Nombre                     | Ability                 |
 | ------ | --------------------------- | -------------------------- | ----------------------- |
+| `GET`  | `/api/usuarios/consultar`   | `api.usuarios.consultar`   | `usuarios:consultar`    |
 | `POST` | `/api/usuarios/provisionar` | `api.usuarios.provisionar` | `usuarios:provisionar`  |
 | `POST` | `/api/usuarios/suspender`   | `api.usuarios.suspender`   | `usuarios:suspender`    |
 | `GET`  | `/api/operaciones/{uuid}`   | `api.operaciones.show`     | `operaciones:consultar` |
@@ -249,7 +251,7 @@ El token se emite por comando, nunca por HTTP:
 
 ```bash
 docker compose exec app php artisan api:token {integracion} \
-  --abilities=usuarios:provisionar,usuarios:suspender,operaciones:consultar
+  --abilities=usuarios:consultar,usuarios:provisionar,usuarios:suspender,operaciones:consultar
 
 # Emitir para el usuario admin del sistema en vez de preguntar el email:
 docker compose exec app php artisan api:token {integracion} --admin --abilities=...
@@ -271,6 +273,64 @@ Hay rate limit por integración, no por IP: **60 peticiones/minuto por token** y
 **600/minuto entre todas** (`AppServiceProvider::boot()`). Al superarlo, `429`
 con `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` y
 `X-RateLimit-Reset`.
+
+### `GET /api/usuarios/consultar`
+
+Consulta previa al alta: recibe un CPF y devuelve los datos reutilizables que ya
+existen, junto con la fuente de la que salieron.
+
+```bash
+curl "http://localhost:8085/api/usuarios/consultar?cpf=123.456.789-09" \
+  -H "Authorization: Bearer 1|tu-token" \
+  -H "Accept: application/json"
+```
+
+Los tres casos posibles son:
+
+```json
+{ "userdata": null }
+```
+
+```json
+{
+    "userdata": {
+        "source": "self",
+        "id": 42,
+        "nombre_completo": "Juan Carlos Perez Gomez",
+        "cpf": "12345678909",
+        "usuario": "juan.perez",
+        "empresa": "Acme",
+        "estado": "activo",
+        "email_personal": "juan.perez@gmail.com",
+        "telefono_personal": "+55 62 90000-0000",
+        "telefono_trabajo": "+55 62 90000-1111",
+        "direccion_particular": "Rua Exemplo, 123"
+    }
+}
+```
+
+```json
+{
+    "userdata": {
+        "source": "adagio",
+        "nombre_completo": "Juan Carlos Perez Gomez",
+        "email_personal": "juan.perez@empresa.com.br",
+        "cpf": "12345678909",
+        "usuario": "juan.perez",
+        "external_account_id": "77"
+    }
+}
+```
+
+- Busca primero en el sistema. Si el CPF ya es un `GestorUser`, devuelve
+  `source: "self"` y no consulta Adagio: es la señal de que **no hay que crear**
+  otro usuario.
+- Si no está en el sistema, consulta Adagio. Si existe allí, devuelve
+  `source: "adagio"` con los campos ya cadastrados para reutilizarlos.
+- Si no está en ninguno, `userdata` es `null` y el alta puede continuar.
+- Si Adagio no responde, devuelve `503` en vez de `null`: no se puede afirmar
+  que el CPF no exista.
+- El CPF se normaliza a dígitos antes de validarse, igual que en el alta.
 
 ### `POST /api/usuarios/provisionar`
 

@@ -74,27 +74,48 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
     {
         $accountId = $this->resolverAccountId($subsystem, $userData['empresa'] ?? null);
         $inboxIds = $this->resolverInboxIdsDeAlta($userData, $subsystem); // falla rápido, antes de crear nada
+        $email = $this->emailDeAgente($userData, $subsystem);
 
         $payload = [
             'name' => $userData['nombre_completo'],
-            'email' => $this->emailDeAgente($userData, $subsystem),
+            'email' => $email,
             'role' => 'agent',
         ];
 
         $teamIds = $this->resolverTeamIds($userData, $subsystem);
 
-        // `team_ids` no se manda en el alta: Chatwoot solo acepta
-        // name/email/role/availability/auto_offline en POST /agents y descarta
-        // el resto en silencio. La pertenencia a equipos se crea después con
-        // team_members (ver asignarAEquipos()).
-        $response = $this->http($subsystem)->post("/api/v1/accounts/{$accountId}/agents", $payload);
+        // Chatwoot rechaza con 422 el alta de un agente cuyo email ya está
+        // vinculado al account. Se busca antes de crear y, si ya existe, se
+        // reutiliza: el alta es idempotente igual que la de Adagio.
+        $existente = $this->buscarAgenteExistente($subsystem, $accountId, $email);
+        $reutilizado = $existente !== null && ! blank($existente['id'] ?? null);
+        $agenteCreado = null;
 
-        if ($response->failed()) {
-            return SubsystemOperationResult::fail('Chatwoot rechazó la creación del agente', $response->json() ?? []);
+        if (! $reutilizado) {
+            // `team_ids` no se manda en el alta: Chatwoot solo acepta
+            // name/email/role/availability/auto_offline en POST /agents y
+            // descarta el resto en silencio. La pertenencia a equipos se crea
+            // después con team_members (ver asignarAEquipos()).
+            $response = $this->http($subsystem)->post("/api/v1/accounts/{$accountId}/agents", $payload);
+
+            if ($response->failed()) {
+                // Otro proceso pudo crearlo entre la comprobación y el POST.
+                // Antes de devolver el error se busca de nuevo: si está, se
+                // reutiliza en vez de fallar.
+                $existente = $this->buscarAgenteExistente($subsystem, $accountId, $email);
+                $reutilizado = $existente !== null && ! blank($existente['id'] ?? null);
+
+                if (! $reutilizado) {
+                    return SubsystemOperationResult::fail('Chatwoot rechazó la creación del agente', $response->json() ?? []);
+                }
+            } else {
+                $agenteCreado = $response->json() ?? [];
+            }
         }
 
-        $agentId = $response->json('id');
-        $raw = array_merge($response->json() ?? [], ['account_id' => $accountId, 'inbox_id' => $inboxIds[0] ?? null, 'inbox_ids' => $inboxIds]);
+        $agentId = $reutilizado ? $existente['id'] : ($agenteCreado['id'] ?? null);
+        $raw = $reutilizado ? $existente : $agenteCreado;
+        $raw = array_merge($raw ?? [], ['account_id' => $accountId, 'inbox_id' => $inboxIds[0] ?? null, 'inbox_ids' => $inboxIds]);
 
         $asignacion = $this->asignarAInboxes($subsystem, $accountId, $inboxIds, $agentId);
         $asignacionEquipos = $this->asignarAEquipos($subsystem, $accountId, $agentId, $teamIds);
@@ -112,9 +133,10 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         $raw['teams_asignados'] = $asignacionEquipos->success;
 
         if (! $asignacion->success) {
-            // El agente ya existe en Chatwoot: se informa el problema sin perder su id,
-            // para que no quede huérfano y se pueda reintentar solo la asignación.
-            $this->log('Agente creado pero no se pudo añadir al inbox', [
+            // El agente ya tiene id (creado o reutilizado): se informa el
+            // problema sin perderlo, para que no quede huérfano y se pueda
+            // reintentar solo la asignación.
+            $this->log('No se pudo añadir el agente al inbox', [
                 'agent_id' => $agentId,
                 'inbox_ids' => $inboxIds,
                 'raw' => $asignacion->raw,
@@ -124,7 +146,7 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         if (! $asignacionEquipos->success) {
-            $this->log('Agente creado pero no se pudo añadir a uno o más equipos', [
+            $this->log('No se pudo añadir el agente a uno o más equipos', [
                 'agent_id' => $agentId,
                 'team_ids' => $teamIds,
                 'raw' => $asignacionEquipos->raw,
@@ -134,10 +156,16 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         $mensaje = match (true) {
-            ! $asignacion->success && ! $asignacionEquipos->success => 'Agente creado, pero no se pudo añadir a la caja de entrada ni a los equipos.',
-            ! $asignacion->success => 'Agente creado, pero no se pudo añadir a la caja de entrada.',
-            ! $asignacionEquipos->success => 'Agente creado, pero no se pudo añadir a uno o más equipos.',
-            default => null,
+            ! $asignacion->success && ! $asignacionEquipos->success => $reutilizado
+                ? 'El agente ya existía en Chatwoot, pero no se pudo añadir a la caja de entrada ni a los equipos.'
+                : 'Agente creado, pero no se pudo añadir a la caja de entrada ni a los equipos.',
+            ! $asignacion->success => $reutilizado
+                ? 'El agente ya existía en Chatwoot, pero no se pudo añadir a la caja de entrada.'
+                : 'Agente creado, pero no se pudo añadir a la caja de entrada.',
+            ! $asignacionEquipos->success => $reutilizado
+                ? 'El agente ya existía en Chatwoot, pero no se pudo añadir a uno o más equipos.'
+                : 'Agente creado, pero no se pudo añadir a uno o más equipos.',
+            default => $reutilizado ? 'El agente ya existía en Chatwoot, se reutilizó.' : null,
         };
 
         return SubsystemOperationResult::ok(
@@ -468,6 +496,30 @@ class ChatwootService extends BaseSubsystemService implements SubsystemConnectio
         }
 
         return null;
+    }
+
+    /**
+     * Busca un agente existente por email sin romper el alta si el listado
+     * falla.
+     *
+     * Si Chatwoot no deja listar, no se puede afirmar que el agente no exista;
+     * se devuelve null para que el llamador siga con el POST y sea la propia
+     * respuesta del alta (o la búsqueda posterior) la que decida.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buscarAgenteExistente(Subsystem $subsystem, int|string $accountId, string $email): ?array
+    {
+        try {
+            return $this->buscarAgente($subsystem, $accountId, null, [$email]);
+        } catch (Throwable $exception) {
+            $this->log('No se pudo comprobar si el agente ya existía en Chatwoot', [
+                'email' => $email,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ enum ApiAbility: string
 {
     case Provisionar = 'usuarios:provisionar';
     case Suspender = 'usuarios:suspender';
+    case ConsultarUsuario = 'usuarios:consultar';
     case Consultar = 'operaciones:consultar';
 
     /**

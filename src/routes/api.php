@@ -4,6 +4,7 @@ use App\Enums\ApiAbility;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\OperationController;
+use App\Http\Controllers\Api\UserLookupController;
 use App\Http\Controllers\Api\UserProvisioningController;
 use App\Http\Controllers\Api\UserSuspensionController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/empresas', [CatalogController::class, 'companies'])->name('api.empresas.index');
 
     Route::prefix('usuarios')->group(function () {
+        /*
+         * Consulta previa al alta: dice si el CPF ya es un GestorUser, si solo
+         * existe en Adagio, o si no está en ninguno de los dos. Ability aparte
+         * de la de provisionar porque es de solo lectura.
+         */
+        Route::get('/consultar', [UserLookupController::class, 'show'])
+            ->middleware('abilities:'.ApiAbility::ConsultarUsuario->value)
+            ->name('api.usuarios.consultar');
+
         // Con nombre para que los tests y la documentación puedan referirse a
         // la ruta sin escribir el path: el prefijo y el verbo ya se ven.
         Route::post('/provisionar', [UserProvisioningController::class, 'store'])
