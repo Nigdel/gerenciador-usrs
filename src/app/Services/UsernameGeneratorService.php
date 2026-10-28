@@ -48,6 +48,45 @@ class UsernameGeneratorService
     }
 
     /**
+     * Propone una dirección de email completa para un usuario nuevo, usando el
+     * mismo login validado contra Adagio que devuelve proponerConAviso():
+     * nombre.primerApellido@empresa.com.br y, si está ocupado,
+     * nombre.segundoApellido@empresa.com.br.
+     *
+     * No es una simple concatenación: el login ya viene comprobado contra los
+     * subsistemas activos que sepan decir si está libre (Adagio incluido), así
+     * que el email propuesto es el que el alta intentaría crear de verdad.
+     *
+     * @return array{email: string, usuario: string, dominio: string, no_verificados: array<int, string>, mensaje: ?string}
+     */
+    public function proponerEmail(string $nombreCompleto, string $empresa): array
+    {
+        $propuesta = $this->proponerConAviso($nombreCompleto, $empresa);
+        $dominio = $this->resolverDominio($empresa);
+
+        return [
+            'email' => $propuesta['usuario'].'@'.$dominio,
+            'usuario' => $propuesta['usuario'],
+            'dominio' => $dominio,
+            'no_verificados' => $propuesta['no_verificados'],
+            'mensaje' => $propuesta['mensaje'],
+        ];
+    }
+
+    /**
+     * Dominio corporativo derivado del nombre de la empresa: "Klios" pasa a
+     * "klios.com.br" y "Mi Empresa" a "miempresa.com.br". Se normaliza porque
+     * el nombre llega tal cual lo escribe el operador y un espacio o una tilde
+     * no forman parte de una dirección válida.
+     */
+    public function resolverDominio(string $empresa): string
+    {
+        $slug = Str::slug($empresa, '');
+
+        return ($slug !== '' ? $slug : 'empresa').'.com.br';
+    }
+
+    /**
      * Igual que proponer(), pero devuelve también qué subsistemas no se pudieron
      * consultar.
      *

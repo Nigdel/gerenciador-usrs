@@ -31,6 +31,7 @@ operación](#el-flujo-de-una-operación).
 - [3. API](#3-api)
   - [Autenticación](#autenticación)
   - [`GET /api/usuarios/consultar`](#get-apiusuariosconsultar)
+  - [`GET /api/usuarios/email-propuesto`](#get-apiusuariosemail-propuesto)
   - [`POST /api/usuarios/provisionar`](#post-apiusuariosprovisionar)
   - [`POST /api/usuarios/suspender`](#post-apiusuariosuspender)
   - [`GET /api/operaciones/{uuid}`](#get-apioperacionesuuid)
@@ -231,15 +232,16 @@ o configuración frontend, ejecuta `docker compose up -d --force-recreate assets
 
 ## 3. API
 
-Cuatro endpoints, definidos en `src/routes/api.php` y cerrados con
+Cinco endpoints, definidos en `src/routes/api.php` y cerrados con
 `auth:sanctum`.
 
-| Método | Ruta                        | Nombre                     | Ability                 |
-| ------ | --------------------------- | -------------------------- | ----------------------- |
-| `GET`  | `/api/usuarios/consultar`   | `api.usuarios.consultar`   | `usuarios:consultar`    |
-| `POST` | `/api/usuarios/provisionar` | `api.usuarios.provisionar` | `usuarios:provisionar`  |
-| `POST` | `/api/usuarios/suspender`   | `api.usuarios.suspender`   | `usuarios:suspender`    |
-| `GET`  | `/api/operaciones/{uuid}`   | `api.operaciones.show`     | `operaciones:consultar` |
+| Método | Ruta                            | Nombre                         | Ability                 |
+| ------ | ------------------------------- | ------------------------------ | ----------------------- |
+| `GET`  | `/api/usuarios/consultar`       | `api.usuarios.consultar`       | `usuarios:consultar`    |
+| `GET`  | `/api/usuarios/email-propuesto` | `api.usuarios.email-propuesto` | `usuarios:consultar`    |
+| `POST` | `/api/usuarios/provisionar`     | `api.usuarios.provisionar`     | `usuarios:provisionar`  |
+| `POST` | `/api/usuarios/suspender`       | `api.usuarios.suspender`       | `usuarios:suspender`    |
+| `GET`  | `/api/operaciones/{uuid}`       | `api.operaciones.show`         | `operaciones:consultar` |
 
 ### Autenticación
 
@@ -331,6 +333,38 @@ Los tres casos posibles son:
 - Si Adagio no responde, devuelve `503` en vez de `null`: no se puede afirmar
   que el CPF no exista.
 - El CPF se normaliza a dígitos antes de validarse, igual que en el alta.
+
+### `GET /api/usuarios/email-propuesto`
+
+Propuesta de email previa al alta. Recibe el nombre completo y la empresa y
+devuelve la dirección que se crearía, ya comprobada contra Adagio con la misma
+utilidad que usa el alta (`UsernameGeneratorService`).
+
+```bash
+curl "http://localhost:8085/api/usuarios/email-propuesto?nombre_completo=Juan%20Carlos%20Perez%20Gomez&empresa=Klios" \
+  -H "Authorization: Bearer 1|tu-token" \
+  -H "Accept: application/json"
+```
+
+```json
+{
+    "email": "juan.perez@klios.com.br",
+    "usuario": "juan.perez",
+    "dominio": "klios.com.br",
+    "no_verificados": [],
+    "mensaje": null
+}
+```
+
+- La convención es `nombre.primerApellido@empresa.com.br`. Si ese login ya está
+  ocupado, se propone `nombre.segundoApellido@empresa.com.br`; si tampoco, los
+  sufijos numéricos habituales del alta.
+- El dominio se deriva del nombre de la empresa en minúsculas y sin espacios ni
+  tildes: `Klios` → `klios.com.br`, `Mi Empresa` → `miempresa.com.br`.
+- Si Adagio (u otro subsistema que sepa comprobar disponibilidad) no responde,
+  se devuelve igualmente la propuesta con `mensaje` y `no_verificados`, para que
+  la integración sepa que debe confirmarla antes de usarla.
+- Si no hay ningún candidato libre, responde `422` con el motivo.
 
 ### `POST /api/usuarios/provisionar`
 

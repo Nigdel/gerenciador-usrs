@@ -2,6 +2,7 @@
 
 use App\Enums\ApiAbility;
 use App\Http\Controllers\Api\CatalogController;
+use App\Http\Controllers\Api\EmailProposalController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\OperationController;
 use App\Http\Controllers\Api\UserLookupController;
@@ -47,6 +48,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/consultar', [UserLookupController::class, 'show'])
             ->middleware('abilities:'.ApiAbility::ConsultarUsuario->value)
             ->name('api.usuarios.consultar');
+
+        /*
+         * Propuesta de email previa al alta: recibe nombre completo y empresa y
+         * devuelve la dirección que se crearía, ya comprobada contra Adagio.
+         * Es de solo lectura, así que comparte la ability de consultar.
+         */
+        Route::get('/email-propuesto', [EmailProposalController::class, 'show'])
+            ->middleware('abilities:'.ApiAbility::ConsultarUsuario->value)
+            ->name('api.usuarios.email-propuesto');
 
         // Con nombre para que los tests y la documentación puedan referirse a
         // la ruta sin escribir el path: el prefijo y el verbo ya se ven.
