@@ -12,7 +12,8 @@ use Throwable;
 
 /**
  * Propone el login/usuario para un usuario nuevo (que no existe en Adagio
- * por CPF), siguiendo la convención nombre.primerApellido@empresa.com.br.
+ * por CPF), siguiendo la convención nombre.segundoApellido@empresa.com.br y,
+ * si está ocupado, nombre.primerApellido@empresa.com.br.
  *
  * La comprobación de disponibilidad (Fase 2.8) consulta **todos** los subsistemas
  * activos que sepan hacerla, no solo el proveedor de identidad: el login es en
@@ -50,8 +51,8 @@ class UsernameGeneratorService
     /**
      * Propone una dirección de email completa para un usuario nuevo, usando el
      * mismo login validado contra Adagio que devuelve proponerConAviso():
-     * nombre.primerApellido@empresa.com.br y, si está ocupado,
-     * nombre.segundoApellido@empresa.com.br.
+     * nombre.segundoApellido@empresa.com.br y, si está ocupado,
+     * nombre.primerApellido@empresa.com.br.
      *
      * No es una simple concatenación: el login ya viene comprobado contra los
      * subsistemas activos que sepan decir si está libre (Adagio incluido), así
@@ -126,25 +127,26 @@ class UsernameGeneratorService
     }
 
     /**
-     * Todos los candidatos por orden de preferencia: primero los nombres
-     * (nombre.primerApellido y, si existe, nombre.segundoApellido) y después los
-     * sufijos numéricos a partir del último nombre válido.
+     * Todos los candidatos por orden de preferencia: primero nombre.segundoApellido
+     * y, si existe, nombre.primerApellido; después los sufijos numéricos a partir
+     * del último nombre válido.
      *
      * @return array<int, string>
      */
     private function candidatos(string $nombre, string $apellido1, ?string $apellido2): array
     {
-        $porNombre = [$this->normalizar($nombre).'.'.$this->normalizar($apellido1)];
+        $porNombre = [];
 
         if ($apellido2) {
             $porNombre[] = $this->normalizar($nombre).'.'.$this->normalizar($apellido2);
         }
 
+        $porNombre[] = $this->normalizar($nombre).'.'.$this->normalizar($apellido1);
+
         $candidatos = $porNombre;
 
-        // El sufijo numérico cuelga del último nombre, no del primero: si
-        // "juan.perez" está ocupado y "juan.gomez" también, lo natural es
-        // "juan.gomez2", no "juan.perez2".
+        // El sufijo numérico cuelga del último candidato por apellido: si ambos
+        // apellidos están ocupados, se sigue probando sobre nombre.primerApellido.
         $base = end($porNombre);
 
         for ($sufijo = 2; $sufijo < self::MAX_INTENTOS + 1; $sufijo++) {

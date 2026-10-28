@@ -16,8 +16,8 @@ use Tests\TestCase;
  * GET /api/usuarios/email-propuesto — la propuesta de email previa al alta.
  *
  * Lo que promete es la misma convención que usa el alta
- * (nombre.primerApellido@empresa.com.br) ya comprobada contra Adagio: si el
- * primer apellido está ocupado, se propone nombre.segundoApellido. La
+ * (nombre.segundoApellido@empresa.com.br) ya comprobada contra Adagio: si el
+ * segundo apellido está ocupado, se propone nombre.primerApellido. La
  * comprobación la hace UsernameGeneratorService, así que aquí se verifica que
  * el endpoint la use de verdad y que exponga el aviso cuando Adagio no responde.
  */
@@ -90,15 +90,15 @@ class EmailProposalApiTest extends TestCase
         ]));
     }
 
-    public function test_propone_nombre_y_primer_apellido_con_el_dominio_de_la_empresa(): void
+    public function test_propone_nombre_y_segundo_apellido_con_el_dominio_de_la_empresa(): void
     {
         $this->adagioTodoLibre();
 
-        $this->proponer('Juan Perez')
+        $this->proponer('Juan Carlos Perez Gomez')
             ->assertOk()
             ->assertExactJson([
-                'email' => 'juan.perez@klios.com.br',
-                'usuario' => 'juan.perez',
+                'email' => 'juan.gomez@klios.com.br',
+                'usuario' => 'juan.gomez',
                 'dominio' => 'klios.com.br',
                 'no_verificados' => [],
                 'mensaje' => null,
@@ -106,37 +106,37 @@ class EmailProposalApiTest extends TestCase
 
         // La disponibilidad se comprobó con el email completo, no con el login
         // suelto: es lo que Adagio usa como credencial.
-        Http::assertSent(fn ($request) => str_contains($request->url(), 'juan.perez%40klios.com.br'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'juan.gomez%40klios.com.br'));
     }
 
-    public function test_usa_el_segundo_apellido_cuando_el_primero_esta_ocupado_en_adagio(): void
+    public function test_usa_el_primer_apellido_cuando_el_segundo_esta_ocupado_en_adagio(): void
     {
-        $this->adagioConEmailOcupado('juan.perez@klios.com.br');
+        $this->adagioConEmailOcupado('juan.gomez@klios.com.br');
 
         $this->proponer('Juan Carlos Perez Gomez')
             ->assertOk()
-            ->assertJsonPath('email', 'juan.gomez@klios.com.br')
-            ->assertJsonPath('usuario', 'juan.gomez')
+            ->assertJsonPath('email', 'juan.perez@klios.com.br')
+            ->assertJsonPath('usuario', 'juan.perez')
             ->assertJsonPath('dominio', 'klios.com.br');
     }
 
-    public function test_propone_el_segundo_apellido_si_el_primero_ya_es_un_gestor_user(): void
+    public function test_propone_el_primer_apellido_si_el_segundo_ya_es_un_gestor_user(): void
     {
         // Sin fake de Adagio: el login local se descarta antes de salir a la
-        // red, pero el segundo candidato sí se consulta. Se deja Adagio libre.
+        // red, pero el siguiente candidato sí se consulta. Se deja Adagio libre.
         $this->adagioTodoLibre();
 
         GestorUser::create([
             'nombre_completo' => 'Otra Persona',
             'cpf' => '12345678909',
             'password_general' => 'Password123!',
-            'usuario' => 'juan.perez',
+            'usuario' => 'juan.gomez',
             'empresa' => 'Klios',
         ]);
 
         $this->proponer('Juan Carlos Perez Gomez')
             ->assertOk()
-            ->assertJsonPath('email', 'juan.gomez@klios.com.br');
+            ->assertJsonPath('email', 'juan.perez@klios.com.br');
     }
 
     public function test_si_adagio_no_responde_devuelve_la_propuesta_con_aviso(): void

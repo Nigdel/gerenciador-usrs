@@ -132,9 +132,8 @@ Dos reglas que salen de este diseño y que conviene no saltarse:
   `subsystems` a la clase concreta, según `config/subsystems.php`. Es el único
   punto que conoce el mapeo slug → clase.
 - **`UsernameGeneratorService`**: cuando el CPF no existe en Adagio, propone
-  `usuario` = `nombre.primerApellido`, validando contra Adagio (`existsByEmail`)
-  con el dominio `empresa.com.br`; si ya está en uso prueba con
-  `nombre.segundoApellido`.
+  `usuario` = `nombre.segundoApellido`, comprobando la disponibilidad en los
+  subsistemas activos; si ya está en uso prueba con `nombre.primerApellido`.
 - **`UserProvisioningService`**: orquesta todo el flujo de alta — consulta
   Adagio por CPF, reutiliza o genera datos, guarda el `GestorUser` local, y crea
   la cuenta en cada subsistema solicitado (o en todos los activos si el JSON no
@@ -356,8 +355,8 @@ curl "http://localhost:8085/api/usuarios/email-propuesto?nombre_completo=Juan%20
 }
 ```
 
-- La convención es `nombre.primerApellido@empresa.com.br`. Si ese login ya está
-  ocupado, se propone `nombre.segundoApellido@empresa.com.br`; si tampoco, los
+- La convención es `nombre.segundoApellido@empresa.com.br`. Si ese login ya está
+  ocupado, se propone `nombre.primerApellido@empresa.com.br`; si tampoco, los
   sufijos numéricos habituales del alta.
 - El dominio se deriva del nombre de la empresa en minúsculas y sin espacios ni
   tildes: `Klios` → `klios.com.br`, `Mi Empresa` → `miempresa.com.br`.

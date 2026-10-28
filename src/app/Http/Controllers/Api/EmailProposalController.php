@@ -13,7 +13,7 @@ use Illuminate\Http\JsonResponse;
  *
  * La integración lo usa antes del alta para enseñar al operador la dirección
  * que se va a crear, sin tener que replicar la convención
- * nombre.primerApellido@empresa.com.br ni la comprobación de disponibilidad.
+ * nombre.segundoApellido@empresa.com.br ni la comprobación de disponibilidad.
  */
 class EmailProposalController extends Controller
 {

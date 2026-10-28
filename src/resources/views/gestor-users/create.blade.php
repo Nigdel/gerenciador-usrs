@@ -155,7 +155,6 @@
                 empresa: document.getElementById('empresa'),
             };
             let requestNumber = 0;
-            let usuarioEncontradoEnAdagio = false; // Flag para saber si el usuario existe en Adagio
             let ultimoCpfConsultado = ''; // Para evitar consultas duplicadas
 
             // Validación para aceptar solo números en el campo CPF
@@ -173,8 +172,6 @@
                 fields.email_personal.value = '';
                 fields.usuario.value = '';
                 fields.empresa.value = '';
-                usuarioEncontradoEnAdagio = false;
-
                 // Resetear mensaje de Adagio
                 if (adagioDescription) {
                     adagioDescription.textContent = 'Ingresa un CPF para verificar disponibilidad';
@@ -197,41 +194,6 @@
                     });
                 }
             });
-
-            // Auto-generar usuario cuando NO existe en Adagio
-            fields.nombre_completo.addEventListener('blur', () => {
-                if (!usuarioEncontradoEnAdagio && fields.nombre_completo.value.trim() && !fields.usuario.value) {
-                    generarUsuario();
-                }
-            });
-
-            const generarUsuario = () => {
-                const nombreCompleto = fields.nombre_completo.value.trim();
-                if (!nombreCompleto) return;
-
-                // Tomar primer nombre y primer apellido
-                const partes = nombreCompleto.toLowerCase()
-                    .normalize('NFD')
-                    .replace(/[̀-ͯ]/g, '') // Remover acentos
-                    .split(/\s+/)
-                    .filter(p => p.length > 0);
-
-                if (partes.length === 0) return;
-
-                let usuario = '';
-                if (partes.length === 1) {
-                    // Solo un nombre
-                    usuario = partes[0];
-                } else {
-                    // Primer nombre + primer apellido
-                    usuario = partes[0] + '.' + partes[partes.length - 1];
-                }
-
-                // Limpiar caracteres especiales
-                usuario = usuario.replace(/[^a-z0-9.]/g, '');
-
-                fields.usuario.value = usuario;
-            };
 
             // Buscar el checkbox y label de Adagio usando el atributo data-subsystem-slug
             const adagioLabel = document.querySelector('[data-subsystem-slug="adagio"]');
@@ -310,7 +272,6 @@
                             return;
                         }
 
-                        usuarioEncontradoEnAdagio = false;
                         status.textContent = message;
 
                         if (adagioDescription) {
@@ -325,7 +286,6 @@
                     const result = await response.json();
 
                     if (!result.found) {
-                        usuarioEncontradoEnAdagio = false;
                         status.textContent = 'CPF no encontrado en Adagio. Completa los datos manualmente.';
                         // Usuario NO existe: se creará en Adagio
                         if (adagioDescription) {
@@ -335,8 +295,6 @@
                         }
                         return;
                     }
-
-                    usuarioEncontradoEnAdagio = true;
 
                     // Usuario SÍ existe: se vinculará cuenta existente
                     if (adagioDescription) {
@@ -368,7 +326,6 @@
                     status.textContent = 'Datos encontrados en Adagio. Revisa y completa los campos restantes.';
                 } catch (error) {
                     if (currentRequest === requestNumber) {
-                        usuarioEncontradoEnAdagio = false;
                         status.textContent = 'No se pudo consultar Adagio. Completa los datos manualmente.';
                         // En caso de error
                         if (adagioDescription) {

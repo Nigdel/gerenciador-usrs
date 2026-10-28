@@ -98,6 +98,14 @@ class UsernameGeneratorTest extends TestCase
         $this->assertSame('juan.perez', $this->generar()->proponer('Juan Perez', 'klios'));
     }
 
+    public function test_prefiere_el_segundo_apellido_cuando_no_hay_colision(): void
+    {
+        $this->subsistema('adagio', $this->adagioConfig());
+        $this->fakeAdagioResponde();
+
+        $this->assertSame('juan.gomez', $this->generar()->proponer('Juan Carlos Perez Gomez', 'klios'));
+    }
+
     public function test_cae_al_sufijo_cuando_el_nombre_esta_ocupado(): void
     {
         $this->subsistema('adagio', $this->adagioConfig());
@@ -107,23 +115,23 @@ class UsernameGeneratorTest extends TestCase
         $this->assertSame('juan.perez2', $this->generar()->proponer('Juan Perez', 'klios'));
     }
 
-    public function test_cae_al_segundo_apellido_antes_del_sufijo(): void
+    public function test_cae_al_primer_apellido_si_el_segundo_esta_ocupado(): void
     {
         $this->subsistema('adagio', $this->adagioConfig());
         $this->fakeAdagioResponde();
-        $this->homonimo('juan.perez', 1);
+        $this->homonimo('juan.gomez', 1);
 
-        $this->assertSame('juan.gomez', $this->generar()->proponer('Juan Carlos Perez Gomez', 'klios'));
+        $this->assertSame('juan.perez', $this->generar()->proponer('Juan Carlos Perez Gomez', 'klios'));
     }
 
-    public function test_el_sufijo_cuelga_del_segundo_apellido_si_este_esta_ocupado(): void
+    public function test_el_sufijo_cuelga_del_primer_apellido_si_ambos_estan_ocupados(): void
     {
         $this->subsistema('adagio', $this->adagioConfig());
         $this->fakeAdagioResponde();
         $this->homonimo('juan.perez', 1);
         $this->homonimo('juan.gomez', 2);
 
-        $this->assertSame('juan.gomez2', $this->generar()->proponer('Juan Carlos Perez Gomez', 'klios'));
+        $this->assertSame('juan.perez2', $this->generar()->proponer('Juan Carlos Perez Gomez', 'klios'));
     }
 
     public function test_consulta_todos_los_subsistemas_activos_no_solo_adagio(): void
