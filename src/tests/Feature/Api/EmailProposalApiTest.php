@@ -109,6 +109,17 @@ class EmailProposalApiTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'juan.gomez%40klios.com.br'));
     }
 
+    public function test_federal_usa_el_dominio_federalst(): void
+    {
+        $this->adagioTodoLibre();
+
+        $this->proponer('Juan Perez', 'Federal')
+            ->assertOk()
+            ->assertJsonPath('email', 'juan.perez@federalst.com.br')
+            ->assertJsonPath('usuario', 'juan.perez')
+            ->assertJsonPath('dominio', 'federalst.com.br');
+    }
+
     public function test_usa_el_primer_apellido_cuando_el_segundo_esta_ocupado_en_adagio(): void
     {
         $this->adagioConEmailOcupado('juan.gomez@klios.com.br');

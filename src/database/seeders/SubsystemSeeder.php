@@ -20,6 +20,7 @@ class SubsystemSeeder extends Seeder
                     'email' => env('ADAGIO_EMAIL'),
                     'password' => env('ADAGIO_PASSWORD'),
                     'token' => env('ADAGIO_API_TOKEN'),
+                    'dominio' => env('ADAGIO_DOMINIO'),
                     'entidad_default' => env('ADAGIO_ENTIDAD_DEFAULT', 'klios'),
                 ],
                 'external_subsystem_id' => 'adagio-01',

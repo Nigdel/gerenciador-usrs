@@ -75,14 +75,17 @@ class UsernameGeneratorService
     }
 
     /**
-     * Dominio corporativo derivado del nombre de la empresa: "Klios" pasa a
-     * "klios.com.br" y "Mi Empresa" a "miempresa.com.br". Se normaliza porque
-     * el nombre llega tal cual lo escribe el operador y un espacio o una tilde
-     * no forman parte de una dirección válida.
+     * Dominio corporativo derivado del nombre de la empresa. Federal usa el
+     * dominio institucional "federalst.com.br"; el resto se normaliza a
+     * slug.com.br.
      */
     public function resolverDominio(string $empresa): string
     {
         $slug = Str::slug($empresa, '');
+
+        if ($slug === 'federal') {
+            return 'federalst.com.br';
+        }
 
         return ($slug !== '' ? $slug : 'empresa').'.com.br';
     }
