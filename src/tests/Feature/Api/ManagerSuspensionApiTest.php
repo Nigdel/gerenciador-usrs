@@ -21,6 +21,40 @@ class ManagerSuspensionApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_permite_fecha_fin_sin_inicio_y_suspende_inmediatamente(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-30 10:00:00'));
+
+        $gestor = GestorUser::create([
+            'nombre_completo' => 'Ana Silva',
+            'cpf' => '12345678909',
+            'password_general' => 'Password123!',
+            'usuario' => 'ana.silva',
+            'empresa' => 'klios',
+        ]);
+        $token = User::factory()->operador()->create()
+            ->createToken('integracion', [ApiAbility::Suspender->value])
+            ->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer '.$token);
+        Queue::fake();
+        Http::preventStrayRequests();
+
+        $response = $this->postJson(route('api.usuarios.suspender-gestor'), [
+            'cpf' => '12345678909',
+            'motivo_suspension' => 'Licencia médica',
+            'fin_suspension' => '2026-11-05',
+        ])->assertOk()
+            ->assertJsonPath('tipo', 'suspension_gestor')
+            ->assertJsonPath('estado', 'completada');
+
+        $this->assertSame(GestorUserStatus::Suspendido, $gestor->fresh()->estado);
+        $this->assertSame(
+            '2026-11-05',
+            $gestor->fresh()->fin_suspension_gestor->toDateString(),
+        );
+        $this->assertNotEmpty($response->json('operacion_id'));
+    }
+
     public function test_programa_la_suspension_del_gestor_aunque_no_tenga_cuentas_activas(): void
     {
         $this->travelTo(Carbon::parse('2026-10-30 10:00:00'));

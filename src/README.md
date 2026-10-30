@@ -466,9 +466,9 @@ se capturaron al suspenderlo; cuentas que ya estaban suspendidas o
 deshabilitadas no se modifican. Ambos endpoints requieren la ability
 `usuarios:suspender` y aceptan `Idempotency-Key`.
 
-`motivo_suspension` es obligatorio. `inicio_suspension` es opcional; si se
-envía `fin_suspension`, también se debe enviar el inicio y el fin no puede ser
-anterior al inicio ni a hoy.
+`motivo_suspension` es obligatorio. `inicio_suspension` y `fin_suspension` son
+opcionales e independientes: si se omite el inicio, la suspensión empieza
+inmediatamente. El fin no puede ser anterior a hoy ni al inicio, si se envía.
 
 ### `GET /api/operaciones/{uuid}`
 

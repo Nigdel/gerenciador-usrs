@@ -22,17 +22,22 @@ class SuspendManagerUserApiRequest extends FormRequest
 
     public function rules(): array
     {
+        $fechaFin = [
+            'sometimes',
+            'nullable',
+            'date',
+            'after_or_equal:today',
+        ];
+
+        if ($this->filled('inicio_suspension')) {
+            $fechaFin[] = 'after_or_equal:inicio_suspension';
+        }
+
         return [
             'cpf' => ['required', 'string', 'max:20', new Cpf],
             'motivo_suspension' => ['required', 'string', 'min:5', 'max:500'],
-            'inicio_suspension' => ['required_with:fin_suspension', 'date'],
-            'fin_suspension' => [
-                'sometimes',
-                'nullable',
-                'date',
-                'after_or_equal:inicio_suspension',
-                'after_or_equal:today',
-            ],
+            'inicio_suspension' => ['sometimes', 'date'],
+            'fin_suspension' => $fechaFin,
         ];
     }
 }
