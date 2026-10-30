@@ -277,10 +277,25 @@ class UsernameGeneratorService
             return [$partes[0], $partes[1], null];
         }
 
-        // Convención: último token = segundo apellido, penúltimo = primer apellido,
-        // todo lo anterior se considera parte del nombre (pero solo se usa el primero).
+        // Las preposiciones de apellidos compuestos no son apellidos por sí solas:
+        // "Oliva de Souza" debe generar Souza y Oliva, no Souza y de.
         $segundoApellido = array_pop($partes);
-        $primerApellido = array_pop($partes);
+        do {
+            $primerApellido = array_pop($partes);
+        } while ($primerApellido !== null && in_array(
+            Str::lower($primerApellido),
+            ['de', 'da', 'do', 'das', 'dos'],
+            true,
+        ) && count($partes) > 1);
+
+        if ($primerApellido === null || in_array(
+            Str::lower($primerApellido),
+            ['de', 'da', 'do', 'das', 'dos'],
+            true,
+        )) {
+            $primerApellido = $segundoApellido;
+        }
+
         $nombre = $partes[0];
 
         return [$nombre, $primerApellido, $segundoApellido];

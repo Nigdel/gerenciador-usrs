@@ -150,6 +150,29 @@ class EmailProposalApiTest extends TestCase
             ->assertJsonPath('email', 'juan.perez@klios.com.br');
     }
 
+    public function test_ignora_preposiciones_al_buscar_el_primer_apellido_compuesto(): void
+    {
+        $this->adagioTodoLibre();
+
+        $this->proponer('Felipe Oliva de Souza')
+            ->assertOk()
+            ->assertJsonPath('email', 'felipe.souza@klios.com.br')
+            ->assertJsonPath('usuario', 'felipe.souza');
+
+        GestorUser::create([
+            'nombre_completo' => 'Felipe Oliva de Souza',
+            'cpf' => '12345678909',
+            'password_general' => 'Password123!',
+            'usuario' => 'felipe.souza',
+            'empresa' => 'Klios',
+        ]);
+
+        $this->proponer('Felipe Oliva de Souza')
+            ->assertOk()
+            ->assertJsonPath('email', 'felipe.oliva@klios.com.br')
+            ->assertJsonPath('usuario', 'felipe.oliva');
+    }
+
     public function test_si_adagio_no_responde_devuelve_la_propuesta_con_aviso(): void
     {
         Cache::flush();

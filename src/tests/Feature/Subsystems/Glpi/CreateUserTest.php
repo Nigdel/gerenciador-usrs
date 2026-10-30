@@ -29,6 +29,8 @@ class CreateUserTest extends TestCase
             'nombre_completo' => 'Ana Silva',
             'usuario' => 'ana.silva',
             'email_personal' => 'ana@example.test',
+            'telefono_personal' => '+55 62 90000-0000',
+            'telefono_trabajo' => '+55 62 90000-1111',
             'cpf' => '12345678909',
             'password_general' => 'Password123!',
         ], $subsystem);
@@ -37,7 +39,9 @@ class CreateUserTest extends TestCase
         $this->assertSame('42', $result->externalAccountId);
         Http::assertSent(fn ($request) => $request->method() === 'POST'
             && str_ends_with($request->url(), '/User')
-            && ($request->data()['input']['name'] ?? null) === 'ana.silva');
+            && ($request->data()['input']['name'] ?? null) === 'ana.silva'
+            && ($request->data()['input']['mobile'] ?? null) === '+55 62 90000-0000'
+            && ($request->data()['input']['phone'] ?? null) === '+55 62 90000-1111');
     }
 
     public function test_glpi_reuses_an_existing_user_after_verifying_its_status(): void

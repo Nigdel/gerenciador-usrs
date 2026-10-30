@@ -128,6 +128,8 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
                 'name' => $userData['usuario'],
                 'realname' => $userData['nombre_completo'],
                 '_useremails' => [$userData['email_personal'] ?? null],
+                'mobile' => $userData['telefono_personal'] ?? null,
+                'phone' => $userData['telefono_trabajo'] ?? null,
                 'password' => $userData['password_general'] ?? null,
                 'password2' => $userData['password_general'] ?? null,
                 'comment' => isset($userData['cpf']) ? 'cpf: '.$userData['cpf'] : null,
