@@ -70,6 +70,12 @@ class ApiAuthenticationTest extends TestCase
 
         $this->postJson('/api/usuarios/suspender', $this->payloadSuspender())
             ->assertUnauthorized();
+
+        $this->postJson('/api/usuarios/suspender-gestor', $this->payloadSuspender())
+            ->assertUnauthorized();
+
+        $this->postJson('/api/usuarios/habilitar-gestor', ['cpf' => '12345678909'])
+            ->assertUnauthorized();
     }
 
     public function test_api_rechaza_un_token_invalido(): void
@@ -102,6 +108,14 @@ class ApiAuthenticationTest extends TestCase
         $this->como($this->bearer([ApiAbility::Provisionar->value]))
             ->postJson('/api/usuarios/suspender', $this->payloadSuspender())
             ->assertForbidden();
+
+        $this->como($this->bearer([ApiAbility::Provisionar->value]))
+            ->postJson('/api/usuarios/suspender-gestor', $this->payloadSuspender())
+            ->assertForbidden();
+
+        $this->como($this->bearer([ApiAbility::Provisionar->value]))
+            ->postJson('/api/usuarios/habilitar-gestor', ['cpf' => '12345678909'])
+            ->assertForbidden();
     }
 
     public function test_token_sin_abilities_no_puede_hacer_nada(): void
@@ -114,6 +128,14 @@ class ApiAuthenticationTest extends TestCase
 
         $this->como($plain)
             ->postJson('/api/usuarios/suspender', $this->payloadSuspender())
+            ->assertForbidden();
+
+        $this->como($plain)
+            ->postJson('/api/usuarios/suspender-gestor', $this->payloadSuspender())
+            ->assertForbidden();
+
+        $this->como($plain)
+            ->postJson('/api/usuarios/habilitar-gestor', ['cpf' => '12345678909'])
             ->assertForbidden();
     }
 

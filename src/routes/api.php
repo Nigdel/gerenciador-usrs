@@ -4,6 +4,7 @@ use App\Enums\ApiAbility;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\EmailProposalController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\ManagerSuspensionController;
 use App\Http\Controllers\Api\OperationController;
 use App\Http\Controllers\Api\UserLookupController;
 use App\Http\Controllers\Api\UserProvisioningController;
@@ -73,6 +74,20 @@ Route::middleware('auth:sanctum')->group(function () {
                 'abilities:'.ApiAbility::Suspender->value,
             ])
             ->name('api.usuarios.suspender');
+
+        Route::post('/suspender-gestor', [ManagerSuspensionController::class, 'suspend'])
+            ->middleware([
+                'idempotencia',
+                'abilities:'.ApiAbility::Suspender->value,
+            ])
+            ->name('api.usuarios.suspender-gestor');
+
+        Route::post('/habilitar-gestor', [ManagerSuspensionController::class, 'reactivate'])
+            ->middleware([
+                'idempotencia',
+                'abilities:'.ApiAbility::Suspender->value,
+            ])
+            ->name('api.usuarios.habilitar-gestor');
     });
 
     /*

@@ -15,6 +15,7 @@ use App\Models\ProvisioningOperationAccount;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use App\Support\ActorContext;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -57,6 +58,7 @@ class ProvisioningOperationService
      * lo único que se usa de ella es `isEmpty()`, `count()` y recorrerla.
      * @param  array<string, mixed>  $payload  datos de la operación (motivo de baja, motivo y fechas de suspensión...)
      * @param  array<int, array<string, mixed>>  $payloadPorCuenta  lo que cada fila necesita guardar
+     * @param  bool  $aplazarSinCuentas  deja pendiente una operación programada aunque no haya cuentas
      */
     public function describir(
         OperationType $tipo,
@@ -64,16 +66,18 @@ class ProvisioningOperationService
         Collection $trabajo,
         array $payload = [],
         array $payloadPorCuenta = [],
+        bool $aplazarSinCuentas = false,
     ): ProvisioningOperation {
         $actor = ActorContext::actual();
 
-        return DB::transaction(function () use ($tipo, $usuario, $trabajo, $payload, $payloadPorCuenta, $actor) {
+        return DB::transaction(function () use ($tipo, $usuario, $trabajo, $payload, $payloadPorCuenta, $aplazarSinCuentas, $actor) {
             $this->comprobarSinOperacionActiva($usuario);
 
+            $sinTrabajoInmediato = $trabajo->isEmpty() && ! $aplazarSinCuentas;
             $operacion = ProvisioningOperation::create([
                 'gestor_user_id' => $usuario?->id,
                 'tipo' => $tipo,
-                'estado' => $trabajo->isEmpty() ? OperationStatus::Completada : OperationStatus::Pendiente,
+                'estado' => $sinTrabajoInmediato ? OperationStatus::Completada : OperationStatus::Pendiente,
                 'payload' => $payload ?: null,
                 'actor_id' => $actor?->id,
                 // Congelado: si el operador se borra, la operación no debe
@@ -89,10 +93,10 @@ class ProvisioningOperationService
             // «0 pendientes». El resto de la cabecera ya viene en el create().
             $operacion->forceFill(['pendientes' => $trabajo->count()]);
 
-            $operacion->terminada_at = $operacion->estado === OperationStatus::Completada ? now() : null;
+            $operacion->terminada_at = $sinTrabajoInmediato ? now() : null;
             $operacion->save();
 
-            if ($trabajo->isEmpty()) {
+            if ($sinTrabajoInmediato) {
                 $this->aplicarEstadoDelUsuario($operacion, 0);
             }
 
@@ -109,6 +113,73 @@ class ProvisioningOperationService
 
             return $operacion;
         });
+    }
+
+    /**
+     * Inicia una suspensión de gestor que quedó pendiente hasta su fecha de
+     * inicio. El lock hace que dos pasadas del scheduler no encolen dos veces
+     * la misma operación.
+     */
+    public function despacharSuspensionGestorProgramada(ProvisioningOperation $operacion): bool
+    {
+        $cuentas = DB::transaction(function () use ($operacion): ?array {
+            $bloqueada = ProvisioningOperation::query()
+                ->whereKey($operacion->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if (
+                $bloqueada === null
+                || $bloqueada->tipo !== OperationType::SuspensionGestor
+                || $bloqueada->estado !== OperationStatus::Pendiente
+                || ($bloqueada->payload['suspension_programada'] ?? false) !== true
+            ) {
+                return null;
+            }
+
+            $inicio = $bloqueada->payload['inicio_suspension_gestor'] ?? null;
+            if (! is_string($inicio) || Carbon::parse($inicio)->isFuture()) {
+                return null;
+            }
+
+            $idsPendientes = $bloqueada->cuentas()
+                ->where('estado', OperationAccountStatus::Pendiente)
+                ->orderBy('id')
+                ->pluck('id')
+                ->all();
+
+            if ($bloqueada->cuentas()->doesntExist()) {
+                $bloqueada->forceFill([
+                    'estado' => OperationStatus::Completada,
+                    'iniciada_at' => now(),
+                    'terminada_at' => now(),
+                ])->save();
+                $this->aplicarEstadoDelUsuario($bloqueada, 0);
+
+                return [];
+            }
+
+            if ($idsPendientes === []) {
+                return null;
+            }
+
+            $bloqueada->forceFill([
+                'estado' => OperationStatus::EnCurso,
+                'iniciada_at' => now(),
+            ])->save();
+
+            return $idsPendientes;
+        });
+
+        if ($cuentas === null) {
+            return false;
+        }
+
+        foreach ($cuentas as $cuentaId) {
+            ProcessOperationAccount::dispatch($cuentaId)->onQueue(self::COLA);
+        }
+
+        return true;
     }
 
     /**

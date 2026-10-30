@@ -19,6 +19,7 @@ use App\Models\Subsystem;
 use App\Rules\Cpf;
 use App\Services\AuditService;
 use App\Services\GestorUserReactivationService;
+use App\Services\GestorUserSuspensionService;
 use App\Services\ProvisioningOperationService;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\UserDataSyncService;
@@ -51,6 +52,7 @@ class GestorUserController extends Controller
         private readonly UserDataSyncService $syncService,
         private readonly ProvisioningOperationService $operationService,
         private readonly GestorUserReactivationService $gestorReactivationService,
+        private readonly GestorUserSuspensionService $gestorSuspensionService,
         private readonly SubsystemServiceRegistry $registry,
         private readonly AuditService $audit,
     ) {}
@@ -365,38 +367,11 @@ class GestorUserController extends Controller
         $this->authorize('suspendManager', $gestorUser);
 
         try {
-            $operacion = DB::transaction(function () use ($request, $gestorUser) {
-                $usuario = GestorUser::query()
-                    ->whereKey($gestorUser->getKey())
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                if ($usuario->estado !== GestorUserStatus::Activo) {
-                    throw new ProvisioningException('Solo se puede suspender un gestor activo.');
-                }
-
-                if ($usuario->cuentasSuspendidasPorGestor()->exists()) {
-                    throw new ProvisioningException('Hay una suspensión anterior incompleta. Reintenta sus cuentas pendientes antes de suspenderlo otra vez.');
-                }
-
-                $cuentas = $usuario->subsystemAccounts()
-                    ->with('subsystem')
-                    ->where('estado', SubsystemAccountStatus::Activo)
-                    ->orderBy('id')
-                    ->get();
-
-                $usuario->cuentasSuspendidasPorGestor()->sync($cuentas->modelKeys());
-
-                return $this->operationService->describir(
-                    OperationType::SuspensionGestor,
-                    $usuario,
-                    $cuentas,
-                    [
-                        'motivo_suspension_gestor' => $request->validated('motivo_suspension_gestor'),
-                        'fin_suspension_gestor' => $request->validated('fin_suspension_gestor'),
-                    ],
-                );
-            });
+            $operacion = $this->gestorSuspensionService->suspender(
+                $gestorUser,
+                $request->validated('motivo_suspension_gestor'),
+                fin: $request->validated('fin_suspension_gestor'),
+            );
         } catch (Throwable $exception) {
             report($exception);
 
@@ -404,17 +379,6 @@ class GestorUserController extends Controller
                 ->route('gestor-users.show', $gestorUser)
                 ->with('error', $this->mensajeAlOperador($exception));
         }
-
-        $this->operationService->despachar($operacion);
-
-        $this->audit->log(AuditService::USUARIO_SUSPENDIDO_GESTOR, [
-            'gestor_user_id' => $gestorUser->id,
-            'nombre_completo' => $gestorUser->nombre_completo,
-            'operacion_id' => $operacion->uuid,
-            'cuentas' => $operacion->cuentas()->pluck('subsistema')->all(),
-            'motivo_suspension_gestor' => $request->validated('motivo_suspension_gestor'),
-            'fin_suspension_gestor' => $request->validated('fin_suspension_gestor'),
-        ]);
 
         return $this->redirigirTrasEncolar($gestorUser, $operacion);
     }

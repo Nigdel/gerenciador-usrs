@@ -42,6 +42,15 @@ Schedule::command('accounts:apply-pending-suspensions')
     ->onOneServer();
 
 /*
+ * Suspensión programada de gestores: inicia la operación del gestor y sus
+ * cuentas capturadas al llegar la fecha indicada por la integración.
+ */
+Schedule::command('gestor-users:apply-pending-suspensions')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+/*
  * Caducidad de los secretos del payload (Sprint 1.1): el payload cifrado de
  * una operación guarda la contraseña general, y `cerrar()` ya la borra al
  * completarse. Este comando cubre lo que queda —fallidas que nadie reintentó y

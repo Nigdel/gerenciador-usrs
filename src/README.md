@@ -442,6 +442,34 @@ curl -X POST http://localhost:8085/api/usuarios/suspender \
   la aplica cuando llega la fecha y `accounts:reactivate-expired` la revierte
   cuando termina. Ver [Tareas programadas](#tareas-programadas).
 
+### Suspender y habilitar un gestor completo
+
+`POST /api/usuarios/suspender-gestor` suspende el gestor identificado por CPF
+y conserva la lista exacta de cuentas que estaban activas. La suspensión se
+aplica inmediatamente si no se envía `inicio_suspension`, o al llegar esa fecha
+si es futura. Las suspensiones programadas se procesan con
+`gestor-users:apply-pending-suspensions`.
+
+```json
+{
+    "cpf": "123.456.789-09",
+    "motivo_suspension": "Licencia médica",
+    "inicio_suspension": "2026-10-31",
+    "fin_suspension": "2026-11-05"
+}
+```
+
+La respuesta incluye `operacion_id`, `tipo`, `estado` y `subsistemas[]`. Para
+volver a habilitar el gestor, envía `POST /api/usuarios/habilitar-gestor` con
+`{"cpf": "123.456.789-09"}`. La operación reactiva únicamente las cuentas que
+se capturaron al suspenderlo; cuentas que ya estaban suspendidas o
+deshabilitadas no se modifican. Ambos endpoints requieren la ability
+`usuarios:suspender` y aceptan `Idempotency-Key`.
+
+`motivo_suspension` es obligatorio. `inicio_suspension` es opcional; si se
+envía `fin_suspension`, también se debe enviar el inicio y el fin no puede ser
+anterior al inicio ni a hoy.
+
 ### `GET /api/operaciones/{uuid}`
 
 ```bash
