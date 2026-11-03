@@ -326,6 +326,7 @@ Los tres casos posibles son:
 - Busca primero en el sistema. Si el CPF ya es un `GestorUser`, devuelve
   `source: "self"` y no consulta Adagio: es la señal de que **no hay que crear**
   otro usuario.
+
 - Si no está en el sistema, consulta Adagio. Si existe allí, devuelve
   `source: "adagio"` con los campos ya cadastrados para reutilizarlos.
 - Si no está en ninguno, `userdata` es `null` y el alta puede continuar.
@@ -976,7 +977,7 @@ Tres cosas que la CI necesita y que no son obvias:
 La CI **no corre `php artisan test --parallel`**: eso exige `brianium/paratest`,
 que no es dependencia del proyecto, y la suite tarda unos 8 segundos.
 
----
+-----
 
 ## 7. Limitaciones conocidas
 
