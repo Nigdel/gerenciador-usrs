@@ -180,4 +180,38 @@ class AccountsReconcileCommandTest extends TestCase
         // acumularía una fila por ejecución para la misma cuenta.
         $this->assertSame(1, AccountDiscrepancy::count());
     }
+
+    public function test_registra_la_discrepancia_cuando_glpi_reporta_borrado(): void
+    {
+        // GLPI reporta el estado remoto 'borrado' cuando el usuario fue
+        // eliminado: la discrepancia debe registrarse sin colapsar el insert
+        // en el enum de account_discrepancies (Data truncated on MySQL).
+        $glpi = Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test',
+            'api_config' => [],
+            'activo' => true,
+        ]);
+
+        UserSubsystemAccount::create([
+            'gestor_user_id' => $this->usuario->id,
+            'subsystem_id' => $glpi->id,
+            'credencial_usuario' => 'ana.silva',
+            'external_account_id' => 'glpi-1',
+            'estado' => SubsystemAccountStatus::Activo,
+        ]);
+
+        Http::fake(['https://glpi.test/User/*' => Http::response(['is_deleted' => 1])]);
+
+        $this->artisan('accounts:reconcile')
+            ->expectsOutputToContain('Se detectaron 1 discrepancias.')
+            ->assertSuccessful();
+
+        $discrepancia = AccountDiscrepancy::sole();
+
+        $this->assertSame(SubsystemAccountStatus::Activo, $discrepancia->estado_local);
+        $this->assertSame('borrado', $discrepancia->remote_estado);
+        $this->assertNotNull($discrepancia->detectada_at);
+    }
 }
