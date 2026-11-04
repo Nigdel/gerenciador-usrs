@@ -295,7 +295,12 @@ class UserImportService
             'email_personal' => $datosAdagio['email_personal'] ?? $cuentaGlpi->email,
             'usuario' => (string) ($datosAdagio['usuario'] ?? $cuentaGlpi->login ?? ''),
             'cpf' => $cpf,
-            'empresa' => $this->resolverEmpresa($cpf, (string) ($datosAdagio['usuario'] ?? $cuentaGlpi->login ?? ''), $indices),
+            'empresa' => $this->resolverEmpresa(
+                $cpf,
+                (string) ($datosAdagio['usuario'] ?? $cuentaGlpi->login ?? ''),
+                (string) ($datos['email_personal'] ?? ''),
+                $indices,
+            ),
         ];
     }
 
@@ -304,7 +309,7 @@ class UserImportService
      * Chatwoot la llevan como identificador de cuenta, y el UPN de Samba
      * encuadre contra los dominios declarados de EntraID.
      */
-    private function resolverEmpresa(string $cpf, string $usuario, IndicesImportacion $indices): ?string
+    private function resolverEmpresa(string $cpf, string $usuario, string $emailPersonal, IndicesImportacion $indices): ?string
     {
         $mapaEmpresas = array_combine(
             array_map(static fn (string $empresa): string => strtolower($empresa), config('subsystems.empresas', [])),
@@ -361,7 +366,25 @@ class UserImportService
             }
         }
 
-        return null;
+        // 4) Email: el dominio del correo personal (fuente Adagio) encaja
+        //    contra los dominios declarados por empresa en los indices.
+        if (filled($emailPersonal) && str_contains(strtolower($emailPersonal), '@')) {
+            $empresa = $indices->empresaPorDominio((string) substr(strtolower($emailPersonal), (int) strrpos(strtolower($emailPersonal), '@') + 1));
+
+            if ($empresa !== null) {
+                $resuelta = $this->empresaDeConfiguracion($empresa, $mapaEmpresas);
+
+                if ($resuelta !== null) {
+                    return $resuelta;
+                }
+            }
+        }
+
+        // La columna "empresa" es NOT NULL en la base de datos: sin ninguna
+        // fuente que la atribuya se usa la primera empresa configurada como
+        // valor por defecto, para que el alta del gestor no falle en el
+        // constraint en vez de dejar al usuario sin registrar.
+        return $mapaEmpresas[array_key_first($mapaEmpresas)] ?? null;
     }
 
     /**
