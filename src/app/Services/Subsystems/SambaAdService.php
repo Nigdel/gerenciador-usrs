@@ -483,7 +483,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     /**
      * @return Connection
      */
-    private function connectAndBind(Subsystem $subsystem)
+    protected function connectAndBind(Subsystem $subsystem)
     {
         if (! extension_loaded('ldap')) {
             throw new RuntimeException('La extensión PHP ldap no está cargada en este proceso (revisa CLI vs php-fpm).');
@@ -702,14 +702,14 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
         return $message;
     }
 
-    private function unbind($ldap): void
+    protected function unbind($ldap): void
     {
         if ($ldap) {
             @ldap_unbind($ldap);
         }
     }
 
-    private function escapeFilter(string $value): string
+    protected function escapeFilter(string $value): string
     {
         return ldap_escape($value, '', LDAP_ESCAPE_FILTER);
     }
@@ -722,7 +722,7 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     /**
      * Raíz del dominio, desde donde se buscan las cuentas existentes.
      */
-    private function getBaseDn(Subsystem $subsystem): string
+    protected function getBaseDn(Subsystem $subsystem): string
     {
         return trim((string) ($subsystem->api_config['base_dn'] ?? config('services.samba_ad.base_dn', 'DC=klios,DC=br')));
     }

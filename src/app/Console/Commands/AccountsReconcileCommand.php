@@ -6,17 +6,11 @@ use App\Enums\SubsystemAccountStatus;
 use App\Models\AccountDiscrepancy;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
-use App\Services\Subsystems\AdagioService;
-use App\Services\Subsystems\BaseSubsystemService;
-use App\Services\Subsystems\ChatwootService;
-use App\Services\Subsystems\EmailService;
-use App\Services\Subsystems\EntraIdService;
-use App\Services\Subsystems\GlpiService;
-use App\Services\Subsystems\SambaAdService;
-use App\Services\Subsystems\SlackService;
+use App\Services\SubsystemServiceRegistry;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Throwable;
 
 #[Signature('accounts:reconcile {--dry-run}')]
 #[Description('Reconciliar cuentas de operaciones pendientes o en error')]
@@ -57,26 +51,19 @@ class AccountsReconcileCommand extends Command
             }
 
             // Resolve the service class based on subsystem slug
-            $serviceClass = match ($subsystem->slug) {
-                'email' => EmailService::class,
-                'slack' => SlackService::class,
-                'samba' => SambaAdService::class,
-                'adagio' => AdagioService::class,
-                'entra_id' => EntraIdService::class,
-                'glpi' => GlpiService::class,
-                'chatwoot' => ChatwootService::class,
-                default => null,
-            };
-
-            if (! $serviceClass) {
-                // Unknown subsystem – skip with a warning
-                $this->components->warn("Subsistema desconocido: {$subsystem->slug}");
+            try {
+                $service = app(SubsystemServiceRegistry::class)->resolve($subsystem->slug);
+            } catch (Throwable $e) {
+                $this->components->warn("Subsistema desconocido o sin driver: {$subsystem->slug}");
 
                 continue;
             }
 
-            /** @var BaseSubsystemService $service */
-            $service = app($serviceClass);
+            if (! method_exists($service, 'getUserStatus')) {
+                $this->components->warn("El driver de {$subsystem->slug} no puede recuperar el estado remoto; se omite la cuenta {$cuenta->id}.");
+
+                continue;
+            }
 
             // Los drivers que no pueden verificar el estado remoto (Chatwoot no
             // tiene estados de suspensión o deshabilitado: desactivar es
@@ -97,7 +84,7 @@ class AccountsReconcileCommand extends Command
                     continue;
                 }
                 $estadoRemoto = $resultado->estado;
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $this->components->error("Error al obtener estado de {$cuenta->id}: {$e->getMessage()}");
 
                 continue;

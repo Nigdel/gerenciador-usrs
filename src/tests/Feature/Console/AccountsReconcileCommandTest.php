@@ -162,7 +162,7 @@ class AccountsReconcileCommandTest extends TestCase
         Http::fake();
 
         $this->artisan('accounts:reconcile')
-            ->expectsOutputToContain('Subsistema desconocido: desconocido')
+            ->expectsOutputToContain('Subsistema desconocido o sin driver: desconocido')
             ->assertSuccessful();
 
         $this->assertSame(0, AccountDiscrepancy::count());
