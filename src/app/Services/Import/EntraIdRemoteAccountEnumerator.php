@@ -80,7 +80,7 @@ class EntraIdRemoteAccountEnumerator extends EntraIdService implements RemoteAcc
                     login: isset($upn, $dominio) && str_ends_with(strtolower((string) $upn), '@'.strtolower((string) $dominio))
                         ? strstr($upn, '@', true)
                         : $upn,
-                    email: $usuario['mail'] ?? null,
+                    email: filled($usuario['mail'] ?? null) ? (string) $usuario['mail'] : (string) ($upn ?? ''),
                     cpf: blank($usuario['employeeId'] ?? null) ? null : (string) $usuario['employeeId'],
                     estado: $usuario['accountEnabled'] ? 'activo' : 'deshabilitado',
                     nombreCompleto: $usuario['displayName'] ?? null,

@@ -78,7 +78,10 @@ final class IndicesImportacion
             }
 
             if (filled($config['dominio'] ?? null)) {
-                $dominiosPorEmpresa[$slug][] = strtolower((string) $config['dominio']);
+                $dominio = strtolower((string) $config['dominio']);
+                $empresaKey = self::empresaKeyDelDominio($dominio, $subsistemas) ?? $slug;
+
+                $dominiosPorEmpresa[$empresaKey][] = $dominio;
             }
         }
 
@@ -135,7 +138,12 @@ final class IndicesImportacion
      */
     public function buscar(string $slug, string $cpf, ?string $login, ?array $emails = null): ?RemoteAccount
     {
-        $indice = $this->porCpf[$slug][$cpf] ?? null;
+        // EntraID no correlaciona por CPF: el employeeId devuelto por Graph
+        // no se usa como clave de correlación. La búsqueda se hace por username
+        // (login) o email.
+        $indice = $slug === 'entraid'
+            ? null
+            : ($this->porCpf[$slug][$cpf] ?? null);
 
         if ($indice !== null) {
             return $this->remotas($slug)[$indice] ?? null;
@@ -203,20 +211,73 @@ final class IndicesImportacion
     }
 
     /**
-     * Domain de la empresa en el que encuadra un dominio de UPN (entraid /
-     * samba) o null si no encuadra en ninguna empresa configurada.
+     * Empresa (clave en minúsculas, p. ej. 'klios') a la que pertenece el
+     * dominio corporativo, o null si no encaja en ninguna empresa declarada.
+     *
+     * La clave se resuelve primero contra los dominios declarados por los
+     * subsistemas (Adagio por entidad, Email, Samba AD) y luego contra los
+     * dominios registrados desde tenants con clave de empresa (EntraID).
      */
     public function empresaPorDominio(string $dominio): ?string
     {
-        $dominio = strtolower(trim($dominio));
+        $empresaKey = self::empresaKeyDelDominio($dominio, $this->subsistemas);
+
+        if ($empresaKey !== null) {
+            return $empresaKey;
+        }
+
+        $dominioNormalizado = strtolower(trim($dominio));
 
         foreach ($this->dominiosPorEmpresa as $empresa => $dominios) {
-            if (in_array($dominio, $dominios, true)) {
-                return $empresa;
+            if (in_array($dominioNormalizado, $dominios, true)) {
+                return strtolower((string) $empresa);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Clave de empresa (minúsculas) del dominio corporativo declarado por un
+     * subsistema, o null si no se puede atribuir a ninguna empresa.
+     *
+     * @param  array<string, Subsystem>  $subsistemas
+     */
+    private static function empresaKeyDelDominio(string $dominio, array $subsistemas): ?string
+    {
+        $dominioNormalizado = strtolower(trim($dominio));
+
+        foreach ($subsistemas as $subsystem) {
+            $subDominio = strtolower(trim((string) ($subsystem->api_config['dominio'] ?? '')));
+
+            if ($subDominio === '' || strcasecmp($subDominio, $dominioNormalizado) !== 0) {
+                continue;
+            }
+
+            $empresaKey = self::empresaKeyDelSubsystem($subsystem);
+
+            if ($empresaKey !== null) {
+                return $empresaKey;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Clave de empresa del subsistema: el proveedor de identidad (Adagio)
+     * resuelve la entidad (empresa) desde su configuración; el resto de
+     * subsistemas no atribuye dominio a empresa explícitamente.
+     */
+    private static function empresaKeyDelSubsystem(Subsystem $subsystem): ?string
+    {
+        $entidad = strtolower(trim((string) ($subsystem->api_config['entidad'] ?? $subsystem->api_config['entidad_default'] ?? '')));
+
+        if ($entidad === '') {
+            return null;
+        }
+
+        return $entidad;
     }
 
     /**

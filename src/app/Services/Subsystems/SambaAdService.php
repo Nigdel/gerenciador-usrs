@@ -119,6 +119,51 @@ class SambaAdService extends BaseSubsystemService implements IdentityProviderInt
     }
 
     /**
+     * Busca un usuario de Samba AD por email (mail / userPrincipalName) y
+     * devuelve sus datos con el CPF (employeeNumber), para rellenar el que
+     * falte en el proveedor de identidad de quien no lo tiene.
+     */
+    public function findByEmail(string $email): ?array
+    {
+        $subsystem = $this->resolveSubsystem();
+        $cleanEmail = $this->escapeFilter(trim(strtolower($email)));
+        $ldap = null;
+
+        try {
+            $ldap = $this->connectAndBind($subsystem);
+            $baseDn = $this->getBaseDn($subsystem);
+            $filter = "(&(objectCategory=person)(objectClass=user)(|(userPrincipalName={$cleanEmail})(mail={$cleanEmail})))";
+
+            $search = @ldap_search($ldap, $baseDn, $filter, ['cn', 'sAMAccountName', 'mail', 'employeeNumber', 'userAccountControl']);
+            if (! $search) {
+                return null;
+            }
+
+            $entries = @ldap_get_entries($ldap, $search);
+
+            if (($entries['count'] ?? 0) === 0) {
+                return null;
+            }
+
+            $user = $entries[0];
+
+            return [
+                'nombre_completo' => $user['cn'][0] ?? null,
+                'email_personal' => $user['mail'][0] ?? null,
+                'cpf' => $user['employeenumber'][0] ?? null,
+                'usuario' => $user['samaccountname'][0] ?? null,
+                'external_account_id' => $user['samaccountname'][0] ?? null,
+            ];
+        } catch (Exception $e) {
+            Log::warning('SambaAD findByEmail falló', ['error' => $e->getMessage()]);
+
+            return null;
+        } finally {
+            $this->unbind($ldap);
+        }
+    }
+
+    /**
      * En Samba AD el login es el sAMAccountName y además forma parte del UPN,
      * así que se buscan **los dos**: un sAMAccountName libre con el UPN ya
      * ocupado es justo el caso en el que el alta fallaría.

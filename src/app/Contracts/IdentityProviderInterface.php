@@ -17,6 +17,12 @@ interface IdentityProviderInterface extends SubsystemConnectionInterface
     public function findByCpf(string $cpf): ?array;
 
     /**
+     * Busca un usuario por email (credencial en Adagio/Samba): devuelve los
+     * datos del propietario o null si no existe / no se pudo consultar.
+     */
+    public function findByEmail(string $email): ?array;
+
+    /**
      * @return bool true si ya existe una cuenta con ese email/login en el proveedor.
      */
     public function existsByEmail(string $email): bool;

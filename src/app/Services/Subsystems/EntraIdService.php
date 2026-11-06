@@ -9,6 +9,7 @@ use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -249,7 +250,49 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
         $response = $this->http($subsystem, $empresa)->post('/v1.0/users', $payload);
 
         if ($response->failed()) {
-            return SubsystemOperationResult::fail('Entra ID rechazó la creación del usuario', $response->json() ?? []);
+            // Un usuario eliminado en Entra ID no aparece en /users (el GET
+            // anterior devuelve 404), pero sigue en la papelera y su
+            // userPrincipalName queda reservado. En ese caso se restaura y se
+            // habilita en vez de devolver el "already exists" opaco de Graph.
+            $eliminado = $this->buscarUsuarioEliminado(
+                $subsystem,
+                $empresa,
+                $upn,
+                isset($userData['usuario']) ? (string) $userData['usuario'] : null,
+            );
+
+            if ($eliminado !== null) {
+                return $this->restaurarYHabilitarUsuario($subsystem, $empresa, $eliminado, $userData, $upn);
+            }
+
+            // Aunque no se pueda consultar la papelera (por permisos o por un
+            // fallo puntual), el error de Graph sí identifica el UPN duplicado.
+            // Se traduce a algo accionable en vez de dejar el mensaje crudo.
+            $error = $response->json('error');
+            $mensajeGraph = is_array($error) ? strtolower((string) ($error['message'] ?? '')) : '';
+
+            if (str_contains($mensajeGraph, 'password must be specified')) {
+                return SubsystemOperationResult::fail(
+                    'No se pudo crear el usuario en Entra ID porque falta la contraseña general (password_general) para el alta.',
+                    $response->json() ?? [],
+                );
+            }
+
+            if (str_contains($mensajeGraph, 'already exists') || str_contains($mensajeGraph, 'ya existe')) {
+                return SubsystemOperationResult::fail(
+                    "No se pudo crear '{$upn}' en Entra ID porque ese userPrincipalName ya está reservado. "
+                    .'Si el usuario está en la papelera de reciclaje, restáurelo o elimínelo '
+                    .'permanentemente antes de volver a crear la cuenta.',
+                    $response->json() ?? [],
+                );
+            }
+
+            $detalle = is_array($error) ? trim((string) ($error['code'] ?? '').': '.(string) ($error['message'] ?? ''), ': ') : '';
+
+            return SubsystemOperationResult::fail(
+                'Entra ID rechazó la creación del usuario'.($detalle !== '' ? ': '.$detalle : ''),
+                $response->json() ?? [],
+            );
         }
 
         return SubsystemOperationResult::ok(
@@ -258,6 +301,235 @@ class EntraIdService extends BaseSubsystemService implements SubsystemConnection
             estado: 'activo',
             raw: $response->json() ?? [],
         );
+    }
+
+    /**
+     * Restaura de la papelera al usuario cuyo UPN sigue reservado y lo deja
+     * habilitado, reutilizando los datos del alta.
+     *
+     * @param  array<string, mixed>  $eliminado
+     * @param  array<string, mixed>  $userData
+     */
+    private function restaurarYHabilitarUsuario(
+        Subsystem $subsystem,
+        ?string $empresa,
+        array $eliminado,
+        array $userData,
+        string $upn,
+    ): SubsystemOperationResult {
+        $id = (string) ($eliminado['id'] ?? '');
+
+        if ($id === '') {
+            return SubsystemOperationResult::fail(
+                "El usuario '{$upn}' está eliminado en Entra ID, pero no se pudo obtener su identificador para restaurarlo.",
+                ['usuario_eliminado' => $eliminado],
+            );
+        }
+
+        $restauracion = $this->http($subsystem, $empresa)
+            ->post('/v1.0/directory/deletedItems/'.rawurlencode($id).'/restore');
+
+        if ($restauracion->failed()) {
+            return SubsystemOperationResult::fail(
+                "El usuario '{$upn}' está eliminado en Entra ID y no se pudo restaurar "
+                .'(HTTP '.$restauracion->status().'). Restáurelo manualmente o elimínelo '
+                .'permanentemente antes de reintentar el alta.',
+                array_merge($restauracion->json() ?? [], ['usuario_eliminado' => $eliminado]),
+            );
+        }
+
+        $restaurado = $restauracion->json();
+        $restaurado = is_array($restaurado) ? $restaurado : [];
+        $idRestaurado = (string) ($restaurado['id'] ?? $id);
+
+        // La respuesta del restore no siempre trae el estado. En ese caso se
+        // consulta el usuario recién restaurado con el GET de siempre. Graph es
+        // eventualmente consistente, así que se reintenta unos segundos.
+        if (! array_key_exists('accountEnabled', $restaurado)) {
+            $consultado = $this->obtenerUsuarioPorUpn($subsystem, $empresa, $upn);
+
+            if ($consultado !== null) {
+                $restaurado = array_merge($restaurado, $consultado);
+                $idRestaurado = (string) ($restaurado['id'] ?? $idRestaurado);
+            }
+        }
+
+        $estabaHabilitado = ($restaurado['accountEnabled'] ?? null) === true;
+
+        // Solo se toca el usuario si estaba deshabilitado. Si el restore ya lo
+        // devolvió habilitado, un PATCH inmediato puede responder 404 mientras
+        // la restauración se propaga, y no hace falta.
+        if (! $estabaHabilitado) {
+            $payload = [
+                'accountEnabled' => true,
+                // Al eliminar un usuario, Entra ID antepone un identificador a
+                // su UPN (ej. <guid>ana.silva@dominio). Se fija de nuevo el UPN
+                // real del alta para que la cuenta conserve su credencial.
+                'userPrincipalName' => $upn,
+            ];
+
+            if (! empty($userData['nombre_completo'])) {
+                $payload['displayName'] = $userData['nombre_completo'];
+            }
+
+            if (! empty($userData['cpf'])) {
+                $payload['employeeId'] = $userData['cpf'];
+            }
+
+            $habilitacion = $this->habilitarUsuarioRestaurado(
+                $subsystem,
+                $empresa,
+                $idRestaurado,
+                $payload,
+            );
+
+            if ($habilitacion === null || $habilitacion->failed()) {
+                return SubsystemOperationResult::fail(
+                    "El usuario '{$upn}' se restauró en Entra ID, pero no se pudo habilitar "
+                    .'('.($habilitacion === null ? 'sin respuesta de Graph' : 'HTTP '.$habilitacion->status()).'). '
+                    .'Habilítelo manualmente antes de reintentar el alta.',
+                    array_merge($habilitacion?->json() ?? [], [
+                        'usuario_eliminado' => $eliminado,
+                        'usuario_restaurado' => $idRestaurado,
+                    ]),
+                );
+            }
+
+            $restaurado['accountEnabled'] = true;
+        }
+
+        return SubsystemOperationResult::ok(
+            credencialUsuario: (string) ($restaurado['userPrincipalName'] ?? $upn),
+            externalAccountId: $idRestaurado,
+            estado: 'activo',
+            mensaje: $estabaHabilitado
+                ? 'Usuario restaurado desde la papelera; ya estaba habilitado en Entra ID'
+                : 'Usuario restaurado desde la papelera y habilitado en Entra ID',
+            raw: array_merge($restaurado, [
+                'usuario_eliminado' => $eliminado,
+                'restaurado' => true,
+            ]),
+        );
+    }
+
+    /**
+     * Consulta el usuario por su UPN mientras Graph termina de propagar la
+     * restauración. Devuelve null si no aparece tras los reintentos.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function obtenerUsuarioPorUpn(Subsystem $subsystem, ?string $empresa, string $upn): ?array
+    {
+        for ($intento = 1; $intento <= 4; $intento++) {
+            try {
+                $response = $this->http($subsystem, $empresa)->get(
+                    '/v1.0/users/'.rawurlencode($upn),
+                    ['$select' => 'id,accountEnabled,userPrincipalName,mailNickname,displayName'],
+                );
+            } catch (Throwable) {
+                $response = null;
+            }
+
+            if ($response?->successful()) {
+                $usuario = $response->json();
+
+                return is_array($usuario) ? $usuario : null;
+            }
+
+            if ($intento < 4) {
+                usleep(500_000);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Habilita al usuario restaurado. Si Graph todavía responde 404 por la
+     * consistencia eventual del restore, se reintenta antes de darlo por
+     * fallido.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function habilitarUsuarioRestaurado(
+        Subsystem $subsystem,
+        ?string $empresa,
+        string $idRestaurado,
+        array $payload,
+    ): ?Response {
+        $response = null;
+
+        for ($intento = 1; $intento <= 3; $intento++) {
+            try {
+                $response = $this->http($subsystem, $empresa)
+                    ->patch('/v1.0/users/'.rawurlencode($idRestaurado), $payload);
+            } catch (Throwable) {
+                $response = null;
+            }
+
+            if ($response !== null && ! $response->failed()) {
+                return $response;
+            }
+
+            if ($response?->status() !== 404 || $intento === 3) {
+                return $response;
+            }
+
+            usleep(500_000);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Busca en la papelera de reciclaje de Entra ID el usuario que corresponde
+     * al alta. Devuelve null si no está eliminado o si la consulta no se puede
+     * completar: en ese caso el llamante conserva el error original.
+     *
+     * No basta con filtrar por el UPN original: al eliminar un usuario, Entra
+     * ID lo decora con un prefijo GUID (<guid>ana.silva@dominio), así que la
+     * búsqueda exacta no lo encuentra. El mailNickname sí se conserva, y es el
+     * mismo valor con el que se creó la cuenta (gestor_users.usuario).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buscarUsuarioEliminado(
+        Subsystem $subsystem,
+        ?string $empresa,
+        string $upn,
+        ?string $mailNickname = null,
+    ): ?array {
+        $filtros = ['userPrincipalName eq \''.str_replace("'", "''", $upn).'\''];
+
+        if (filled($mailNickname)) {
+            $filtros[] = 'mailNickname eq \''.str_replace("'", "''", $mailNickname).'\'';
+        }
+
+        foreach ($filtros as $filtro) {
+            try {
+                $response = $this->http($subsystem, $empresa)->get(
+                    '/v1.0/directory/deletedItems/microsoft.graph.user',
+                    [
+                        '$filter' => $filtro,
+                        '$select' => 'id,userPrincipalName,displayName,mailNickname,employeeId,deletedDateTime',
+                    ],
+                );
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($response->failed()) {
+                continue;
+            }
+
+            $usuario = $response->json('value.0');
+
+            if (is_array($usuario)) {
+                return $usuario;
+            }
+        }
+
+        return null;
     }
 
     public function suspendUser(UserSubsystemAccount $account, array $suspensionData): SubsystemOperationResult

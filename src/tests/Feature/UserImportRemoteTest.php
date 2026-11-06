@@ -11,6 +11,7 @@ use App\Models\UserSubsystemAccount;
 use App\Services\Import\RemoteAccount;
 use App\Services\Import\RemoteAccountEnumerator;
 use App\Services\Import\UserImportService;
+use App\Services\Subsystems\GlpiService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -73,6 +74,23 @@ class UserImportRemoteTest extends TestCase
             };
         }
 
+        // Adagio no se enumera en bloque: se incluye con lista vacía para que
+        // asociarCuentas() lo considere y construya la cuenta desde findByCpf().
+        if (! isset($fakes['adagio'])) {
+            $fakes['adagio'] = new class implements RemoteAccountEnumerator
+            {
+                public function slug(): string
+                {
+                    return 'adagio';
+                }
+
+                public function enumerar(Subsystem $subsystem): array
+                {
+                    return [];
+                }
+            };
+        }
+
         return app(UserImportService::class)->conEnumeradores($fakes);
     }
 
@@ -108,7 +126,14 @@ class UserImportRemoteTest extends TestCase
 
         $slugs = $gestor->subsystemAccounts()->with('subsystem')->get()
             ->map(fn ($account) => $account->subsystem->slug)->sort()->values()->all();
-        $this->assertSame(['chatwoot', 'entraid', 'glpi', 'sambaad'], $slugs);
+        $this->assertSame(['adagio', 'chatwoot', 'entraid', 'glpi', 'sambaad'], $slugs);
+
+        // La cuenta de Adagio también se asoció (desde findByCpf, no desde enumeración).
+        $adagio = UserSubsystemAccount::where('gestor_user_id', $gestor->id)
+            ->whereHas('subsystem', fn ($q) => $q->where('slug', 'adagio'))->first();
+        $this->assertNotNull($adagio);
+        $this->assertSame('adagio-12345678901', $adagio->external_account_id);
+        $this->assertSame('activo', $adagio->estado->value);
 
         // El estado remoto se mapea: samba suspendida no se importa como activa.
         $samba = UserSubsystemAccount::where('gestor_user_id', $gestor->id)
@@ -130,6 +155,23 @@ class UserImportRemoteTest extends TestCase
         $this->assertSame('bbc', $reporte['huerfanos'][1]['external_id']);
     }
 
+    public function test_asigna_la_empresa_por_el_dominio_del_email(): void
+    {
+        $this->adagio = ['12345678901' => ['nome' => 'Ana Perez', 'email' => 'ana@federalst.com.br', 'documento' => '123.456.789-01']];
+        $this->app->singleton(FakeAdagioForImport::class, fn () => new FakeAdagioForImport($this->adagio));
+
+        $adagioSubsystem = Subsystem::where('slug', 'adagio')->firstOrFail();
+        $adagioSubsystem->api_config = ['dominio' => 'federalst.com.br', 'entidad_default' => 'federal', 'es_proveedor_identidad' => true];
+        $adagioSubsystem->save();
+
+        $reporte = $this->importador([
+            'glpi' => [new RemoteAccount('glpi', '10', login: 'aperez', email: 'ana@federalst.com.br', cpf: '12345678901', estado: 'activo')],
+        ])->importar();
+
+        $this->assertSame(1, $reporte['resumen']['gestores_creados']);
+        $this->assertSame('Federal', GestorUser::where('cpf', '12345678901')->firstOrFail()->empresa);
+    }
+
     public function test_reimportar_no_duplica(): void
     {
         $this->adagio = ['11122333444' => ['nome' => 'Ana Cruz', 'email' => 'acruz@klios.com.br']];
@@ -147,10 +189,10 @@ class UserImportRemoteTest extends TestCase
         $this->assertSame(0, $segunda['resumen']['gestores_creados']);
         $this->assertSame(1, $segunda['resumen']['gestores_actualizados']);
         $this->assertSame(0, $segunda['resumen']['cuentas_creadas']);
-        $this->assertSame(2, $segunda['resumen']['cuentas_actualizadas']);
+        $this->assertSame(3, $segunda['resumen']['cuentas_actualizadas']);
 
         $this->assertSame(1, GestorUser::count());
-        $this->assertSame(2, UserSubsystemAccount::count());
+        $this->assertSame(3, UserSubsystemAccount::count());
     }
 
     public function test_rescata_el_cpf_cuando_otra_plataforma_lo_tiene(): void
@@ -183,9 +225,93 @@ class UserImportRemoteTest extends TestCase
         ])->importar(['dry_run' => true]);
 
         $this->assertSame(1, $reporte['resumen']['gestores_creados']);
-        $this->assertSame(2, $reporte['resumen']['cuentas_creadas']);
+        $this->assertSame(3, $reporte['resumen']['cuentas_creadas']);
         $this->assertSame(0, GestorUser::count());
         $this->assertSame(0, UserSubsystemAccount::count());
+    }
+
+    public function test_rellena_el_cpf_de_glpi_por_email_del_username(): void
+    {
+        $this->adagio = ['12345678901' => ['nome' => 'Maria Souza', 'email' => 'msouza@klios.com.br', 'documento' => '123.456.789-01']];
+        $fakeAdagio = new FakeAdagioForImport($this->adagio);
+
+        $this->app->bind(IdentityProviderInterface::class, fn () => $fakeAdagio);
+        $this->app->singleton(FakeAdagioForImport::class, fn () => $fakeAdagio);
+
+        $this->app['config']->set('subsystems.drivers.adagio', FakeAdagioForImport::class);
+
+        $glpiFake = new class extends GlpiService
+        {
+            public array $cpfsAsignados = [];
+
+            public function asignarCpf(Subsystem $subsystem, string $externalAccountId, string $cpf): SubsystemOperationResult
+            {
+                $this->cpfsAsignados[] = [$subsystem->slug, $externalAccountId, $cpf];
+
+                return SubsystemOperationResult::ok();
+            }
+        };
+
+        $this->app->bind(GlpiService::class, fn () => $glpiFake);
+
+        $reporte = $this->importador([
+            'glpi' => [new RemoteAccount('glpi', '77', login: 'msouza', estado: 'activo')],
+        ])->rellenarCpfs();
+
+        $this->assertSame(1, $reporte['procesados']);
+        $this->assertSame([['login' => 'msouza', 'email' => 'msouza@klios.com.br', 'cpf' => '12345678901']], $reporte['rellenados']);
+        $this->assertSame([], $reporte['fallos']);
+        $this->assertSame([['glpi', '77', '12345678901']], $glpiFake->cpfsAsignados);
+    }
+
+    public function test_rellenar_cpfs_en_dry_run_no_escribe_en_glpi(): void
+    {
+        $this->adagio = ['12345678901' => ['nome' => 'Maria Souza', 'email' => 'msouza@klios.com.br', 'documento' => '123.456.789-01']];
+        $fakeAdagio = new FakeAdagioForImport($this->adagio);
+
+        $this->app->bind(IdentityProviderInterface::class, fn () => $fakeAdagio);
+        $this->app->singleton(FakeAdagioForImport::class, fn () => $fakeAdagio);
+        $this->app['config']->set('subsystems.drivers.adagio', FakeAdagioForImport::class);
+
+        $glpiFake = new class extends GlpiService
+        {
+            public array $cpfsAsignados = [];
+
+            public function asignarCpf(Subsystem $subsystem, string $externalAccountId, string $cpf): SubsystemOperationResult
+            {
+                $this->cpfsAsignados[] = [$subsystem->slug, $externalAccountId, $cpf];
+
+                return SubsystemOperationResult::ok();
+            }
+        };
+
+        $this->app->bind(GlpiService::class, fn () => $glpiFake);
+
+        $reporte = $this->importador([
+            'glpi' => [new RemoteAccount('glpi', '77', login: 'msouza', estado: 'activo')],
+        ])->rellenarCpfs(['dry_run' => true]);
+
+        $this->assertSame(1, $reporte['procesados']);
+        $this->assertNotEmpty($reporte['rellenados']);
+        $this->assertSame([], $glpiFake->cpfsAsignados);
+    }
+
+    public function test_rellenar_cpfs_sin_coincidencia_en_adagio(): void
+    {
+        $this->adagio = ['12345678901' => ['nome' => 'Maria Souza', 'email' => 'maria@klios.com.br', 'documento' => '123.456.789-01']];
+        $fakeAdagio = new FakeAdagioForImport($this->adagio);
+
+        $this->app->bind(IdentityProviderInterface::class, fn () => $fakeAdagio);
+        $this->app->singleton(FakeAdagioForImport::class, fn () => $fakeAdagio);
+        $this->app['config']->set('subsystems.drivers.adagio', FakeAdagioForImport::class);
+
+        $reporte = $this->importador([
+            'glpi' => [new RemoteAccount('glpi', '78', login: 'nadaaaaa', estado: 'activo')],
+        ])->rellenarCpfs();
+
+        $this->assertSame(1, $reporte['procesados']);
+        $this->assertSame([], $reporte['rellenados']);
+        $this->assertCount(1, $reporte['fallos']);
     }
 }
 
@@ -200,7 +326,27 @@ class FakeAdagioForImport implements IdentityProviderInterface, SubsystemService
 
     public function findByCpf(string $cpf): ?array
     {
-        return $this->cuentas[$cpf] ?? null;
+        $d = $this->cuentas[$cpf] ?? null;
+        if ($d === null) {
+            return null;
+        }
+
+        return array_merge($d, [
+            'external_account_id' => $d['external_account_id'] ?? $d['externalAccountId'] ?? 'adagio-'.$cpf,
+        ]);
+    }
+
+    public function findByEmail(string $email): ?array
+    {
+        foreach ($this->cuentas as $cpf => $datos) {
+            if (strcasecmp((string) ($datos['email'] ?? ''), $email) === 0) {
+                return array_merge($datos, [
+                    'external_account_id' => $datos['external_account_id'] ?? $datos['externalAccountId'] ?? 'adagio-'.$cpf,
+                ]);
+            }
+        }
+
+        return null;
     }
 
     public function existsByEmail(string $email): bool

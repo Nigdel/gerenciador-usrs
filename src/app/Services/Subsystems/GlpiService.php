@@ -224,6 +224,36 @@ class GlpiService extends BaseSubsystemService implements SubsystemConnectionInt
     }
 
     /**
+     * Registra el CPF en el comentario del usuario de GLPI, conservando el
+     * comentario previo (se añade una línea "CPF: xxx.xxx.xxx-xx"). Si el
+     * comentario ya trae ese CPF no repite la escritura (idempotencia).
+     */
+    public function asignarCpf(Subsystem $subsystem, string $externalAccountId, string $cpf): SubsystemOperationResult
+    {
+        $consulta = $this->http($subsystem)->get('/User/'.$externalAccountId);
+
+        if ($consulta->failed()) {
+            return SubsystemOperationResult::fail('No se pudo consultar el usuario en GLPI', $consulta->json() ?? []);
+        }
+
+        $comentarioActual = (string) $consulta->json('comment', '');
+
+        if (str_contains($comentarioActual, 'CPF: '.$cpf)) {
+            return SubsystemOperationResult::ok(mensaje: 'CPF ya estaba registrado en GLPI');
+        }
+
+        $comentarioNuevo = trim($comentarioActual."\nCPF: ".$cpf);
+
+        $response = $this->http($subsystem)->put('/User/'.$externalAccountId, ['input' => ['comment' => $comentarioNuevo]]);
+
+        if ($response->failed()) {
+            return SubsystemOperationResult::fail('No se pudo registrar el CPF en GLPI', $response->json() ?? []);
+        }
+
+        return SubsystemOperationResult::ok(mensaje: 'CPF registrado en GLPI');
+    }
+
+    /**
      * Restablece la contraseña de un usuario en GLPI.
      */
     public function resetPassword(UserSubsystemAccount $account, string $newPassword): SubsystemOperationResult

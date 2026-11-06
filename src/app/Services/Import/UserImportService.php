@@ -7,6 +7,7 @@ use App\Enums\SubsystemAccountStatus;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use App\Services\Subsystems\GlpiService;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\TemporaryPasswordGenerator;
 use Throwable;
@@ -62,6 +63,7 @@ class UserImportService
     {
         return [
             'glpi' => app(GlpiRemoteAccountEnumerator::class),
+            'adagio' => app(AdagioRemoteAccountEnumerator::class),
             'entraid' => app(EntraIdRemoteAccountEnumerator::class),
             'sambaad' => app(SambaAdRemoteAccountEnumerator::class),
             'chatwoot' => app(ChatwootRemoteAccountEnumerator::class),
@@ -144,6 +146,133 @@ class UserImportService
         $this->reportarHuerfanos($indices, $procesadas, $reporte);
 
         return $reporte;
+    }
+
+    /**
+     * Backfill de CPF para los usuarios activos de GLPI que todavía no lo
+     * tienen: se enumeran sus cuentas, se buscan en Adagio por email (el
+     * username de GLPI se convierte en email en cada dominio conocido) y se
+     * escribe el CPF encontrado en el comentario del usuario de GLPI para que
+     * el siguiente import pueda correlacionarlo.
+     *
+     * @param  array{dry_run?: bool}  $opciones
+     * @return array{procesados: int, rellenados: list<array<string, string>>, fallos: list<array<string, string>>}
+     */
+    public function rellenarCpfs(array $opciones = []): array
+    {
+        $dryRun = (bool) ($opciones['dry_run'] ?? false);
+        $reporte = ['procesados' => 0, 'rellenados' => [], 'fallos' => []];
+
+        $subsystem = Subsystem::activos()->where('slug', 'glpi')->first();
+
+        if ($subsystem === null) {
+            return $reporte;
+        }
+
+        $enumerador = $this->enumeradores['glpi'];
+
+        foreach ($enumerador->enumerar($subsystem) as $cuenta) {
+            if ($cuenta->estado !== 'activo') {
+                continue;
+            }
+
+            if ($cuenta->cpfLimpio() !== null) {
+                continue;
+            }
+
+            $reporte['procesados']++;
+
+            $cpf = null;
+            $email = null;
+
+            foreach ($this->emailsDeUsuario($cuenta->login) as $candidato) {
+                $datos = $this->registry->resolveIdentityProvider()->findByEmail($candidato);
+
+                if ($datos === null) {
+                    continue;
+                }
+
+                $email = $candidato;
+                $cpf = (string) ($datos['cpf'] ?? '');
+
+                break;
+            }
+
+            if ($cpf === null || $cpf === '') {
+                $cpf = (string) ($datos['documento'] ?? '');
+            }
+
+            $cpf = preg_replace('/\D/', '', (string) $cpf);
+
+            if ($cpf === null || $cpf === '') {
+                $reporte['fallos'][] = [
+                    'login' => (string) $cuenta->login,
+                    'mensaje' => 'No se encontró el usuario en Adagio por ninguno de los emails derivados del username',
+                ];
+
+                continue;
+            }
+
+            if ($dryRun) {
+                $reporte['rellenados'][] = ['login' => (string) $cuenta->login, 'email' => $email, 'cpf' => $cpf];
+
+                continue;
+            }
+
+            $resultado = app(GlpiService::class)->asignarCpf($subsystem, $cuenta->externalAccountId, $cpf);
+
+            if (! $resultado->success) {
+                $reporte['fallos'][] = [
+                    'login' => (string) $cuenta->login,
+                    'email' => $email,
+                    'mensaje' => (string) ($resultado->mensaje ?? 'No se pudo registrar el CPF en GLPI'),
+                ];
+
+                continue;
+            }
+
+            $reporte['rellenados'][] = ['login' => (string) $cuenta->login, 'email' => $email, 'cpf' => $cpf];
+        }
+
+        return $reporte;
+    }
+
+    /**
+     * Emails candidatos para buscar a un usuario de GLPI sin CPF: el username
+     * se convierte en email en cada dominio de Adagio que se conoce.
+     *
+     * @return list<string>
+     */
+    private function emailsDeUsuario(?string $login): array
+    {
+        $usuario = strtolower(trim((string) $login));
+        $dominios = ['klios.com.br', 'federalst.com.br'];
+
+        $subsystem = Subsystem::activos()->where('slug', 'glpi')->first();
+
+        $dominioConfig = strtolower(trim((string) ($subsystem?->api_config['dominio'] ?? '')));
+
+        if ($dominioConfig !== '') {
+            $dominios[] = $dominioConfig;
+        }
+
+        $emails = [];
+
+        foreach ($dominios as $dominio) {
+            if ($dominio === '') {
+                continue;
+            }
+
+            $email = $usuario.'@'.$dominio;
+
+            if (! str_contains($email, '@') || in_array($email, $emails, true)) {
+                continue;
+            }
+
+            $emails[] = $email;
+        }
+
+        return $emails;
     }
 
     /**
@@ -244,7 +373,7 @@ class UserImportService
      * identidad no hay datos autoritativos, así que el usuario se deja
      * anotado y no se importa.
      *
-     * @return array{nombre_completo: ?string, email_personal: ?string, usuario: ?string}|null
+     * @return array{nombre_completo: ?string, email_personal: ?string, usuario: ?string, external_account_id_adagio: ?string}|null
      */
     private function datosDeAdagio(string $cpf, array &$reporte): ?array
     {
@@ -278,6 +407,7 @@ class UserImportService
             'nombre_completo' => $datos['nombre_completo'] ?? $datos['nome'] ?? null,
             'email_personal' => $datos['email_personal'] ?? $datos['email'] ?? null,
             'usuario' => $datos['usuario'] ?? null,
+            'external_account_id_adagio' => $datos['external_account_id'] ?? $datos['externalAccountId'] ?? null,
         ];
     }
 
@@ -285,8 +415,8 @@ class UserImportService
      * Cruza lo que dice Adagio (fuente de datos) con lo que dice GLPI
      * (fuente de existencia).
      *
-     * @param  array{nombre_completo: ?string, email_personal: ?string, usuario: ?string}  $datosAdagio
-     * @return array{nombre_completo: string, email_personal: ?string, usuario: string, cpf: string}
+     * @param  array{nombre_completo: ?string, email_personal: ?string, usuario: ?string, external_account_id_adagio: ?string}  $datosAdagio
+     * @return array{nombre_completo: string, email_personal: ?string, usuario: string, cpf: string, external_account_id_adagio: ?string}
      */
     private function resolverDatos(RemoteAccount $cuentaGlpi, array $datosAdagio, string $cpf, bool $cpfRescatado, IndicesImportacion $indices): array
     {
@@ -295,10 +425,11 @@ class UserImportService
             'email_personal' => $datosAdagio['email_personal'] ?? $cuentaGlpi->email,
             'usuario' => (string) ($datosAdagio['usuario'] ?? $cuentaGlpi->login ?? ''),
             'cpf' => $cpf,
+            'external_account_id_adagio' => $datosAdagio['external_account_id_adagio'] ?? $datosAdagio['external_account_id'] ?? null,
             'empresa' => $this->resolverEmpresa(
                 $cpf,
                 (string) ($datosAdagio['usuario'] ?? $cuentaGlpi->login ?? ''),
-                (string) ($datos['email_personal'] ?? ''),
+                (string) ($datosAdagio['email_personal'] ?? ''),
                 $indices,
             ),
         ];
@@ -491,6 +622,25 @@ class UserImportService
             $cuenta = $cuentaGlpi->subsystemSlug === $slug
                 ? $cuentaGlpi
                 : $indices->buscar($slug, $cpf, $datos['usuario'], $this->emailsCandidatos($gestor, $datos, $subsystem));
+
+            // Adagio no se enumera en bloque: la cuenta se construye desde
+            // datosDeAdagio() (external_account_id ya confirmado por CPF).
+            if ($cuenta === null && $slug === 'adagio' && isset($datos['external_account_id_adagio']) && $datos['external_account_id_adagio'] !== null) {
+                $cuenta = new RemoteAccount(
+                    subsystemSlug: 'adagio',
+                    externalAccountId: (string) $datos['external_account_id_adagio'],
+                    login: $datos['usuario'] ?? $cuentaGlpi->login,
+                    email: $datos['email_personal'] ?? $cuentaGlpi->email,
+                    cpf: $cpf,
+                    estado: 'activo',
+                    nombreCompleto: $datos['nombre_completo'] ?? $cuentaGlpi->nombreCompleto,
+                    meta: [
+                        'external_account_id' => $datos['external_account_id_adagio'],
+                        'email' => $datos['email_personal'] ?? $cuentaGlpi->email,
+                        'cpf' => $cpf,
+                    ],
+                );
+            }
 
             if ($cuenta === null) {
                 $reporte['faltantes'][] = [

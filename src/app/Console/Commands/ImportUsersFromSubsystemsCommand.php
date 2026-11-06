@@ -28,6 +28,16 @@ class ImportUsersFromSubsystemsCommand extends Command
 
         $reporte = $importador->importar($opciones);
 
+        // Backfill: por los usuarios activos de GLPI sin CPF, buscar en Adagio
+        // por email (username@dominio) y escribir el CPF en el comentario del
+        // usuario de GLPI, para que el import pueda correlacionarlos.
+        $reporteRellenos = $this->option('dry-run')
+            ? $importador->rellenarCpfs(['dry_run' => true])
+            : $importador->rellenarCpfs();
+
+        $this->newLine();
+        $this->components->info('Backfill CPF: '.(int) $reporteRellenos['procesados'].' usuarios sin CPF procesados · '.count($reporteRellenos['rellenados']).' rellenados · '.count($reporteRellenos['fallos']).' fallos.');
+
         // Resumen en pantalla.
         $this->newLine();
         $this->components->twoColumnDetail('Usuarios GLPI recorridos', (string) $reporte['resumen']['glpi_recorridos']);

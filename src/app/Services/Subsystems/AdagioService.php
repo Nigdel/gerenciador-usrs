@@ -70,6 +70,15 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
         return $this->mapearPropietario($response, $cpf);
     }
 
+    public function findByEmail(string $email): ?array
+    {
+        $subsystem = $this->resolveSubsystem();
+
+        $response = $this->request($subsystem, 'GET', 'proprietarios/internos', query: ['email' => trim(strtolower($email))]);
+
+        return $this->mapearPropietario($response, $email);
+    }
+
     public function existsByEmail(string $email): bool
     {
         $subsystem = $this->resolveSubsystem();
@@ -291,6 +300,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             'body' => $response->json() ?? $response->body(),
         ]);
     }
+
     public function disableUser(UserSubsystemAccount $account): SubsystemOperationResult
     {
         return $this->cambiarEstado($account, [], activar: false);
