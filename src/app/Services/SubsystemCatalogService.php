@@ -84,6 +84,10 @@ class SubsystemCatalogService
                 'dominio' => $config['dominio'] ?? null,
                 'campos_soportados' => (object) [],
             ],
+            'cartorial' => [
+                'tiempo_espera' => $config['timeout'] ?? null,
+                'campos_soportados' => (object) [],
+            ],
             'slack' => [
                 'scim_habilitado' => (bool) ($config['scim_habilitado'] ?? false),
                 'campos_soportados' => (object) [],

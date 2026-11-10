@@ -640,6 +640,11 @@ operan solo contra el contrato universal.
    fila existente: completa `api_config.dominio` en la configuración del
    subsistema Adagio con el dominio de respaldo.
 
+   **Cartorial** (gestión del cartorial del usuario) se registra en el mismo
+   seeder con el slug `cartorial`. Comparte API, login y token con Adagio, así
+   que si no defines `CARTORIAL_API_URL`, `CARTORIAL_EMAIL` y
+   `CARTORIAL_PASSWORD` toma los valores de `ADAGIO_*`.
+
 ---
 
 ## 5. Operación

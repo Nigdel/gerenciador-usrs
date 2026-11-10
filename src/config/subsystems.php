@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Subsystems\AdagioService;
+use App\Services\Subsystems\CartorialService;
 use App\Services\Subsystems\ChatwootService;
 use App\Services\Subsystems\EmailService;
 use App\Services\Subsystems\EntraIdService;
@@ -26,6 +27,7 @@ return [
         'slack' => SlackService::class,
         'entraid' => EntraIdService::class,
         'sambaad' => SambaAdService::class,
+        'cartorial' => CartorialService::class,
     ],
 
     // Slug del subsistema que actúa como proveedor de identidad (Adagio).

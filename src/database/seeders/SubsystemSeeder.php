@@ -26,6 +26,28 @@ class SubsystemSeeder extends Seeder
                 'external_subsystem_id' => 'adagio-01',
                 'es_proveedor_identidad' => true,
             ],
+            // Cartorial: gestión del cartorial del propietario. Comparte API,
+            // login y token con Adagio (misma clave de caché), por eso su URL y
+            // sus credenciales caen por defecto a las de Adagio.
+            //
+            // Se siembra **inactivo** a propósito: el alta de un cartorial crea
+            // un contrato en Klios, y eso no puede pasar por el altas masivas
+            // del gestor sin que el operador lo haya pedido. Se activa desde la
+            // ficha del subsistema cuando el driver esté listo para usarlo.
+            [
+                'nombre' => 'Cartorial',
+                'slug' => 'cartorial',
+                'descripcion' => 'Gestión del cartorial del usuario (Klios)',
+                'api_url' => env('CARTORIAL_API_URL', env('ADAGIO_API_URL', env('ADAGIO_BASE_URL'))),
+                'api_config' => [
+                    'url' => env('CARTORIAL_WEB_URL', env('CARTORIAL_API_URL', env('ADAGIO_API_URL', env('ADAGIO_BASE_URL')))),
+                    'email' => env('CARTORIAL_EMAIL', env('ADAGIO_EMAIL')),
+                    'password' => env('CARTORIAL_PASSWORD', env('ADAGIO_PASSWORD')),
+                    'timeout' => (int) env('CARTORIAL_TIMEOUT', 30),
+                ],
+                'external_subsystem_id' => 'cartorial-01',
+                'activo' => false,
+            ],
             [
                 'nombre' => 'Glpi',
                 'slug' => 'glpi',
