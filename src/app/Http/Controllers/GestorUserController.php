@@ -16,6 +16,7 @@ use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
 use App\Rules\Cpf;
 use App\Services\AuditService;
+use App\Services\GestorUserCartorialService;
 use App\Services\GestorUserReactivationService;
 use App\Services\GestorUserSuspensionService;
 use App\Services\ProvisioningOperationService;
@@ -50,6 +51,7 @@ class GestorUserController extends Controller
         private readonly ProvisioningOperationService $operationService,
         private readonly GestorUserReactivationService $gestorReactivationService,
         private readonly GestorUserSuspensionService $gestorSuspensionService,
+        private readonly GestorUserCartorialService $cartorialService,
         private readonly SubsystemServiceRegistry $registry,
         private readonly AuditService $audit,
     ) {}
@@ -229,6 +231,9 @@ class GestorUserController extends Controller
             // Las 10 últimas operaciones con su detalle por cuenta, que es lo
             // que alimenta el polling del panel (Fase 3.2).
             'operaciones' => $gestorUser->operaciones()->with('cuentas')->limit(10)->get(),
+            // El cartorial: los bloques que documentan a esta persona. Los arma
+            // el servicio, no la vista, porque van a crecer sección a sección.
+            'cartorial' => $this->cartorialService->bloques($gestorUser),
         ]);
     }
 

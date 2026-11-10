@@ -100,7 +100,10 @@ class GestorUserHistorialAcordeonTest extends TestCase
         $usuario = $this->usuarioConHistorial();
         [$xpath] = $this->fichaComoDom($usuario);
 
-        $cuerpos = $xpath->query('//div[@x-show][@id]');
+        // La búsqueda se acota al acordeón: la ficha tiene otros paneles con
+        // x-show (las pestañas General/Cartorial) que no son entradas del
+        // histórico y no tienen por qué compartir su estado.
+        $cuerpos = $xpath->query('//ol[@x-data]//div[@x-show][@id]');
 
         $this->assertSame(
             $usuario->historial()->count(),
@@ -124,7 +127,9 @@ class GestorUserHistorialAcordeonTest extends TestCase
     {
         [$xpath] = $this->fichaComoDom($this->usuarioConHistorial());
 
-        $botones = $xpath->query('//button[@aria-controls]');
+        // Acotado al acordeón: los botones de las pestañas de la ficha también
+        // declaran aria-controls, pero no son las entradas del histórico.
+        $botones = $xpath->query('//ol[@x-data]//button[@aria-controls]');
 
         $this->assertSame(3, $botones->length);
 
@@ -149,7 +154,7 @@ class GestorUserHistorialAcordeonTest extends TestCase
         $usuario = $this->usuarioConHistorial(entradas: 1);
         [$xpath] = $this->fichaComoDom($usuario);
 
-        $cuerpo = $xpath->query('//div[@x-show][@id]')->item(0);
+        $cuerpo = $xpath->query('//ol[@x-data]//div[@x-show][@id]')->item(0);
 
         $this->assertNotNull($cuerpo);
         $this->assertSame(
