@@ -76,21 +76,48 @@ class LoginAvailabilityTest extends SubsystemTestCase
         $this->adagio()->loginEnUso('Ana Silva', 'klios', $subsistema);
 
         // Adagio usa el email como credencial, así que el login se normaliza:
-        // espacios fuera y minúsculas, o el 404 no significaría nada.
+        // espacios fuera y minúsculas, o el 404 no significaría nada. El
+        // dominio sale de la empresa, no del valor fijo de api_config.
         Http::assertSent(fn ($request) => str_contains(
             rawurldecode($request->url()),
-            'anasilva@empresa.com.br',
+            'anasilva@klios.com.br',
         ));
     }
 
-    public function test_sin_dominio_no_se_inventa_una_comprobacion(): void
+    public function test_federal_consulta_el_dominio_institucional(): void
+    {
+        $subsistema = $this->cuenta(['dominio' => 'empresa.com.br'])->subsystem;
+        $this->fakes(fn () => Http::response(null, 404));
+
+        $this->adagio()->loginEnUso('ana.silva', 'federal', $subsistema);
+
+        Http::assertSent(fn ($request) => str_contains(
+            rawurldecode($request->url()),
+            'ana.silva@federalst.com.br',
+        ));
+    }
+
+    public function test_sin_dominio_configurado_se_usa_el_de_la_empresa(): void
+    {
+        $subsistema = $this->cuenta()->subsystem;
+        $this->fakes(fn () => Http::response(null, 404));
+
+        $this->assertFalse($this->adagio()->loginEnUso('ana.silva', 'klios', $subsistema));
+
+        Http::assertSent(fn ($request) => str_contains(
+            rawurldecode($request->url()),
+            'ana.silva@klios.com.br',
+        ));
+    }
+
+    public function test_sin_empresa_ni_dominio_no_se_inventa_una_comprobacion(): void
     {
         $subsistema = $this->cuenta()->subsystem;
         Http::preventStrayRequests();
 
         $this->assertNull(
-            $this->adagio()->loginEnUso('ana.silva', 'klios', $subsistema),
-            'Sin dominio no hay forma de armar el email, así que no se comprueba.',
+            $this->adagio()->loginEnUso('ana.silva', null, $subsistema),
+            'Sin empresa ni dominio no hay forma de armar el email, así que no se comprueba.',
         );
 
         Http::assertNothingSent();

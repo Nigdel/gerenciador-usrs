@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\IdentityProviderInterface;
-use App\Enums\GestorUserStatus;
 use App\Enums\OperationType;
-use App\Enums\SubsystemAccountStatus;
 use App\Exceptions\ProvisioningException;
 use App\Http\Requests\GestorUserListRequest;
 use App\Http\Requests\GestorUserRequest;
@@ -30,7 +28,6 @@ use BackedEnum;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Throwable;
 
@@ -370,7 +367,8 @@ class GestorUserController extends Controller
             $operacion = $this->gestorSuspensionService->suspender(
                 $gestorUser,
                 $request->validated('motivo_suspension_gestor'),
-                fin: $request->validated('fin_suspension_gestor'),
+                inicio: $request->validated('inicio_suspension_gestor') ?: null,
+                fin: $request->validated('fin_suspension_gestor') ?: null,
             );
         } catch (Throwable $exception) {
             report($exception);

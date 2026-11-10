@@ -9,6 +9,7 @@ use App\DTO\SubsystemOperationResult;
 use App\Enums\GestorUserStatus;
 use App\Models\Subsystem;
 use App\Models\UserSubsystemAccount;
+use App\Support\DominioCorporativo;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -96,8 +97,8 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
 
     /**
      * En Adagio el email ES la credencial (no hay un campo "login" aparte), así
-     * que comprobar el login es comprobar el email con el dominio del
-     * subsistema.
+     * que comprobar el login es comprobar el email con el dominio de la empresa
+     * del usuario. `api_config.dominio` solo se usa si el usuario no trae empresa.
      *
      * A diferencia de existsByEmail() —que es una búsqueda de usuario y por eso
      * devuelve false si falla—, aquí un fallo se devuelve como **null**
@@ -106,7 +107,7 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
      */
     public function loginEnUso(string $login, ?string $empresa, Subsystem $subsystem): ?bool
     {
-        $dominio = $subsystem->api_config['dominio'] ?? null;
+        $dominio = $this->dominio($subsystem, $empresa);
 
         if (blank($dominio)) {
             // Sin dominio no hay forma de armar el email que Adagio usa como
@@ -167,12 +168,12 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             );
         }
 
-        $dominio = $subsystem->api_config['dominio'] ?? null;
+        $dominio = $this->dominio($subsystem, $userData['empresa'] ?? null);
         $email = $dominio ? $userData['usuario'].'@'.$dominio : ($userData['email_personal'] ?? null);
 
         if (! $email) {
             return SubsystemOperationResult::fail(
-                'No se pudo determinar el email a crear en Adagio: configura api_config.dominio del subsistema o email_personal del usuario',
+                'No se pudo determinar el email a crear en Adagio: indica la empresa del usuario, configura api_config.dominio del subsistema o email_personal del usuario',
             );
         }
 
@@ -425,9 +426,25 @@ class AdagioService extends BaseSubsystemService implements IdentityProviderInte
             return $credencial;
         }
 
-        $dominio = $account->subsystem->api_config['dominio'] ?? null;
+        $dominio = $this->dominio($account->subsystem, $account->user?->empresa);
 
         return blank($dominio) ? null : $credencial.'@'.$dominio;
+    }
+
+    /**
+     * Dominio que Adagio usa en el email del propietario.
+     *
+     * La empresa es la fuente principal: Adagio es compartido por Klios y
+     * Federal, y cada una tiene su propio dominio. `api_config.dominio` queda
+     * solo como respaldo cuando el usuario no trae empresa, para no crear
+     * direcciones con el placeholder "empresa.com.br".
+     */
+    private function dominio(Subsystem $subsystem, ?string $empresa): ?string
+    {
+        $configurado = trim((string) ($subsystem->api_config['dominio'] ?? ''));
+
+        return DominioCorporativo::para($empresa)
+            ?? ($configurado !== '' ? $configurado : null);
     }
 
     private function request(

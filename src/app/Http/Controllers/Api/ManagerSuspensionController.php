@@ -17,7 +17,6 @@ use Illuminate\Http\JsonResponse;
 class ManagerSuspensionController extends Controller
 {
     use ConservaLaClaveDeIdempotencia;
-
     use RespondeErroresDeProvisionado;
 
     public function __construct(

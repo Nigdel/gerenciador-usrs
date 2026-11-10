@@ -14,8 +14,10 @@ use App\Models\User;
 use App\Models\UserSubsystemAccount;
 use App\Services\ProvisioningOperationService;
 use App\Services\Subsystems\EmailService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class GestorUserManagerSuspensionTest extends TestCase
@@ -218,6 +220,58 @@ class GestorUserManagerSuspensionTest extends TestCase
 
         $this->assertSame(GestorUserStatus::Activo, $gestorUser->fresh()->estado);
         $this->assertNull($gestorUser->fresh()->fin_suspension_gestor);
+    }
+
+    public function test_formulario_de_suspension_del_gestor_propone_la_fecha_de_hoy(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-30 10:00:00'));
+
+        $gestorUser = $this->gestor();
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->get(route('gestor-users.show', $gestorUser))
+            ->assertOk()
+            ->assertSee('id="inicio_suspension_gestor"', false)
+            ->assertSee('value="2026-10-30"', false);
+    }
+
+    public function test_suspension_con_inicio_futuro_queda_pendiente_y_no_toca_las_cuentas(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-30 10:00:00'));
+
+        $gestorUser = $this->gestor();
+        $cuenta = $this->cuenta($gestorUser, 'email-1', 'activo', 1);
+
+        Queue::fake();
+        Http::preventStrayRequests();
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->post(route('gestor-users.suspend-manager', $gestorUser), [
+            'motivo_suspension_gestor' => 'Ausencia temporal',
+            'inicio_suspension_gestor' => '2026-10-31',
+            'fin_suspension_gestor' => '2026-11-05',
+        ])->assertRedirect(route('gestor-users.show', $gestorUser));
+
+        $operacion = ProvisioningOperation::query()->latest('id')->sole();
+        $this->assertSame(OperationStatus::Pendiente, $operacion->estado);
+        $this->assertSame(GestorUserStatus::Activo, $gestorUser->fresh()->estado);
+        $this->assertSame(SubsystemAccountStatus::Activo, $cuenta->fresh()->estado);
+        $this->assertSame(1, $gestorUser->cuentasSuspendidasPorGestor()->count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_fecha_de_fin_no_puede_ser_anterior_al_inicio(): void
+    {
+        $gestorUser = $this->gestor();
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->post(route('gestor-users.suspend-manager', $gestorUser), [
+            'motivo_suspension_gestor' => 'Ausencia temporal',
+            'inicio_suspension_gestor' => now()->addDays(10)->toDateString(),
+            'fin_suspension_gestor' => now()->addDays(5)->toDateString(),
+        ])->assertSessionHasErrors('fin_suspension_gestor');
+
+        $this->assertSame(GestorUserStatus::Activo, $gestorUser->fresh()->estado);
     }
 
     public function test_no_se_puede_crear_ni_reactivar_cuentas_individualmente_mientras_el_gestor_esta_suspendido(): void

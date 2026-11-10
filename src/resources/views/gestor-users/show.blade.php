@@ -228,13 +228,23 @@ $crearCuentaConErrores = isset($errors) && collect($errors->getBag('default')->k
             </div>
             <form action="{{ route('gestor-users.suspend-manager', $gestorUser) }}" method="POST" class="p-6">
                 @csrf
-                <p class="mb-4 text-sm text-[#68756d]">Se deshabilitarán únicamente las cuentas activas ahora. Se guardará esa selección para reactivar solo esas mismas cuentas.</p>
+                <p class="mb-4 text-sm text-[#68756d]">Se capturarán las cuentas activas ahora y se deshabilitarán al llegar la fecha de inicio (hoy por defecto). Se guardará esa selección para reactivar solo esas mismas cuentas.</p>
                 <label class="{{ $label }}" for="motivo_suspension_gestor">Motivo</label>
                 <input id="motivo_suspension_gestor" class="{{ $input }}" name="motivo_suspension_gestor" type="text" minlength="5" maxlength="500" required value="{{ old('motivo_suspension_gestor') }}">
                 @error('motivo_suspension_gestor')<small class="{{ $err }}">{{ $message }}</small>@enderror
-                <label class="{{ $label }} mt-4" for="fin_suspension_gestor">Fecha de fin (opcional)</label>
-                <input id="fin_suspension_gestor" class="{{ $input }}" name="fin_suspension_gestor" type="date" min="{{ now()->toDateString() }}" value="{{ old('fin_suspension_gestor') }}">
-                @error('fin_suspension_gestor')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="{{ $label }}" for="inicio_suspension_gestor">Fecha de inicio</label>
+                        <input id="inicio_suspension_gestor" class="{{ $input }}" name="inicio_suspension_gestor" type="date" value="{{ old('inicio_suspension_gestor', now()->toDateString()) }}">
+                        <small class="{{ $hint }}">Por defecto, hoy. Si es futura, la suspensión se programa.</small>
+                        @error('inicio_suspension_gestor')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                    </div>
+                    <div>
+                        <label class="{{ $label }}" for="fin_suspension_gestor">Fecha de fin (opcional)</label>
+                        <input id="fin_suspension_gestor" class="{{ $input }}" name="fin_suspension_gestor" type="date" min="{{ now()->toDateString() }}" value="{{ old('fin_suspension_gestor') }}">
+                        @error('fin_suspension_gestor')<small class="{{ $err }}">{{ $message }}</small>@enderror
+                    </div>
+                </div>
                 <div class="mt-6 flex justify-end gap-3">
                     <button type="button" @click="showManagerSuspension = false" class="{{ $btnSecondary }}">Cancelar</button>
                     <button class="{{ $btnDanger }}" type="submit" onclick="return confirm('¿Suspender al gestor y deshabilitar sus cuentas activas?');">Suspender gestor</button>

@@ -186,18 +186,26 @@ class UsernameGeneratorTest extends TestCase
         $this->assertNull($resultado['mensaje']);
     }
 
-    public function test_un_subsistema_sin_dominio_configurado_no_se_da_por_consultado(): void
+    public function test_sin_dominio_configurado_se_usa_el_de_la_empresa(): void
     {
-        // Sin api_config.dominio, Adagio no puede armar el email que usa como
-        // credencial: no se puede comprobar, y fingir que sí llevaría a proponer
-        // un login ocupado creyendo que está libre.
-        $this->subsistema('adagio');
+        // El dominio ya no depende de api_config: se deriva de la empresa. Con
+        // "klios" la comprobación se hace contra klios.com.br y el login queda
+        // verificado, en vez de darse por no comprobable.
+        $this->subsistema('adagio', [
+            'email' => 'integracion@klios.com.br',
+            'password' => 'secreto',
+            'entidad_default' => 'klios',
+        ]);
         $this->fakeAdagioResponde();
 
         $resultado = $this->generar()->proponerConAviso('Juan Perez', 'klios');
 
         $this->assertSame('juan.perez', $resultado['usuario']);
-        $this->assertContains('adagio', $resultado['no_verificados']);
+        $this->assertSame([], $resultado['no_verificados']);
+        Http::assertSent(fn ($request) => str_contains(
+            rawurldecode($request->url()),
+            'juan.perez@klios.com.br',
+        ));
     }
 
     public function test_el_aviso_solo_mentiona_los_subsistemas_del_candidato_elegido(): void

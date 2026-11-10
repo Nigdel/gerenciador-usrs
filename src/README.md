@@ -632,12 +632,13 @@ operan solo contra el contrato universal.
 
 4. Configura en `.env` las credenciales de cada subsistema (`ADAGIO_API_URL`,
    `ADAGIO_API_TOKEN`, `ADAGIO_DOMINIO`, `GLPI_API_URL`, etc. — ver
-   `SubsystemSeeder`). `ADAGIO_DOMINIO` es necesario para comprobar si el email
-   propuesto ya existe en Adagio y para crear usuarios con ese dominio.
+   `SubsystemSeeder`). En Adagio el dominio del email se deriva de la empresa
+   del usuario (`Klios` → `klios.com.br`, `Federal` → `federalst.com.br`);
+   `ADAGIO_DOMINIO` queda como respaldo para usuarios sin empresa.
 
    Si Adagio ya estaba sembrado, añadir la variable al `.env` no actualiza la
    fila existente: completa `api_config.dominio` en la configuración del
-   subsistema Adagio con el dominio real de acceso.
+   subsistema Adagio con el dominio de respaldo.
 
 ---
 

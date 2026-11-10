@@ -6,6 +6,7 @@ use App\Contracts\UsernameAvailabilityInterface;
 use App\Exceptions\ProvisioningException;
 use App\Models\GestorUser;
 use App\Models\Subsystem;
+use App\Support\DominioCorporativo;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -81,13 +82,7 @@ class UsernameGeneratorService
      */
     public function resolverDominio(string $empresa): string
     {
-        $slug = Str::slug($empresa, '');
-
-        if ($slug === 'federal') {
-            return 'federalst.com.br';
-        }
-
-        return ($slug !== '' ? $slug : 'empresa').'.com.br';
+        return DominioCorporativo::para($empresa) ?? 'empresa.com.br';
     }
 
     /**
