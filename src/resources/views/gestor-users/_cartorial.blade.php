@@ -21,25 +21,32 @@
     </div>
     @else
     <div class="space-y-6">
-        @foreach ($cartorial as $bloque)
-        <div class="rounded-xl border border-[#d9e2dc] bg-white">
-            <div class="border-b border-[#d9e2dc] bg-[#f7faf8] px-4 py-3">
-                <h3 class="font-bold text-[#17211b]">{{ $bloque['titulo'] }}</h3>
-                @if (filled($bloque['descripcion']))
-                <p class="mt-0.5 text-xs text-[#68756d]">{{ $bloque['descripcion'] }}</p>
-                @endif
-            </div>
-
-            <dl class="grid gap-px bg-[#e8eee9] sm:grid-cols-2 lg:grid-cols-3">
-                @foreach ($bloque['campos'] as $campo)
-                <div class="bg-white px-4 py-3">
-                    <dt class="text-xs font-bold uppercase tracking-[0.06em] text-[#68756d]">{{ $campo['etiqueta'] }}</dt>
-                    <dd class="mt-0.5 break-words text-[#17211b] {{ $campo['valor'] === null ? 'text-[#a3b0a8]' : '' }}">
-                        {{ $campo['valor'] ?? 'No informado' }}
-                    </dd>
+        @foreach ($cartorial as $seccion)
+        {{-- Los paneles de una misma sección van uno al lado del otro: la
+             cuenta de Adagio y la de GLPI se leen juntas, que es de lo que se
+             trata al mirar un cartorial. --}}
+        <div class="grid gap-6 lg:grid-cols-2">
+            @foreach ($seccion['paneles'] as $panel)
+            <div class="rounded-xl border border-[#d9e2dc] bg-white">
+                <div class="border-b border-[#d9e2dc] bg-[#f7faf8] px-4 py-3">
+                    <h3 class="font-bold text-[#17211b]">{{ $panel['titulo'] }}</h3>
+                    @if (filled($panel['descripcion']))
+                    <p class="mt-0.5 text-xs text-[#68756d]">{{ $panel['descripcion'] }}</p>
+                    @endif
                 </div>
-                @endforeach
-            </dl>
+
+                <dl class="grid gap-px bg-[#e8eee9] sm:grid-cols-2">
+                    @foreach ($panel['campos'] as $campo)
+                    <div class="bg-white px-4 py-3">
+                        <dt class="text-xs font-bold uppercase tracking-[0.06em] text-[#68756d]">{{ $campo['etiqueta'] }}</dt>
+                        <dd class="mt-0.5 break-words text-[#17211b] {{ $campo['valor'] === null ? 'text-[#a3b0a8]' : '' }}">
+                            {{ $campo['valor'] ?? 'No informado' }}
+                        </dd>
+                    </div>
+                    @endforeach
+                </dl>
+            </div>
+            @endforeach
         </div>
         @endforeach
     </div>

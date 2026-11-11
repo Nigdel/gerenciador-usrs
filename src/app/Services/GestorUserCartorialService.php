@@ -22,19 +22,32 @@ use App\Models\UserSubsystemAccount;
 class GestorUserCartorialService
 {
     /**
-     * Bloques del cartorial, en el orden en que se muestran.
+     * Secciones del cartorial, en el orden en que se muestran.
      *
-     * Un bloque es un grupo de campos con su propio título. La forma es fija
-     * porque la vista la recorre igual para todos: añadir un bloque nuevo es
-     * añadir una entrada a esta lista, no tocar la plantilla.
+     * Cada sección es una fila de paneles: los paneles de una misma sección se
+     * pintan uno al lado del otro, y los de secciones distintas se apilan. Es
+     * lo que permite que la cuenta de Adagio y la de GLPI se lean juntas sin
+     * que el servicio tenga que saber nada de la maquetación: si mañana hace
+     * falta la cuenta de otro subsistema, es un panel más en la misma sección.
      *
-     * @return list<array{clave: string, titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}>
+     * @return list<array{clave: string, paneles: list<array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}>}>
      */
     public function bloques(GestorUser $gestorUser): array
     {
         return [
-            $this->bloqueIdentificacion($gestorUser),
-            $this->bloqueCuentaAdagio($gestorUser),
+            [
+                'clave' => 'identificacion',
+                'paneles' => [
+                    $this->panelIdentificacion($gestorUser),
+                ],
+            ],
+            [
+                'clave' => 'cuentas',
+                'paneles' => [
+                    $this->panelCuentaAdagio($gestorUser),
+                    $this->panelCuentaGlpi($gestorUser),
+                ],
+            ],
         ];
     }
 
@@ -127,21 +140,19 @@ class GestorUserCartorialService
     /**
      * Quién es la persona, con los datos que ya viven en su ficha.
      *
-     * @return array{clave: string, titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
+     * @return array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
      */
-    private function bloqueIdentificacion(GestorUser $gestorUser): array
+    private function panelIdentificacion(GestorUser $gestorUser): array
     {
         return [
-            'clave' => 'identificacion',
-            'titulo' => 'Identificación',
-            'descripcion' => 'Datos con los que está dada de alta la persona en el Gestor.',
+            'titulo' => 'Identificação',
+            'descripcion' => 'Dados com os quais a pessoa está cadastrada no Gestor.',
             'campos' => [
-                ['etiqueta' => 'Nombre', 'valor' => $gestorUser->nombre_completo],
-                ['etiqueta' => 'Usuario', 'valor' => $gestorUser->usuario],
+                ['etiqueta' => 'Nome', 'valor' => $gestorUser->nombre_completo],
+                ['etiqueta' => 'Usuário', 'valor' => $gestorUser->usuario],
                 ['etiqueta' => 'Empresa', 'valor' => $gestorUser->empresa],
                 ['etiqueta' => 'CPF', 'valor' => $gestorUser->cpf],
-                ['etiqueta' => 'E-mail personal', 'valor' => $gestorUser->email_personal],
-                ['etiqueta' => 'Estado', 'valor' => $gestorUser->estado?->value],
+                ['etiqueta' => 'E-mail', 'valor' => $gestorUser->email_personal],
             ],
         ];
     }
@@ -150,90 +161,74 @@ class GestorUserCartorialService
      * La cuenta en Adagio, que es donde el email es la credencial.
      *
      * Cuando la persona todavía no tiene cuenta en Adagio se informa en vez de
-     * dejar huecos: un bloque vacío se lee como un dato que falta, y aquí lo
+     * dejar huecos: un panel vacío se lee como un dato que falta, y aquí lo
      * que falta es que el alta en el proveedor de identidad no ha ocurrido.
      *
-     * @return array{clave: string, titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
+     * @return array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
      */
-    private function bloqueCuentaAdagio(GestorUser $gestorUser): array
+    private function panelCuentaAdagio(GestorUser $gestorUser): array
     {
-        $cuenta = $this->cuentaAdagio($gestorUser);
+        $cuenta = $this->cuentaDe($gestorUser, 'adagio');
 
         if ($cuenta === null) {
             return [
-                'clave' => 'cuenta_adagio',
-                'titulo' => 'Cuenta en Adagio',
-                'descripcion' => 'La cuenta del propietario en Adagio, que es el proveedor de identidad.',
+                'titulo' => 'Conta em Adagio',
+                'descripcion' => 'A conta do proprietário no Adagio, que é o provedor de identidade.',
                 'campos' => [
-                    ['etiqueta' => 'Cuenta', 'valor' => 'Sin cuenta en Adagio'],
+                    ['etiqueta' => 'Conta', 'valor' => 'Sem conta em Adagio'],
                 ],
             ];
         }
 
-        $meta = is_array($cuenta->meta) ? $cuenta->meta : [];
-
         return [
-            'clave' => 'cuenta_adagio',
-            'titulo' => 'Cuenta en Adagio',
-            'descripcion' => 'La cuenta del propietario en Adagio, que es el proveedor de identidad.',
+            'titulo' => 'Conta em Adagio',
+            'descripcion' => 'A conta do proprietário no Adagio, que é o provedor de identidade.',
             'campos' => [
-                ['etiqueta' => 'Nombre en Adagio', 'valor' => $this->texto($meta['nome'] ?? null)],
-                ['etiqueta' => 'Documento', 'valor' => $this->texto($meta['documento'] ?? null)],
-                ['etiqueta' => 'E-mail', 'valor' => $cuenta->credencial_usuario ?: $this->texto($meta['email'] ?? null)],
-                ['etiqueta' => 'ID externo', 'valor' => $cuenta->external_account_id ?: $this->texto($meta['id'] ?? null)],
-                ['etiqueta' => 'Estado', 'valor' => $cuenta->estado?->value],
-                ['etiqueta' => 'Tipo de contrato', 'valor' => $this->texto($meta['tipo_contrato'] ?? null)],
-                ['etiqueta' => 'Contexto', 'valor' => $this->contextos($meta)],
+                ['etiqueta' => 'ID externo', 'valor' => $cuenta->external_account_id],
+                ['etiqueta' => 'Status', 'valor' => $cuenta->estado?->value],
             ],
         ];
     }
 
     /**
-     * La cuenta en Adagio de esta persona, si la tiene.
+     * La cuenta en GLPI, la mesa de ayuda.
+     *
+     * GLPI no guarda el email en la respuesta de la API: la credencial es el
+     * login, y es lo que se muestra.
+     *
+     * @return array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
      */
-    private function cuentaAdagio(GestorUser $gestorUser): ?UserSubsystemAccount
+    private function panelCuentaGlpi(GestorUser $gestorUser): array
+    {
+        $cuenta = $this->cuentaDe($gestorUser, 'glpi');
+
+        if ($cuenta === null) {
+            return [
+                'titulo' => 'Conta em GLPI',
+                'descripcion' => 'A conta do usuário no service desk (GLPI).',
+                'campos' => [
+                    ['etiqueta' => 'Conta', 'valor' => 'Sem conta em GLPI'],
+                ],
+            ];
+        }
+
+        return [
+            'titulo' => 'Conta em GLPI',
+            'descripcion' => 'A conta do usuário no service desk (GLPI).',
+            'campos' => [
+                ['etiqueta' => 'Login', 'valor' => $cuenta->credencial_usuario],
+                ['etiqueta' => 'ID externo', 'valor' => $cuenta->external_account_id],
+            ],
+        ];
+    }
+
+    /**
+     * La cuenta de esta persona en un subsistema, si la tiene.
+     */
+    private function cuentaDe(GestorUser $gestorUser, string $slug): ?UserSubsystemAccount
     {
         return $gestorUser->subsystemAccounts->first(
-            fn (UserSubsystemAccount $cuenta): bool => $cuenta->subsystem?->slug === 'adagio',
+            fn (UserSubsystemAccount $cuenta): bool => $cuenta->subsystem?->slug === $slug,
         );
-    }
-
-    /**
-     * Los contextos del propietario, que son las unidades organizativas en las
-     * que Adagio lo tiene dado de alta.
-     *
-     * @param  array<string, mixed>  $meta
-     */
-    private function contextos(array $meta): ?string
-    {
-        $contextos = $meta['contextos'] ?? null;
-
-        if (! is_array($contextos)) {
-            return null;
-        }
-
-        $nombres = collect($contextos)
-            ->map(fn (mixed $contexto): ?string => is_array($contexto) ? ($contexto['contexto'] ?? null) : null)
-            ->filter(fn (?string $nombre): bool => filled($nombre))
-            ->unique()
-            ->values();
-
-        return $nombres->isEmpty() ? null : $nombres->implode(', ');
-    }
-
-    /**
-     * Normaliza un valor de la respuesta de Adagio a texto.
-     */
-    private function texto(mixed $valor): ?string
-    {
-        if ($valor === null || $valor === '') {
-            return null;
-        }
-
-        if (is_bool($valor)) {
-            return $valor ? 'Sí' : 'No';
-        }
-
-        return (string) $valor;
     }
 }

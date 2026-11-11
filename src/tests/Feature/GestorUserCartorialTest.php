@@ -53,6 +53,17 @@ class GestorUserCartorialTest extends TestCase
         ]);
     }
 
+    private function glpi(): Subsystem
+    {
+        return Subsystem::create([
+            'nombre' => 'GLPI',
+            'slug' => 'glpi',
+            'api_url' => 'https://glpi.test/apirest.php',
+            'api_config' => [],
+            'activo' => true,
+        ]);
+    }
+
     private function ficha(GestorUser $gestor): string
     {
         return (string) $this->get(route('gestor-users.show', $gestor))->assertOk()->getContent();
@@ -132,7 +143,7 @@ class GestorUserCartorialTest extends TestCase
 
         $panel = $this->panel($html, 'panel-cartorial');
 
-        $this->assertStringContainsString('Identificación', $panel);
+        $this->assertStringContainsString('Identificação', $panel);
         $this->assertStringNotContainsString('Cuentas en subsistemas', $panel);
         $this->assertStringNotContainsString('Histórico', $panel);
     }
@@ -192,12 +203,12 @@ class GestorUserCartorialTest extends TestCase
     {
         $html = $this->ficha($this->gestor());
 
-        $this->assertStringContainsString('Identificación', $html);
+        $this->assertStringContainsString('Identificação', $html);
         $this->assertStringContainsString('Ana Silva', $html);
         $this->assertStringContainsString('ana.silva', $html);
     }
 
-    public function test_el_bloque_de_adagio_muestra_la_credencial_y_el_estado(): void
+    public function test_el_bloque_de_adagio_muestra_el_id_externo_y_el_estado(): void
     {
         $gestor = $this->gestor();
 
@@ -222,18 +233,71 @@ class GestorUserCartorialTest extends TestCase
 
         $html = $this->ficha($gestor);
 
-        $this->assertStringContainsString('Cuenta en Adagio', $html);
-        $this->assertStringContainsString('ana.silva@klios.com.br', $html);
+        $this->assertStringContainsString('Conta em Adagio', $html);
         $this->assertStringContainsString('15040', $html);
-        $this->assertStringContainsString('ANA SILVA', $html);
-        $this->assertStringContainsString('FEDERAL_ST_ADM', $html);
+        $this->assertStringContainsString('ID externo', $html);
+        $this->assertStringContainsString('Status', $html);
+
+        // El panel de Adagio se queda en lo esencial: el nombre, el documento
+        // y el contexto ya están en la Identificación o no aportan nada.
+        $this->assertStringNotContainsString('FEDERAL_ST_ADM', $html);
+        $this->assertStringNotContainsString('Tipo de contrato', $html);
     }
 
     public function test_sin_cuenta_en_adagio_se_lo_dice_en_lugar_de_dejar_huecos(): void
     {
         $html = $this->ficha($this->gestor());
 
-        $this->assertStringContainsString('Cuenta en Adagio', $html);
-        $this->assertStringContainsString('Sin cuenta en Adagio', $html);
+        $this->assertStringContainsString('Conta em Adagio', $html);
+        $this->assertStringContainsString('Sem conta em Adagio', $html);
+    }
+
+    public function test_la_cuenta_de_glpi_se_muestra_al_lado_de_la_de_adagio(): void
+    {
+        $gestor = $this->gestor();
+
+        UserSubsystemAccount::create([
+            'gestor_user_id' => $gestor->id,
+            'subsystem_id' => $this->adagio()->id,
+            'credencial_usuario' => 'ana.silva@klios.com.br',
+            'external_account_id' => '15040',
+            'estado' => 'activo',
+            'meta' => ['nome' => 'ANA SILVA'],
+        ]);
+
+        UserSubsystemAccount::create([
+            'gestor_user_id' => $gestor->id,
+            'subsystem_id' => $this->glpi()->id,
+            'credencial_usuario' => 'ana.silva',
+            'external_account_id' => '621',
+            'estado' => 'activo',
+            'meta' => [
+                'id' => 621,
+                'name' => 'ana.silva',
+                'realname' => 'Ana Silva',
+                'authtype' => 1,
+                'entities_id' => 0,
+                'last_login' => '2026-11-05 11:48:30',
+                'date_creation' => '2026-09-01 09:00:00',
+            ],
+        ]);
+
+        $html = $this->ficha($gestor);
+
+        $this->assertStringContainsString('Conta em GLPI', $html);
+
+        // El panel de GLPI se queda en el login y el id externo.
+        $this->assertStringContainsString('Login', $html);
+        $this->assertStringContainsString('621', $html);
+        $this->assertStringNotContainsString('Autenticação', $html);
+        $this->assertStringNotContainsString('Último acesso', $html);
+    }
+
+    public function test_sin_cuenta_en_glpi_se_lo_dice_en_lugar_de_dejar_huecos(): void
+    {
+        $html = $this->ficha($this->gestor());
+
+        $this->assertStringContainsString('Conta em GLPI', $html);
+        $this->assertStringContainsString('Sem conta em GLPI', $html);
     }
 }
