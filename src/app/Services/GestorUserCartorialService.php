@@ -39,6 +39,92 @@ class GestorUserCartorialService
     }
 
     /**
+     * Documentos del cartorial: el listado tabular.
+     *
+     * Es la segunda forma de sección del cartorial: donde los bloques son
+     * campos sueltos, aquí hay filas de una tabla. Las columnas van agrupadas
+     * tal como las define el sistema de origen ("Usuário Alteração Status" es
+     * una sola columna), porque partirlas daría una lectura distinta de la que
+     * tiene el operador delante. "Status" y "Cadastro" sí van separadas: la
+     * segunda es la fecha de registro del documento.
+     *
+     * @return array{columnas: list<string>, filas: list<array<string, ?string>>}
+     */
+    public function documentos(): array
+    {
+        return [
+            'columnas' => [
+                'Documento',
+                'Situação',
+                'Vencimento',
+                'Dias',
+                'Usuário Alteração Status',
+                'Data Alteração',
+                'Status',
+                'Cadastro',
+            ],
+            'filas' => $this->documentosFicticios(),
+        ];
+    }
+
+    /**
+     * Documentos de ejemplo.
+     *
+     * FICTICIOS a propósito: todavía no hay dónde persistirlos, así que se
+     * inventan aquí y se sustituyen por la consulta real en cuanto exista el
+     * almacenamiento. Las fechas son relativas a hoy para que el listado se
+     * vea vivo, y los valores son fijos para que el mismo gestor muestre
+     * siempre el mismo listado.
+     *
+     * @return list<array<string, ?string>>
+     */
+    private function documentosFicticios(): array
+    {
+        return [
+            [
+                'Documento' => 'CTPS',
+                'Situação' => 'Aprovado',
+                'Vencimento' => now()->addDays(120)->format('d/m/Y'),
+                'Dias' => '120',
+                'Usuário Alteração Status' => 'Marina Duarte',
+                'Data Alteração' => now()->subDays(3)->format('d/m/Y'),
+                'Status' => 'Ativo',
+                'Cadastro' => now()->subDays(400)->format('d/m/Y'),
+            ],
+            [
+                'Documento' => 'RG',
+                'Situação' => 'Em análise',
+                'Vencimento' => now()->addDays(45)->format('d/m/Y'),
+                'Dias' => '45',
+                'Usuário Alteração Status' => 'Rafael Nogueira',
+                'Data Alteração' => now()->subDay()->format('d/m/Y'),
+                'Status' => 'Pendente',
+                'Cadastro' => now()->subDays(380)->format('d/m/Y'),
+            ],
+            [
+                'Documento' => 'Comprovante de residência',
+                'Situação' => 'Pendente',
+                'Vencimento' => now()->addDays(15)->format('d/m/Y'),
+                'Dias' => '15',
+                'Usuário Alteração Status' => 'Marina Duarte',
+                'Data Alteração' => now()->subDays(10)->format('d/m/Y'),
+                'Status' => 'Pendente',
+                'Cadastro' => now()->subDays(90)->format('d/m/Y'),
+            ],
+            [
+                'Documento' => 'CNH',
+                'Situação' => 'Vencido',
+                'Vencimento' => now()->subDays(20)->format('d/m/Y'),
+                'Dias' => '-20',
+                'Usuário Alteração Status' => 'Rafael Nogueira',
+                'Data Alteração' => now()->subDays(60)->format('d/m/Y'),
+                'Status' => 'Vencido',
+                'Cadastro' => now()->subDays(700)->format('d/m/Y'),
+            ],
+        ];
+    }
+
+    /**
      * Quién es la persona, con los datos que ya viven en su ficha.
      *
      * @return array{clave: string, titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}

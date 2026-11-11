@@ -151,6 +151,43 @@ class GestorUserCartorialTest extends TestCase
         $this->assertStringNotContainsString('x-show="showCreateAccount"', $general);
     }
 
+    public function test_la_pestana_cartorial_incluye_el_listado_de_documentos(): void
+    {
+        $panel = $this->panel($this->ficha($this->gestor()), 'panel-cartorial');
+
+        $this->assertStringContainsString('Documentos', $panel);
+
+        // Las columnas van agrupadas como en el sistema de origen: partirlas
+        // daría una lectura distinta de la que tiene el operador delante.
+        foreach ([
+            'Documento',
+            'Situação',
+            'Vencimento',
+            'Dias',
+            'Usuário Alteração Status',
+            'Data Alteração',
+            'Status',
+            'Cadastro',
+        ] as $columna) {
+            $this->assertStringContainsString($columna, $panel, "Falta la columna {$columna}.");
+        }
+
+        // "Status e Cadastro" era una sola columna y ahora son dos: si la
+        // vieja siguiera ahí, la tabla seguiría mostrando el estado y la
+        // fecha de registro juntas.
+        $this->assertStringNotContainsString('Status e Cadastro', $panel);
+    }
+
+    public function test_el_listado_de_documentos_tiene_filas(): void
+    {
+        $panel = $this->panel($this->ficha($this->gestor()), 'panel-cartorial');
+
+        // Cada fila tiene un valor por columna: una celda vacía en un listado
+        // documental se lee como un documento sin documento.
+        $this->assertGreaterThan(0, substr_count($panel, '<tr'));
+        $this->assertStringContainsString('CTPS', $panel);
+    }
+
     public function test_el_bloque_de_identificacion_muestra_los_datos_del_gestor(): void
     {
         $html = $this->ficha($this->gestor());

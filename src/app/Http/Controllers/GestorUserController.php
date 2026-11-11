@@ -234,6 +234,10 @@ class GestorUserController extends Controller
             // El cartorial: los bloques que documentan a esta persona. Los arma
             // el servicio, no la vista, porque van a crecer sección a sección.
             'cartorial' => $this->cartorialService->bloques($gestorUser),
+            // El listado de documentos del cartorial, que es una tabla y no un
+            // bloque de campos: viaja aparte para no forzar a los bloques a
+            // saber de tablas.
+            'cartorialDocumentos' => $this->cartorialService->documentos(),
         ]);
     }
 
