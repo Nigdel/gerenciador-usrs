@@ -9,6 +9,9 @@ use App\Models\UserSubsystemAccount;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -23,10 +26,92 @@ class GestorUserCartorialTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Los equipos que GLPI devuelve. Vacío por defecto: cada test que
+     * necesite equipos los pone aquí.
+     *
+     * @var list<array<string, mixed>>
+     */
+    private array $equipos = [];
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->actingAs(User::factory()->operador()->create());
+
+        // La caché de medios sobrevive entre pruebas (el store es de array y
+        // vive en el proceso): sin limpiarla, los equipos de una prueba se
+        // verían en la siguiente.
+        Cache::flush();
+
+        $this->fakeGlpi();
+    }
+
+    /**
+     * GLPI responde.
+     *
+     * Un solo falso para toda la clase: Http::fake() acumula stubs en vez de
+     * reemplazarlos, así que registrar otro después dejaría el primero
+     * ganar siempre.
+     */
+    private function fakeGlpi(): void
+    {
+        Http::preventStrayRequests();
+
+        Http::fake(function (Request $peticion) {
+            if (str_contains($peticion->url(), '/initSession')) {
+                return Http::response(['session_token' => 'session-token']);
+            }
+
+            if (str_contains($peticion->url(), '/listSearchOptions/')) {
+                // Con la numeración real de GLPI: 1 = nombre, 2 = id,
+                // 70 = usuario, 24 = técnico responsable.
+                return Http::response([
+                    '1' => ['name' => 'Nome', 'table' => 'glpi_computers', 'field' => 'name', 'linkfield' => 'name'],
+                    '2' => ['name' => 'ID', 'table' => 'glpi_computers', 'field' => 'id', 'linkfield' => 'id'],
+                    '24' => ['name' => 'Técnico encarregado', 'table' => 'glpi_users', 'field' => 'name', 'linkfield' => 'users_id_tech'],
+                    '70' => ['name' => 'Usuário', 'table' => 'glpi_users', 'field' => 'name', 'linkfield' => 'users_id'],
+                ]);
+            }
+
+            if (str_contains($peticion->url(), '/search/')) {
+                // Solo hay equipos de tipo Computer: los demás tipos se
+                // consultan también, pero no devuelven nada.
+                if (! str_contains($peticion->url(), '/search/Computer')) {
+                    return Http::response(['totalcount' => 0, 'count' => 0, 'data' => []]);
+                }
+
+                $data = [];
+
+                foreach ($this->equipos as $equipo) {
+                    // La columna 2 es el id del equipo (la 1 es el nombre).
+                    $data[(string) $equipo['id']] = ['2' => (string) $equipo['id']];
+                }
+
+                return Http::response(['totalcount' => count($data), 'count' => count($data), 'data' => $data]);
+            }
+
+            if (preg_match('#/(Computer|Peripheral|Phone|Monitor|Printer)/(\d+)#', $peticion->url(), $coincidencias)) {
+                // El equipo pedido: si no existe, GLPI devuelve un error.
+                $pedido = null;
+
+                foreach ($this->equipos as $equipo) {
+                    if ((string) $equipo['id'] === $coincidencias[2]) {
+                        $pedido = $equipo;
+
+                        break;
+                    }
+                }
+
+                if ($pedido === null) {
+                    return Http::response(['status' => 'ERROR_ITEM_NOT_FOUND'], 404);
+                }
+
+                return Http::response($pedido);
+            }
+
+            return Http::response([], 404);
+        });
     }
 
     private function gestor(): GestorUser
@@ -59,7 +144,10 @@ class GestorUserCartorialTest extends TestCase
             'nombre' => 'GLPI',
             'slug' => 'glpi',
             'api_url' => 'https://glpi.test/apirest.php',
-            'api_config' => [],
+            'api_config' => [
+                'token' => 'user-token',
+                'headers' => ['App-Token' => 'app-token'],
+            ],
             'activo' => true,
         ]);
     }
@@ -266,6 +354,15 @@ class GestorUserCartorialTest extends TestCase
         $gestor = $this->gestor();
         $this->cuentaGlpi($gestor);
 
+        $this->equipos = [[
+            'id' => 71,
+            'name' => 'Notebook Dell Latitude 5440',
+            'serial' => 'DL5440-88421',
+            'states_id' => 'Em produção',
+            'locations_id' => 'Sede — Sala 3',
+            'date_creation' => '2026-04-15 10:00:00',
+        ]];
+
         $panel = $this->panel($this->ficha($gestor), 'panel-cartorial');
 
         $this->assertStringContainsString('Meios', $panel);
@@ -280,18 +377,143 @@ class GestorUserCartorialTest extends TestCase
         ] as $columna) {
             $this->assertStringContainsString($columna, $panel, "Falta la columna {$columna}.");
         }
+
+        // Y con el equipo real que devolvió GLPI.
+        $this->assertStringContainsString('Notebook Dell Latitude 5440', $panel);
+        $this->assertStringContainsString('DL5440-88421', $panel);
     }
 
-    public function test_el_listado_de_medios_tiene_filas(): void
+    public function test_el_nombre_del_medio_es_un_boton_que_abre_su_ficha(): void
     {
+        // El nombre del medio abre la ficha con los datos que GLPI tiene de ese
+        // equipo: es un botón, no un texto, porque al pulsarlo se pide el
+        // detalle al servidor.
+        //
+        // Se busca en el HTML crudo y no en el recortado con DOMDocument: el
+        // parser de HTML4 que usa DOMDocument descarta los atributos que
+        // empiezan por @, que es como Alpine marca sus acciones.
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->equipos = [[
+            'id' => 91,
+            'name' => 'Notebook Dell Latitude 5440',
+            'serial' => 'DL5440-88421',
+            'states_id' => 'Ativo',
+            'locations_id' => 'Sede — Sala 3',
+            'date_creation' => '2026-04-15 10:00:00',
+        ]];
+
+        $html = $this->ficha($gestor);
+
+        // El tipo y el id del medio viajan al botón para que la consulta al
+        // servidor sepa qué equipo pedir.
+        $this->assertStringContainsString("@click=\"abrir('Computer', '91')\"", $html);
+    }
+
+    public function test_solo_el_nombre_del_medio_es_pulsable(): void
+    {
+        // El resto de columnas (nº de serie, estado…) son datos, no enlaces:
+        // que parecieran pulsables haría dudar de qué es clicable.
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->equipos = [[
+            'id' => 91,
+            'name' => 'Notebook Dell Latitude 5440',
+            'serial' => 'DL5440-88421',
+            'states_id' => 'Ativo',
+            'locations_id' => 'Sede — Sala 3',
+            'date_creation' => '2026-04-15 10:00:00',
+        ]];
+
+        $html = $this->ficha($gestor);
+
+        $this->assertSame(
+            1,
+            substr_count($html, '@click="abrir('),
+            'Solo el nombre del medio debe abrir su ficha.',
+        );
+    }
+
+    public function test_la_ficha_de_un_medio_devuelve_sus_datos_de_glpi(): void
+    {
+        // Es lo que se abre al pulsar el nombre del medio en el listado.
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->equipos = [[
+            'id' => 91,
+            'name' => 'Notebook Dell Latitude 5440',
+            'serial' => 'DL5440-88421',
+            'states_id' => 'Ativo',
+            'locations_id' => 'Sede — Sala 3',
+            'date_creation' => '2026-04-15 10:00:00',
+        ]];
+
+        $respuesta = $this->get(route('gestor-users.medios.show', [$gestor, 'Computer', '91']))
+            ->assertOk();
+
+        $datos = $respuesta->json('datos');
+
+        $this->assertSame('Notebook Dell Latitude 5440', $datos['Nome'] ?? null);
+        $this->assertSame('DL5440-88421', $datos['Número de série'] ?? null);
+        $this->assertSame('Ativo', $datos['Status'] ?? null);
+        $this->assertSame('Sede — Sala 3', $datos['Localização'] ?? null);
+
+        // Y el enlace a la ficha del equipo en el inventario de GLPI.
+        $this->assertStringContainsString('/front/computer.php?id=91', (string) $respuesta->json('url_inventario'));
+    }
+
+    public function test_un_medio_que_no_existe_devuelve_404(): void
+    {
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->get(route('gestor-users.medios.show', [$gestor, 'Computer', '999']))
+            ->assertNotFound();
+    }
+
+    public function test_no_se_puede_ver_el_medio_de_otro_gestor(): void
+    {
+        // El medio se pide siempre dentro de una persona: comprobarlo aquí es
+        // lo que impide leer el inventario de un equipo de otro gestor.
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->equipos = [[
+            'id' => 91,
+            'name' => 'Notebook Dell Latitude 5440',
+            'serial' => 'DL5440-88421',
+        ]];
+
+        $this->get(route('gestor-users.medios.show', [$gestor, 'Computer', '91']))
+            ->assertOk();
+
+        $otro = GestorUser::create([
+            'nombre_completo' => 'Bruno Costa',
+            'cpf' => '98765432100',
+            'password_general' => 'Password123!',
+            'usuario' => 'bruno.costa',
+            'empresa' => 'Klios',
+        ]);
+
+        // Sin cuenta en GLPI no hay medio que mostrar.
+        $this->get(route('gestor-users.medios.show', [$otro, 'Computer', '91']))
+            ->assertNotFound();
+    }
+
+    public function test_sin_medios_atribuidos_el_listado_lo_dice(): void
+    {
+        // Los medios vienen de GLPI. Sin ellos, el panel dice que no hay
+        // medios en vez de mostrar una tabla vacía: una tabla sin filas parece
+        // un fallo de la página.
         $gestor = $this->gestor();
         $this->cuentaGlpi($gestor);
 
         $panel = $this->panel($this->ficha($gestor), 'panel-cartorial');
 
-        $this->assertStringContainsString('Computador', $panel);
-        $this->assertStringContainsString('Notebook Dell Latitude 5440', $panel);
-        $this->assertStringContainsString('DL5440-88421', $panel);
+        $this->assertStringContainsString('Nenhum meio atribuído', $panel);
     }
 
     public function test_los_medios_van_dentro_del_panel_de_glpi(): void
@@ -311,7 +533,6 @@ class GestorUserCartorialTest extends TestCase
 
         $this->assertNotNull($glpi, 'No se encontró el panel Conta em GLPI.');
         $this->assertStringContainsString('Meios', $glpi);
-        $this->assertStringContainsString('Notebook Dell Latitude 5440', $glpi);
     }
 
     public function test_sin_cuenta_en_glpi_no_hay_medios_que_atribuir(): void
@@ -321,7 +542,6 @@ class GestorUserCartorialTest extends TestCase
         $panel = $this->panel($this->ficha($this->gestor()), 'panel-cartorial');
 
         $this->assertStringContainsString('Sem conta em GLPI', $panel);
-        $this->assertStringNotContainsString('Notebook Dell Latitude 5440', $panel);
     }
 
     public function test_identificacion_y_adagio_comparten_fila_y_glpi_ocupa_la_entera(): void

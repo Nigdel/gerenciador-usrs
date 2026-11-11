@@ -79,6 +79,15 @@ Route::middleware('auth')->group(function () {
         [GestorUserController::class, 'reintentar']
     )->name('gestor-users.operaciones.retry');
 
+    // El detalle de un medio del gestor, en el inventario de GLPI. Va dentro de
+    // {gestorUser} por la misma razón que el polling: que el medio sea de esta
+    // persona es una condición de la ruta, no algo que el controlador pueda
+    // comprobar con datos fiables si no viene en la URL.
+    Route::get(
+        'gestor-users/{gestorUser}/medios/{tipo}/{id}',
+        [GestorUserController::class, 'medio']
+    )->name('gestor-users.medios.show');
+
     Route::resource('gestor-users', GestorUserController::class)
         ->parameters(['gestor-users' => 'gestorUser']);
 

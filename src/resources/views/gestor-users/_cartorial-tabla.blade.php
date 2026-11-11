@@ -7,6 +7,11 @@
     una copia que se queda desactualizada es peor que ninguna.
 
     No lleva cabecera propia: el contenedor que la llama pone el título.
+
+    En los medios, el nombre de la columna "Descrição" abre la ficha del
+    equipo: los datos no vienen en la página (son muchos y la ficha se abre en
+    cada consulta), así que se piden a GLPI bajo demanda y se muestran en un
+    modal.
 --}}
 <div class="overflow-x-auto">
     <table class="min-w-full border-collapse text-left text-sm">
@@ -21,7 +26,22 @@
             @foreach ($filas as $fila)
             <tr class="align-middle transition hover:bg-[#f7faf8]">
                 @foreach ($columnas as $columna)
-                <td class="px-4 py-3.5 text-[#17211b]">{{ $fila[$columna] ?? '—' }}</td>
+                @php($enlace = $fila['enlace'] ?? null)
+                @php($medio = $fila['medio'] ?? null)
+                <td class="px-4 py-3.5 text-[#17211b]">
+                    @if ($medio && $columna === 'Descrição')
+                    {{-- El nombre del medio abre su ficha: los datos se piden
+                         a GLPI en el momento, porque son muchos y la ficha
+                         se abre en cada consulta. --}}
+                    <button type="button"
+                        @click="abrir(@js($medio['tipo']), @js($medio['id']))"
+                        class="font-bold text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+                        {{ $fila[$columna] ?? '—' }}
+                    </button>
+                    @else
+                    {{ $fila[$columna] ?? '—' }}
+                    @endif
+                </td>
                 @endforeach
             </tr>
             @endforeach

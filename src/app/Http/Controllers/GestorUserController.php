@@ -14,12 +14,14 @@ use App\Http\Requests\SyncGestorUserRequest;
 use App\Models\GestorUser;
 use App\Models\ProvisioningOperation;
 use App\Models\Subsystem;
+use App\Models\UserSubsystemAccount;
 use App\Rules\Cpf;
 use App\Services\AuditService;
 use App\Services\GestorUserCartorialService;
 use App\Services\GestorUserReactivationService;
 use App\Services\GestorUserSuspensionService;
 use App\Services\ProvisioningOperationService;
+use App\Services\Subsystems\GlpiMediosService;
 use App\Services\SubsystemServiceRegistry;
 use App\Services\UserDataSyncService;
 use App\Services\UserOffboardingService;
@@ -52,6 +54,7 @@ class GestorUserController extends Controller
         private readonly GestorUserReactivationService $gestorReactivationService,
         private readonly GestorUserSuspensionService $gestorSuspensionService,
         private readonly GestorUserCartorialService $cartorialService,
+        private readonly GlpiMediosService $mediosGlpi,
         private readonly SubsystemServiceRegistry $registry,
         private readonly AuditService $audit,
     ) {}
@@ -240,6 +243,37 @@ class GestorUserController extends Controller
             // del panel de GLPI, que los lleva dentro.
             'cartorialDocumentos' => $this->cartorialService->documentos(),
         ]);
+    }
+
+    /**
+     * El detalle de un medio del gestor, tal como está en el inventario de GLPI.
+     *
+     * Es lo que se abre al pulsar el nombre de un medio en el listado del
+     * cartorial: los datos no vienen en la respuesta de la ficha (son muchos,
+     * y la ficha se abre en cada consulta), así que se piden aquí, bajo demanda
+     * y solo para el medio que se ha pulsado.
+     */
+    public function medio(
+        GestorUser $gestorUser,
+        string $tipo,
+        string $id,
+    ): JsonResponse {
+        $this->authorize('view', $gestorUser);
+
+        $cuenta = $gestorUser->subsystemAccounts
+            ->first(fn (UserSubsystemAccount $cuenta): bool => $cuenta->subsystem?->slug === 'glpi');
+
+        if ($cuenta === null || $cuenta->subsystem === null) {
+            abort(404);
+        }
+
+        $medio = $this->mediosGlpi->medio($cuenta->subsystem, $tipo, $id);
+
+        if ($medio === null) {
+            abort(404);
+        }
+
+        return response()->json($medio);
     }
 
     /**

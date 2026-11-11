@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\GestorUser;
 use App\Models\UserSubsystemAccount;
+use App\Services\Subsystems\GlpiMediosService;
 
 /**
  * Cartorial del gestor: su segunda constancia documental.
@@ -18,9 +19,16 @@ use App\Models\UserSubsystemAccount;
  * en Adagio con su respuesta original en `meta`), no de una llamada a Adagio:
  * esta página se abre en cada consulta y preguntar al exterior en cada visita
  * la haría depender de un sistema de terceros para pintar una tabla.
+ *
+ * Los medios son la excepción: salen de GLPI, que es donde están, y el
+ * servicio de medios se encarga de la llamada y de su caché.
  */
 class GestorUserCartorialService
 {
+    public function __construct(
+        private readonly GlpiMediosService $mediosGlpi,
+    ) {}
+
     /**
      * Secciones del cartorial, en el orden en que se muestran.
      *
@@ -88,75 +96,27 @@ class GestorUserCartorialService
     }
 
     /**
-     * Medios del gestor: los equipos y dispositivos que tiene asignados.
+     * Las columnas del listado de medios.
      *
-     * En GLPI los medios son los "itens" vinculados al usuario (la tabla
-     * items_users): computadores, monitores, celulares, impresoras. Es la
-     * tercera forma de sección del cartorial, junto a los bloques de campos y
-     * al listado de documentos.
+     * Las define el servicio de medios, que es quien construye las filas: si
+     * cada uno por su cuenta, un cambio de nombre en uno rompe el listado sin
+     * que se note (la celda sale vacía, no un error).
      *
-     * @return array{columnas: list<string>, filas: list<array<string, ?string>>}
+     * @return list<string>
      */
-    public function medios(): array
+    public function columnasMedios(): array
     {
-        return [
-            'columnas' => [
-                'Tipo',
-                'Descrição',
-                'Nº de Série',
-                'Status',
-                'Localização',
-                'Atribuído em',
-            ],
-            'filas' => $this->mediosFicticios(),
-        ];
+        return $this->mediosGlpi->columnas();
     }
 
     /**
-     * Medios de ejemplo.
-     *
-     * FICTICIOS a propósito, como los documentos: aún no hay de dónde sacarlos
-     * de verdad. Se sustituyen por la consulta a `items_users` de GLPI en
-     * cuanto exista el enlace.
+     * Los medios atribuidos a una cuenta de GLPI.
      *
      * @return list<array<string, ?string>>
      */
-    private function mediosFicticios(): array
+    public function mediosDe(UserSubsystemAccount $cuenta): array
     {
-        return [
-            [
-                'Tipo' => 'Computador',
-                'Descrição' => 'Notebook Dell Latitude 5440',
-                'Nº de Série' => 'DL5440-88421',
-                'Status' => 'Ativo',
-                'Localização' => 'Sede — Sala 3',
-                'Atribuído em' => now()->subDays(210)->format('d/m/Y'),
-            ],
-            [
-                'Tipo' => 'Monitor',
-                'Descrição' => 'Monitor Dell P2422H 23,8"',
-                'Nº de Série' => 'DL2422-11907',
-                'Status' => 'Ativo',
-                'Localização' => 'Sede — Sala 3',
-                'Atribuído em' => now()->subDays(210)->format('d/m/Y'),
-            ],
-            [
-                'Tipo' => 'Celular',
-                'Descrição' => 'Samsung Galaxy A54',
-                'Nº de Série' => 'SM-A54-55219',
-                'Status' => 'Ativo',
-                'Localização' => 'Home office',
-                'Atribuído em' => now()->subDays(95)->format('d/m/Y'),
-            ],
-            [
-                'Tipo' => 'Periférico',
-                'Descrição' => 'Impressora HP LaserJet M428',
-                'Nº de Serie' => 'HP428-77031',
-                'Status' => 'Em manutenção',
-                'Localização' => 'Sede — Copia',
-                'Atribuído em' => now()->subDays(400)->format('d/m/Y'),
-            ],
-        ];
+        return $this->mediosGlpi->medios($cuenta);
     }
 
     /**
@@ -310,8 +270,8 @@ class GestorUserCartorialService
             'tabla' => [
                 'titulo' => 'Meios',
                 'descripcion' => 'Equipamentos e dispositivos atribuídos a este usuário no GLPI.',
-                'columnas' => $this->medios()['columnas'],
-                'filas' => $this->medios()['filas'],
+                'columnas' => $this->columnasMedios(),
+                'filas' => $this->mediosDe($cuenta),
             ],
         ];
     }
