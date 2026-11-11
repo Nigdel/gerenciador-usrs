@@ -25,26 +25,33 @@ class GestorUserCartorialService
      * Secciones del cartorial, en el orden en que se muestran.
      *
      * Cada sección es una fila de paneles: los paneles de una misma sección se
-     * pintan uno al lado del otro, y los de secciones distintas se apilan. Es
-     * lo que permite que la cuenta de Adagio y la de GLPI se lean juntas sin
-     * que el servicio tenga que saber nada de la maquetación: si mañana hace
-     * falta la cuenta de otro subsistema, es un panel más en la misma sección.
+     * pintan uno al lado del otro, y los de secciones distintas se apilan. Un
+     * panel puede ocupar la fila entera (`ancho` => 'completo'), que es lo que
+     * hace el de GLPI: lleva dentro el listado de medios y con la mitad del
+     * ancho no cabía.
      *
-     * @return list<array{clave: string, paneles: list<array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}>}>
+     * Un panel puede llevar además un listado (`tabla`): es lo que hacen los
+     * medios, que cuelgan de la cuenta de GLPI y por eso van dentro de su
+     * panel en vez de en una sección aparte.
+     *
+     * @return list<array{clave: string, paneles: list<array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>, tabla?: array{titulo: string, descripcion: string, columnas: list<string>, filas: list<array<string, ?string>>}>}>}>
      */
     public function bloques(GestorUser $gestorUser): array
     {
         return [
             [
+                // Identificación y Adagio en la misma fila: la cuenta del
+                // proveedor de identidad se lee junto a los datos de la persona.
                 'clave' => 'identificacion',
                 'paneles' => [
                     $this->panelIdentificacion($gestorUser),
+                    $this->panelCuentaAdagio($gestorUser),
                 ],
             ],
             [
-                'clave' => 'cuentas',
+                // GLPI ocupa la fila entera: su panel lleva el listado de medios.
+                'clave' => 'glpi',
                 'paneles' => [
-                    $this->panelCuentaAdagio($gestorUser),
                     $this->panelCuentaGlpi($gestorUser),
                 ],
             ],
@@ -77,6 +84,78 @@ class GestorUserCartorialService
                 'Cadastro',
             ],
             'filas' => $this->documentosFicticios(),
+        ];
+    }
+
+    /**
+     * Medios del gestor: los equipos y dispositivos que tiene asignados.
+     *
+     * En GLPI los medios son los "itens" vinculados al usuario (la tabla
+     * items_users): computadores, monitores, celulares, impresoras. Es la
+     * tercera forma de sección del cartorial, junto a los bloques de campos y
+     * al listado de documentos.
+     *
+     * @return array{columnas: list<string>, filas: list<array<string, ?string>>}
+     */
+    public function medios(): array
+    {
+        return [
+            'columnas' => [
+                'Tipo',
+                'Descrição',
+                'Nº de Série',
+                'Status',
+                'Localização',
+                'Atribuído em',
+            ],
+            'filas' => $this->mediosFicticios(),
+        ];
+    }
+
+    /**
+     * Medios de ejemplo.
+     *
+     * FICTICIOS a propósito, como los documentos: aún no hay de dónde sacarlos
+     * de verdad. Se sustituyen por la consulta a `items_users` de GLPI en
+     * cuanto exista el enlace.
+     *
+     * @return list<array<string, ?string>>
+     */
+    private function mediosFicticios(): array
+    {
+        return [
+            [
+                'Tipo' => 'Computador',
+                'Descrição' => 'Notebook Dell Latitude 5440',
+                'Nº de Série' => 'DL5440-88421',
+                'Status' => 'Ativo',
+                'Localização' => 'Sede — Sala 3',
+                'Atribuído em' => now()->subDays(210)->format('d/m/Y'),
+            ],
+            [
+                'Tipo' => 'Monitor',
+                'Descrição' => 'Monitor Dell P2422H 23,8"',
+                'Nº de Série' => 'DL2422-11907',
+                'Status' => 'Ativo',
+                'Localização' => 'Sede — Sala 3',
+                'Atribuído em' => now()->subDays(210)->format('d/m/Y'),
+            ],
+            [
+                'Tipo' => 'Celular',
+                'Descrição' => 'Samsung Galaxy A54',
+                'Nº de Série' => 'SM-A54-55219',
+                'Status' => 'Ativo',
+                'Localização' => 'Home office',
+                'Atribuído em' => now()->subDays(95)->format('d/m/Y'),
+            ],
+            [
+                'Tipo' => 'Periférico',
+                'Descrição' => 'Impressora HP LaserJet M428',
+                'Nº de Serie' => 'HP428-77031',
+                'Status' => 'Em manutenção',
+                'Localização' => 'Sede — Copia',
+                'Atribuído em' => now()->subDays(400)->format('d/m/Y'),
+            ],
         ];
     }
 
@@ -140,13 +219,14 @@ class GestorUserCartorialService
     /**
      * Quién es la persona, con los datos que ya viven en su ficha.
      *
-     * @return array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
+     * @return array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>}
      */
     private function panelIdentificacion(GestorUser $gestorUser): array
     {
         return [
             'titulo' => 'Identificação',
             'descripcion' => 'Dados com os quais a pessoa está cadastrada no Gestor.',
+            'ancho' => 'mitad',
             'campos' => [
                 ['etiqueta' => 'Nome', 'valor' => $gestorUser->nombre_completo],
                 ['etiqueta' => 'Usuário', 'valor' => $gestorUser->usuario],
@@ -164,7 +244,7 @@ class GestorUserCartorialService
      * dejar huecos: un panel vacío se lee como un dato que falta, y aquí lo
      * que falta es que el alta en el proveedor de identidad no ha ocurrido.
      *
-     * @return array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
+     * @return array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>}
      */
     private function panelCuentaAdagio(GestorUser $gestorUser): array
     {
@@ -174,6 +254,7 @@ class GestorUserCartorialService
             return [
                 'titulo' => 'Conta em Adagio',
                 'descripcion' => 'A conta do proprietário no Adagio, que é o provedor de identidade.',
+                'ancho' => 'mitad',
                 'campos' => [
                     ['etiqueta' => 'Conta', 'valor' => 'Sem conta em Adagio'],
                 ],
@@ -183,6 +264,7 @@ class GestorUserCartorialService
         return [
             'titulo' => 'Conta em Adagio',
             'descripcion' => 'A conta do proprietário no Adagio, que é o provedor de identidade.',
+            'ancho' => 'mitad',
             'campos' => [
                 ['etiqueta' => 'ID externo', 'valor' => $cuenta->external_account_id],
                 ['etiqueta' => 'Status', 'valor' => $cuenta->estado?->value],
@@ -196,7 +278,11 @@ class GestorUserCartorialService
      * GLPI no guarda el email en la respuesta de la API: la credencial es el
      * login, y es lo que se muestra.
      *
-     * @return array{titulo: string, descripcion: string, campos: list<array{etiqueta: string, valor: ?string}>}
+     * Los medios cuelgan de este panel y no de una sección aparte: en GLPI son
+     * los "itens" vinculados al usuario, así que se leen junto a la cuenta que
+     * los declara, no al final del cartorial.
+     *
+     * @return array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>, tabla?: array{titulo: string, descripcion: string, columnas: list<string>, filas: list<array<string, ?string>>}>}
      */
     private function panelCuentaGlpi(GestorUser $gestorUser): array
     {
@@ -206,6 +292,7 @@ class GestorUserCartorialService
             return [
                 'titulo' => 'Conta em GLPI',
                 'descripcion' => 'A conta do usuário no service desk (GLPI).',
+                'ancho' => 'completo',
                 'campos' => [
                     ['etiqueta' => 'Conta', 'valor' => 'Sem conta em GLPI'],
                 ],
@@ -214,10 +301,17 @@ class GestorUserCartorialService
 
         return [
             'titulo' => 'Conta em GLPI',
-            'descripcion' => 'A conta do usuário no service desk (GLPI).',
+            'descripcion' => 'A conta do usuário no service desk (GLPI) e os meios atribuídos a ela.',
+            'ancho' => 'completo',
             'campos' => [
                 ['etiqueta' => 'Login', 'valor' => $cuenta->credencial_usuario],
                 ['etiqueta' => 'ID externo', 'valor' => $cuenta->external_account_id],
+            ],
+            'tabla' => [
+                'titulo' => 'Meios',
+                'descripcion' => 'Equipamentos e dispositivos atribuídos a este usuário no GLPI.',
+                'columnas' => $this->medios()['columnas'],
+                'filas' => $this->medios()['filas'],
             ],
         ];
     }

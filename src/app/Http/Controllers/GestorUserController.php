@@ -236,7 +236,8 @@ class GestorUserController extends Controller
             'cartorial' => $this->cartorialService->bloques($gestorUser),
             // El listado de documentos del cartorial, que es una tabla y no un
             // bloque de campos: viaja aparte para no forzar a los bloques a
-            // saber de tablas.
+            // saber de tablas. Los medios no vienen por aquí porque cuelgan
+            // del panel de GLPI, que los lleva dentro.
             'cartorialDocumentos' => $this->cartorialService->documentos(),
         ]);
     }
