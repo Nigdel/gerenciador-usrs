@@ -145,6 +145,13 @@ class TermoService
 
         $cuenta = $this->cuentaGlpi($gestorUser);
 
+        // Las fotos del equipo se congelan con el resto del snapshot: el PDF
+        // debe seguir mostrando lo que se vio al emitirlo aunque después se
+        // borren los documentos en GLPI.
+        $imagenes = $cuenta !== null && $cuenta->subsystem !== null
+            ? $this->medios->imagenesDocumentos($cuenta->subsystem, $itemType, (string) $itemId)
+            : [];
+
         $termo = Termo::create([
             'gestor_user_id' => $gestorUser->id,
             'user_subsystem_account_id' => $cuenta?->id,
@@ -158,6 +165,7 @@ class TermoService
                 'empresa' => $empresa,
                 'usuario' => $formulario['usuario'],
                 'dispositivo' => $dispositivo,
+                'imagenes' => $imagenes,
                 'termo' => [
                     'observaciones' => isset($datos['observaciones']) ? trim((string) $datos['observaciones']) : null,
                 ],
@@ -306,7 +314,32 @@ class TermoService
      */
     public function historial(GestorUser $gestorUser): Collection
     {
+        // El listado no pinta el snapshot, y el snapshot lleva las fotos del
+        // medio en base64. Traerlo para cada termo del historial cargaría en
+        // memoria varios megas por fila sin que la vista los use.
         return Termo::query()
+            ->select([
+                'id',
+                'gestor_user_id',
+                'user_subsystem_account_id',
+                'item_type',
+                'item_id',
+                'item_name',
+                'item_serial',
+                'tipo',
+                'estado',
+                'pdf_generado',
+                'pdf_firmado',
+                'generado_at',
+                'enviado_at',
+                'firmado_at',
+                'anulado_at',
+                'motivo_anulacion',
+                'created_by',
+                'updated_by',
+                'created_at',
+                'updated_at',
+            ])
             ->where('gestor_user_id', $gestorUser->id)
             ->with('creadoPor')
             ->latest('id')

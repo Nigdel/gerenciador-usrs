@@ -2,7 +2,7 @@ FROM php:8.5-fpm
 
 WORKDIR /var/www
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git \
     curl \
     unzip \
@@ -10,13 +10,16 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg62-turbo-dev \
     libfreetype6-dev \
+    libwebp-dev \
     libonig-dev \
     libxml2-dev \
     libicu-dev \
     libpq-dev \
     libldap2-dev \
+    libreoffice-writer \
+    fonts-liberation \
     ca-certificates \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-configure ldap --with-libdir="lib/$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" \
     && docker-php-ext-install \
         pdo_mysql \

@@ -50,6 +50,20 @@ class TermoTest extends TestCase
         'date_creation' => '2026-04-15 10:00:00',
     ];
 
+    /**
+     * Documentos de GLPI enlazados al equipo, indexados por id.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    private array $documentosGlpi = [];
+
+    /**
+     * Contenido binario de cada documento, indexado por id.
+     *
+     * @var array<int, string>
+     */
+    private array $archivosGlpi = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -94,6 +108,31 @@ class TermoTest extends TestCase
 
             if (str_contains($url, '/search/')) {
                 return Http::response(['totalcount' => 0, 'count' => 0, 'data' => []]);
+            }
+
+            if (str_contains($url, '/Document_Item')) {
+                return Http::response(array_map(
+                    static fn (int $id): array => ['documents_id' => $id],
+                    array_keys($this->documentosGlpi),
+                ));
+            }
+
+            if (preg_match('#/Document/(\d+)\?alt=media#', $url, $coincidencias)) {
+                $id = (int) $coincidencias[1];
+
+                if (! isset($this->archivosGlpi[$id])) {
+                    return Http::response([], 404);
+                }
+
+                return Http::response($this->archivosGlpi[$id], 200, ['Content-Type' => 'image/png']);
+            }
+
+            if (preg_match('#/Document/(\d+)$#', $url, $coincidencias)) {
+                $id = (int) $coincidencias[1];
+
+                return isset($this->documentosGlpi[$id])
+                    ? Http::response($this->documentosGlpi[$id])
+                    : Http::response([], 404);
             }
 
             if (str_contains($url, '/Item_DeviceProcessor')) {
@@ -194,6 +233,17 @@ class TermoTest extends TestCase
         ], $extra);
     }
 
+    /**
+     * Un PNG 1x1 válido, suficiente para comprobar que la imagen llega al PDF.
+     */
+    private function png(): string
+    {
+        return (string) base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+            true,
+        );
+    }
+
     public function test_un_operador_genera_un_termo_para_un_medio_propio(): void
     {
         $gestor = $this->gestor();
@@ -220,6 +270,64 @@ class TermoTest extends TestCase
 
         $this->assertNotNull($termo->pdf_generado);
         $this->assertTrue(Storage::disk('local')->exists($termo->pdf_generado));
+        $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($termo->pdf_generado));
+    }
+
+    public function test_el_termo_congela_e_imprime_las_imagenes_de_los_documentos_del_medio(): void
+    {
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->documentosGlpi = [
+            5 => [
+                'id' => 5,
+                'name' => 'Foto frontal',
+                'filename' => 'foto-frontal.png',
+                'mime' => 'image/png',
+                'is_deleted' => 0,
+            ],
+        ];
+        $this->archivosGlpi = [5 => $this->png()];
+
+        $this->post(route('gestor-users.termos.store', $gestor), $this->datosTermo())
+            ->assertSessionHasNoErrors();
+
+        $termo = Termo::firstOrFail();
+        $imagenes = $termo->seccion('imagenes');
+
+        $this->assertCount(1, $imagenes);
+        $this->assertSame(5, $imagenes[0]['id']);
+        $this->assertSame('foto-frontal.png', $imagenes[0]['nombre']);
+        $this->assertSame('image/png', $imagenes[0]['mime']);
+        $this->assertSame(base64_encode($this->png()), $imagenes[0]['base64']);
+
+        // LibreOffice incrusta el collage como objeto del PDF, no como una
+        // ruta externa que dependa de GLPI o del disco público.
+        $pdf = Storage::disk('local')->get($termo->pdf_generado);
+        $this->assertMatchesRegularExpression('#/Subtype\s*/Image#', $pdf);
+    }
+
+    public function test_los_documentos_que_no_son_imagenes_no_entran_en_el_termo(): void
+    {
+        $gestor = $this->gestor();
+        $this->cuentaGlpi($gestor);
+
+        $this->documentosGlpi = [
+            6 => [
+                'id' => 6,
+                'name' => 'Manual del equipo',
+                'filename' => 'manual.pdf',
+                'mime' => 'application/pdf',
+                'is_deleted' => 0,
+            ],
+        ];
+
+        $this->post(route('gestor-users.termos.store', $gestor), $this->datosTermo())
+            ->assertSessionHasNoErrors();
+
+        $termo = Termo::firstOrFail();
+
+        $this->assertSame([], $termo->seccion('imagenes'));
         $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($termo->pdf_generado));
     }
 

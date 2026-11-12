@@ -219,6 +219,37 @@ class GlpiMediosTest extends SubsystemTestCase
         $this->assertSame([], $medios);
     }
 
+    public function test_un_glpi_caido_no_deja_un_listado_vacio_cacheado(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(fn (Request $peticion) => str_contains($peticion->url(), '/initSession')
+            ? Http::response(['session_token' => 'session-token'])
+            : Http::response([], 500));
+
+        $servicio = $this->medios();
+        $cuenta = $this->cuenta();
+
+        $this->assertSame([], $servicio->medios($cuenta));
+        $this->assertTrue($servicio->falloEnUltimaConsulta());
+
+        // El vacío de un GLPI caído no se cachea: si se cacheara, la ficha
+        // seguiría sin medios durante minutos aunque GLPI ya estuviera de
+        // vuelta, y no habría forma de saber que faltaba información.
+        $this->assertNull(Cache::get('glpi:medios:'.$cuenta->subsystem_id.':532'));
+    }
+
+    public function test_el_listado_de_medios_se_cachea_cuando_glpi_responde(): void
+    {
+        $this->fakeGlpi();
+
+        $servicio = $this->medios();
+        $cuenta = $this->cuenta();
+
+        $this->assertCount(1, $servicio->medios($cuenta));
+        $this->assertFalse($servicio->falloEnUltimaConsulta());
+        $this->assertNotNull(Cache::get('glpi:medios:'.$cuenta->subsystem_id.':532'));
+    }
+
     public function test_sin_cuenta_en_glpi_no_hay_medios(): void
     {
         $this->fakeGlpi();

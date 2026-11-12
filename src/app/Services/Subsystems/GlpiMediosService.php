@@ -58,6 +58,29 @@ class GlpiMediosService extends GlpiService
     ];
 
     /**
+     * Fallos de GLPI durante la última consulta del listado.
+     *
+     * Sirve para no confundir "este usuario no tiene medios" con "GLPI no
+     * respondió": un listado vacío causado por un fallo de red no se cachea,
+     * porque si no el inventario aparecería vacío durante los minutos que
+     * dure la caché aunque GLPI ya esté de vuelta.
+     */
+    private int $fallos = 0;
+
+    /**
+     * Formatos que GD puede leer para componer las fotos del termo.
+     *
+     * @var list<string>
+     */
+    private const MIMES_IMAGEN = [
+        'image/png',
+        'image/jpeg',
+        'image/gif',
+        'image/webp',
+        'image/bmp',
+    ];
+
+    /**
      * Los medios atribuidos a la persona, listos para pintarse.
      *
      * @return list<array<string, ?string>>
@@ -74,12 +97,36 @@ class GlpiMediosService extends GlpiService
         // La atribución de equipos cambia poco y la ficha se abre en cada
         // consulta: sin caché, cada visita pagaría varias llamadas a GLPI.
         $cacheKey = "glpi:medios:{$subsistema->id}:{$usuario}";
+        $cacheados = Cache::get($cacheKey);
 
-        return Cache::remember(
-            $cacheKey,
-            now()->addMinutes(5),
-            fn (): array => $this->consultarMedios($subsistema, $usuario),
-        );
+        if (is_array($cacheados)) {
+            return $cacheados;
+        }
+
+        $this->fallos = 0;
+
+        $filas = $this->consultarMedios($subsistema, $usuario);
+
+        // Solo se cachea lo que GLPI ha confirmado. Si alguna llamada falló,
+        // el listado está incompleto y se vuelve a intentarlo en la siguiente
+        // visita en vez de dejar un vacío en la caché.
+        if ($this->fallos === 0) {
+            Cache::put($cacheKey, $filas, now()->addMinutes(5));
+        }
+
+        return $filas;
+    }
+
+    /**
+     * Si la última consulta del listado falló por cualquier motivo.
+     *
+     * Sirve para distinguir "este usuario no tiene medios" de "no se pudo
+     * consultar el inventario": en el segundo caso el listado vacío es una
+     * falta de información, no una información.
+     */
+    public function falloEnUltimaConsulta(): bool
+    {
+        return $this->fallos > 0;
     }
 
     /**
@@ -109,6 +156,12 @@ class GlpiMediosService extends GlpiService
         foreach ($this->tipos($subsistema) as $tipo) {
             foreach ($this->itemsDelUsuario($subsistema, $tipo, $usuario) as $item) {
                 $filas[] = $this->fila($tipo, $item, $subsistema);
+            }
+
+            if ($this->fallos > 0) {
+                // GLPI no respondió: los demás tipos de equipo fallarán igual
+                // y solo harían esperar al operador (una espera por tipo).
+                break;
             }
         }
 
@@ -225,6 +278,167 @@ class GlpiMediosService extends GlpiService
             'imei' => $tipo === 'Phone' ? $serial : null,
             'comentario' => $this->texto($item['comment'] ?? null),
         ];
+    }
+
+    /**
+     * Las imágenes que GLPI tiene como documentos del medio.
+     *
+     * En GLPI una foto no es un campo del equipo: es un `Document` enlazado
+     * por `Document_Item`. La API expone esos vínculos como sub-colección del
+     * equipo y el archivo se descarga con `alt=media` sobre el documento.
+     *
+     * Se devuelven ya en base64 para que el snapshot del termo sea autónomo:
+     * si el documento se borra de GLPI, el PDF emitido sigue teniendo la foto
+     * que se vio al firmar. Solo se aceptan imágenes reales: el MIME del
+     * documento no basta, porque un archivo renombrado rompería el PDF.
+     *
+     * @return list<array{id: int, nombre: ?string, mime: string, base64: string}>
+     */
+    public function imagenesDocumentos(Subsystem $subsistema, string $tipo, string $id): array
+    {
+        if (! $this->esTipoValido($subsistema, $tipo) || ! ctype_digit($id)) {
+            return [];
+        }
+
+        $maximo = max(1, (int) config('termos.imagenes_max', 8));
+        $maximoKb = max(1, (int) config('termos.imagen_max_kb', 4096));
+        $totalKb = max($maximoKb, (int) config('termos.imagenes_total_kb', 12288));
+
+        $imagenes = [];
+        $total = 0;
+
+        foreach ($this->documentosDelMedio($subsistema, $tipo, $id) as $vinculo) {
+            if (count($imagenes) >= $maximo || $total >= $totalKb * 1024) {
+                break;
+            }
+
+            $documentoId = (int) ($vinculo['documents_id'] ?? 0);
+
+            if ($documentoId <= 0) {
+                continue;
+            }
+
+            $documento = $this->documento($subsistema, $documentoId);
+
+            if ($documento === null || (int) ($documento['is_deleted'] ?? 0) === 1) {
+                continue;
+            }
+
+            if (! in_array(strtolower((string) ($documento['mime'] ?? '')), self::MIMES_IMAGEN, true)) {
+                continue;
+            }
+
+            try {
+                $response = $this->http($subsistema)
+                    ->withHeaders(['Accept' => '*/*'])
+                    ->get("/Document/{$documentoId}", ['alt' => 'media']);
+            } catch (Throwable $exception) {
+                $this->log('No se pudo descargar un documento de GLPI', [
+                    'documento' => $documentoId,
+                    'error' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            if ($response->failed()) {
+                $this->log('GLPI rechazó la descarga de un documento', [
+                    'documento' => $documentoId,
+                    'http_status' => $response->status(),
+                ]);
+
+                continue;
+            }
+
+            $contenido = $response->body();
+            $bytes = strlen($contenido);
+
+            if ($bytes === 0 || $bytes > $maximoKb * 1024 || $total + $bytes > $totalKb * 1024) {
+                continue;
+            }
+
+            // El MIME que declara GLPI puede no coincidir con el contenido.
+            // getimagesizefromstring() valida la firma del archivo y, de paso,
+            // confirma que GD podrá leerlo al componer el collage del termo.
+            $info = @getimagesizefromstring($contenido);
+            $mime = is_array($info) ? strtolower((string) ($info['mime'] ?? '')) : '';
+
+            if (! in_array($mime, self::MIMES_IMAGEN, true)) {
+                continue;
+            }
+
+            $imagenes[] = [
+                'id' => $documentoId,
+                'nombre' => $this->texto($documento['filename'] ?? $documento['name'] ?? null),
+                'mime' => $mime,
+                'base64' => base64_encode($contenido),
+            ];
+
+            $total += $bytes;
+        }
+
+        return $imagenes;
+    }
+
+    /**
+     * Los vínculos Document_Item del equipo.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function documentosDelMedio(Subsystem $subsistema, string $tipo, string $id): array
+    {
+        try {
+            $response = $this->http($subsistema)->get("/{$tipo}/{$id}/Document_Item", [
+                'range' => '0-99',
+            ]);
+        } catch (Throwable $exception) {
+            $this->log('No se pudieron leer los documentos de un medio en GLPI', [
+                'tipo' => $tipo,
+                'id' => $id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        if ($response->failed()) {
+            return [];
+        }
+
+        $datos = $response->json();
+
+        if (! is_array($datos) || ! array_is_list($datos)) {
+            return [];
+        }
+
+        return array_values(array_filter($datos, 'is_array'));
+    }
+
+    /**
+     * El detalle de un documento de GLPI, sin su contenido.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function documento(Subsystem $subsistema, int $id): ?array
+    {
+        try {
+            $response = $this->http($subsistema)->get('/Document/'.$id);
+        } catch (Throwable $exception) {
+            $this->log('No se pudo leer un documento de GLPI', [
+                'documento' => $id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $documento = $response->json();
+
+        return is_array($documento) ? $documento : null;
     }
 
     /**
@@ -480,6 +694,8 @@ class GlpiMediosService extends GlpiService
                 'error' => $exception->getMessage(),
             ]);
 
+            $this->fallos++;
+
             return [];
         }
 
@@ -489,6 +705,8 @@ class GlpiMediosService extends GlpiService
                 'usuario' => $usuario,
                 'http_status' => $response->status(),
             ]);
+
+            $this->fallos++;
 
             return [];
         }
@@ -617,29 +835,49 @@ class GlpiMediosService extends GlpiService
     private function searchOptions(Subsystem $subsistema, string $tipo): array
     {
         $cacheKey = "glpi:searchoptions:{$subsistema->id}:{$tipo}";
+        $cacheadas = Cache::get($cacheKey);
 
-        return Cache::remember($cacheKey, now()->addHours(6), function () use ($subsistema, $tipo): array {
-            try {
-                // Sin `raw` la API no devuelve el `linkfield`, que es
-                // justamente por donde se reconoce cada columna.
-                $response = $this->http($subsistema)->get('/listSearchOptions/'.$tipo, ['raw' => 'true']);
-            } catch (Throwable $exception) {
-                $this->log('No se pudieron leer las opciones de búsqueda de GLPI', [
-                    'tipo' => $tipo,
-                    'error' => $exception->getMessage(),
-                ]);
+        if (is_array($cacheadas) && $cacheadas !== []) {
+            return $cacheadas;
+        }
 
-                return [];
-            }
+        try {
+            // Sin `raw` la API no devuelve el `linkfield`, que es
+            // justamente por donde se reconoce cada columna.
+            $response = $this->http($subsistema)->get('/listSearchOptions/'.$tipo, ['raw' => 'true']);
+        } catch (Throwable $exception) {
+            $this->log('No se pudieron leer las opciones de búsqueda de GLPI', [
+                'tipo' => $tipo,
+                'error' => $exception->getMessage(),
+            ]);
 
-            if ($response->failed()) {
-                return [];
-            }
+            $this->fallos++;
 
-            $opciones = $response->json();
+            return [];
+        }
 
-            return is_array($opciones) ? $this->indexarOpciones($opciones, $tipo) : [];
-        });
+        if ($response->failed()) {
+            $this->log('GLPI rechazó la lectura de las opciones de búsqueda', [
+                'tipo' => $tipo,
+                'http_status' => $response->status(),
+            ]);
+
+            $this->fallos++;
+
+            return [];
+        }
+
+        $opciones = $response->json();
+        $mapa = is_array($opciones) ? $this->indexarOpciones($opciones, $tipo) : [];
+
+        // Solo se cachea un mapa de opciones completo. Un fallo transitorio de
+        // GLPI dejaría el mapa vacío cacheado durante horas y el inventario
+        // aparecería sin medios sin que nadie pudiera entender por qué.
+        if ($mapa !== []) {
+            Cache::put($cacheKey, $mapa, now()->addHours(6));
+        }
+
+        return $mapa;
     }
 
     /**

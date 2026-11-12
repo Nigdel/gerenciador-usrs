@@ -174,13 +174,21 @@
                         @endif
                     </div>
 
+                    @if (! empty($panel['tabla']['aviso']))
+                    {{-- GLPI no respondió: el listado vacío es una falta de
+                         información, no una información. --}}
+                    <p class="px-4 pt-3 text-sm font-bold text-amber-700">
+                        {{ $panel['tabla']['aviso'] }}
+                    </p>
+                    @endif
+
                     @if (! empty($panel['tabla']['filas']))
                     @include('gestor-users._cartorial-tabla', [
                         'columnas' => $panel['tabla']['columnas'],
                         'filas' => $panel['tabla']['filas'],
                         'gestorUser' => $gestorUser,
                     ])
-                    @else
+                    @elseif (empty($panel['tabla']['aviso']))
                     <p class="px-4 pb-4 text-sm text-[#68756d]">
                         Nenhum meio atribuído a este usuário no GLPI.
                     </p>

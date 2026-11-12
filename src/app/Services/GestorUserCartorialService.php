@@ -300,6 +300,8 @@ class GestorUserCartorialService
             ];
         }
 
+        $filas = $this->mediosDe($gestorUser, $cuenta);
+
         return [
             'titulo' => 'Conta em GLPI',
             'descripcion' => 'A conta do usuário no service desk (GLPI) e os meios atribuídos a ela.',
@@ -312,7 +314,13 @@ class GestorUserCartorialService
                 'titulo' => 'Meios',
                 'descripcion' => 'Equipamentos e dispositivos atribuídos a este usuário no GLPI.',
                 'columnas' => $this->columnasMedios(),
-                'filas' => $this->mediosDe($gestorUser, $cuenta),
+                'filas' => $filas,
+                // Un listado vacío porque GLPI no respondió no es lo mismo que
+                // un usuario sin medios: se dice, para que el operador sepa que
+                // reintentar tiene sentido.
+                'aviso' => $this->mediosGlpi->falloEnUltimaConsulta()
+                    ? 'Não foi possível consultar o inventário em GLPI. Tente novamente em alguns minutos.'
+                    : null,
             ],
         ];
     }

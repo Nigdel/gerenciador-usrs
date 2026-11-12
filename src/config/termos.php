@@ -59,6 +59,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Generación del PDF
+    |--------------------------------------------------------------------------
+    |
+    | Igual que el plugin de GLPI: se llena la plantilla DOCX y se convierte a
+    | PDF con LibreOffice. El DOCX conserva el encabezado, el pie y el texto
+    | legal originales; aquí solo se cambian los marcadores.
+    |
+    */
+
+    'plantilla' => env('TERMOS_PLANTILLA') ?: resource_path('termos/termo_template.docx'),
+    'libreoffice_bin' => env('TERMOS_LIBREOFFICE_BIN', '/usr/bin/libreoffice'),
+
+    /*
+    |--------------------------------------------------------------------------
     | PDF firmado
     |--------------------------------------------------------------------------
     |
@@ -68,5 +82,45 @@ return [
     */
 
     'max_pdf_kb' => (int) env('TERMOS_MAX_PDF_KB', 10240),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Imágenes de los documentos del medio
+    |--------------------------------------------------------------------------
+    |
+    | El plugin original adjuntaba al termo las imágenes que el medio tiene
+    | como documentos en GLPI. Se copian al snapshot y se embeben en el PDF
+    | para que el documento no dependa de que el archivo siga en GLPI ni de
+    | que la sesión de la API siga viva.
+    |
+    | Los límites existen porque un documento de GLPI puede ser cualquier
+    | archivo: sin ellos, un equipo con muchas capturas haría crecer el JSON
+    | del termo y el PDF sin control. Las imágenes que superan el límite se
+    | omiten; el termo se genera igual.
+    |
+    */
+
+    'imagenes_max' => (int) env('TERMOS_IMAGENES_MAX', 8),
+    'imagen_max_kb' => (int) env('TERMOS_IMAGEN_MAX_KB', 4096),
+    'imagenes_total_kb' => (int) env('TERMOS_IMAGENES_TOTAL_KB', 12288),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cuadrícula de fotos del termo
+    |--------------------------------------------------------------------------
+    |
+    | El DOCX del plugin reservaba, en el lugar de "Fotos_Aqui", una cuadrícula
+    | de tamaño fijo. Se respetan esas dimensiones para que todas las fotos
+    | ocupen el mismo espacio, sin importar la resolución con que se subieron a
+    | GLPI. Con "cover" la foto llena la celda (recortando el sobrante); con
+    | "contain" se ve completa, centrada dentro de la misma celda.
+    |
+    */
+
+    'imagen_columnas' => (int) env('TERMOS_IMAGEN_COLUMNAS', 3),
+    'imagen_ancho' => env('TERMOS_IMAGEN_ANCHO', '5.1cm'),
+    'imagen_alto' => env('TERMOS_IMAGEN_ALTO', '3.5cm'),
+    'imagen_ajuste' => env('TERMOS_IMAGEN_AJUSTE', 'cover'),
+    'imagen_dpi' => (int) env('TERMOS_IMAGEN_DPI', 150),
 
 ];
