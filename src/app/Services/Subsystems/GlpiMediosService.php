@@ -139,6 +139,191 @@ class GlpiMediosService extends GlpiService
     }
 
     /**
+     * Etiqueta legible de un tipo de equipo de GLPI.
+     */
+    public function etiquetaTipo(string $tipo): string
+    {
+        return self::TIPOS[$tipo] ?? $tipo;
+    }
+
+    /**
+     * Los datos de un medio que necesita un termo, incluidos los componentes
+     * que el inventario guarda en tablas aparte (procesador, memoria, disco y
+     * MAC). Se piden solo al generar el termo: traerlos para todos los equipos
+     * del listado multiplicaría las llamadas a GLPI sin que la tabla los use.
+     *
+     * @return array<string, ?string>|null
+     */
+    public function detalleTermo(Subsystem $subsistema, string $tipo, string $id): ?array
+    {
+        if (! $this->esTipoValido($subsistema, $tipo) || ! ctype_digit($id)) {
+            return null;
+        }
+
+        $item = $this->item($subsistema, $tipo, $id);
+
+        if ($item === null) {
+            return null;
+        }
+
+        $procesadores = [];
+        $ramMb = 0;
+        $almacenamientoMb = 0;
+
+        if ($tipo === 'Computer') {
+            foreach ($this->coleccion($subsistema, $tipo, $id, 'Item_DeviceProcessor') as $componente) {
+                $nombre = $this->texto($componente['deviceprocessors_id'] ?? null);
+
+                if ($nombre !== null) {
+                    $procesadores[$nombre] = true;
+                }
+            }
+
+            foreach ($this->coleccion($subsistema, $tipo, $id, 'Item_DeviceMemory') as $componente) {
+                $ramMb += (int) ($componente['size'] ?? 0);
+            }
+        }
+
+        if (in_array($tipo, ['Computer', 'Phone'], true)) {
+            foreach ($this->coleccion($subsistema, $tipo, $id, 'Item_DeviceHardDrive') as $componente) {
+                $almacenamientoMb += (int) ($componente['capacity'] ?? 0);
+            }
+        }
+
+        $mac = null;
+
+        foreach (['Item_DeviceNetworkCard', 'NetworkPort'] as $recurso) {
+            foreach ($this->coleccion($subsistema, $tipo, $id, $recurso) as $componente) {
+                $mac = $this->texto($componente['mac'] ?? null);
+
+                if ($mac !== null) {
+                    break 2;
+                }
+            }
+        }
+
+        $serial = $this->texto($item['serial'] ?? null);
+
+        return [
+            'tipo' => $this->etiquetaTipo($tipo),
+            'tipo_item' => $tipo,
+            'nombre' => $this->texto($item['name'] ?? null),
+            'serial' => $serial,
+            'inventario' => $this->texto($item['otherserial'] ?? null),
+            'modelo' => $this->desplegable($this->campoPorSufijo($item, 'models_id')),
+            'fabricante' => $this->desplegable($item['manufacturers_id'] ?? null),
+            'tipo_equipo' => $this->desplegable($this->campoPorSufijo($item, 'types_id')),
+            'estado' => $this->desplegable($item['states_id'] ?? null),
+            'localizacion' => $this->desplegable($item['locations_id'] ?? null),
+            'fecha_asignacion' => $this->fecha($item['date_creation'] ?? null),
+            'procesador' => $procesadores === [] ? null : implode(', ', array_keys($procesadores)),
+            'ram' => $this->capacidad($ramMb),
+            'almacenamiento' => $this->capacidad($almacenamientoMb),
+            'mac' => $mac === null ? null : strtolower($mac),
+            // En GLPI 12 un teléfono no tiene un campo IMEI propio: el
+            // inventario usa el número de serie para identificarlo.
+            'imei' => $tipo === 'Phone' ? $serial : null,
+            'comentario' => $this->texto($item['comment'] ?? null),
+        ];
+    }
+
+    /**
+     * Comprueba que el medio sigue atribuido al usuario de GLPI.
+     *
+     * Es la condición que impide emitir un termo de un equipo de otra persona:
+     * el id del medio llega por la URL, así que la pertenencia no se puede
+     * dar por hecha. Se consulta sin `expand_dropdowns` porque aquí hacen
+     * falta los ids de users_id/users_id_tech, no sus nombres.
+     */
+    public function perteneceAlUsuario(Subsystem $subsistema, string $tipo, string $id, string $usuario): bool
+    {
+        if (! $this->esTipoValido($subsistema, $tipo) || ! ctype_digit($id) || trim($usuario) === '') {
+            return false;
+        }
+
+        try {
+            $response = $this->http($subsistema)->get('/'.$tipo.'/'.$id);
+        } catch (Throwable $exception) {
+            $this->log('No se pudo comprobar la atribución de un medio en GLPI', [
+                'tipo' => $tipo,
+                'id' => $id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        if ($response->failed()) {
+            return false;
+        }
+
+        $item = $response->json();
+
+        if (! is_array($item) || (int) ($item['is_deleted'] ?? 0) === 1) {
+            return false;
+        }
+
+        foreach (['users_id', 'users_id_tech'] as $campo) {
+            if ((string) ($item[$campo] ?? '') === trim($usuario)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Los componentes de un medio (procesador, memoria, disco, tarjeta de
+     * red). GLPI los expone como sub-colecciones del equipo; un tipo que no
+     * tiene ese componente devuelve 404 y se trata como lista vacía.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function coleccion(Subsystem $subsistema, string $tipo, string $id, string $recurso): array
+    {
+        try {
+            $response = $this->http($subsistema)->get("/{$tipo}/{$id}/{$recurso}", [
+                'expand_dropdowns' => 'true',
+            ]);
+        } catch (Throwable) {
+            return [];
+        }
+
+        if ($response->failed()) {
+            return [];
+        }
+
+        $datos = $response->json();
+
+        // La API devuelve una lista; un objeto suelto sería el detalle del
+        // equipo (lo que ocurre con algunos dobles de prueba) y no una
+        // colección de componentes.
+        if (! is_array($datos) || ! array_is_list($datos)) {
+            return [];
+        }
+
+        return array_values(array_filter($datos, 'is_array'));
+    }
+
+    /**
+     * Una capacidad en MB, como la guarda GLPI, en el formato que se imprime.
+     */
+    private function capacidad(int $megabytes): ?string
+    {
+        if ($megabytes <= 0) {
+            return null;
+        }
+
+        if ($megabytes >= 1024) {
+            $gigabytes = $megabytes / 1024;
+
+            return rtrim(rtrim(number_format($gigabytes, 2, ',', '.'), '0'), ',').' GB';
+        }
+
+        return $megabytes.' MB';
+    }
+
+    /**
      * Los campos del medio, con su rótulo y sin los que vienen vacíos.
      *
      * @param  array<string, mixed>  $item

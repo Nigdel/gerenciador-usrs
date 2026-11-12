@@ -136,6 +136,17 @@ class GestorUser extends Model
     }
 
     /**
+     * Termos de responsabilidad emitidos para sus medios.
+     *
+     * El vínculo es con el gestor y no con la cuenta de GLPI: la cuenta puede
+     * desaparecer y el termo debe seguir existiendo como constancia.
+     */
+    public function termos(): HasMany
+    {
+        return $this->hasMany(Termo::class, 'gestor_user_id')->latest('id');
+    }
+
+    /**
      * Cuentas que estaban activas cuando se suspendió al gestor.
      *
      * La relación es una captura explícita: no se deduce del estado actual de

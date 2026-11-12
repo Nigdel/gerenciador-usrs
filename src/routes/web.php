@@ -5,6 +5,7 @@ use App\Http\Controllers\GestorUserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProvisioningOperationController;
 use App\Http\Controllers\SubsystemController;
+use App\Http\Controllers\TermoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserSubsystemAccountController;
 use Illuminate\Support\Facades\Route;
@@ -87,6 +88,37 @@ Route::middleware('auth')->group(function () {
         'gestor-users/{gestorUser}/medios/{tipo}/{id}',
         [GestorUserController::class, 'medio']
     )->name('gestor-users.medios.show');
+
+    // Termos de responsabilidad. Van dentro de {gestorUser} por la misma razón
+    // que los medios: el documento pertenece a una persona, y la ruta lo dice.
+    Route::prefix('gestor-users/{gestorUser}/termos')
+        ->name('gestor-users.termos.')
+        ->group(function () {
+            Route::get('formulario/{tipo}/{id}', [TermoController::class, 'formulario'])
+                ->name('formulario');
+
+            Route::post('/', [TermoController::class, 'store'])->name('store');
+
+            Route::get('{termo}/pdf', [TermoController::class, 'pdfGenerado'])
+                ->whereNumber('termo')
+                ->name('pdf');
+
+            Route::post('{termo}/enviado', [TermoController::class, 'marcarEnviado'])
+                ->whereNumber('termo')
+                ->name('enviado');
+
+            Route::post('{termo}/firmado', [TermoController::class, 'subirFirmado'])
+                ->whereNumber('termo')
+                ->name('firmado');
+
+            Route::get('{termo}/firmado/pdf', [TermoController::class, 'pdfFirmado'])
+                ->whereNumber('termo')
+                ->name('firmado.pdf');
+
+            Route::post('{termo}/anular', [TermoController::class, 'anular'])
+                ->whereNumber('termo')
+                ->name('anular');
+        });
 
     Route::resource('gestor-users', GestorUserController::class)
         ->parameters(['gestor-users' => 'gestorUser']);

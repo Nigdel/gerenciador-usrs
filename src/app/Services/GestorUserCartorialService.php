@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Models\GestorUser;
+use App\Models\Termo;
 use App\Models\UserSubsystemAccount;
 use App\Services\Subsystems\GlpiMediosService;
+use App\Services\Termos\TermoService;
+use Illuminate\Support\Collection;
 
 /**
  * Cartorial del gestor: su segunda constancia documental.
@@ -27,6 +30,7 @@ class GestorUserCartorialService
 {
     public function __construct(
         private readonly GlpiMediosService $mediosGlpi,
+        private readonly TermoService $termos,
     ) {}
 
     /**
@@ -42,7 +46,7 @@ class GestorUserCartorialService
      * medios, que cuelgan de la cuenta de GLPI y por eso van dentro de su
      * panel en vez de en una sección aparte.
      *
-     * @return list<array{clave: string, paneles: list<array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>, tabla?: array{titulo: string, descripcion: string, columnas: list<string>, filas: list<array<string, ?string>>}>}>}>
+     * @return list<array{clave: string, paneles: list<array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>, tabla?: array{titulo: string, descripcion: string, columnas: list<string>, filas: list<array<string, mixed>>}>}>}>
      */
     public function bloques(GestorUser $gestorUser): array
     {
@@ -106,17 +110,54 @@ class GestorUserCartorialService
      */
     public function columnasMedios(): array
     {
-        return $this->mediosGlpi->columnas();
+        // "Termo" es una columna más del listado porque el documento cuelga
+        // del medio: así se ve de un vistazo qué equipos están cubiertos y
+        // cuáles todavía no.
+        return [...$this->mediosGlpi->columnas(), 'Termo'];
     }
 
     /**
-     * Los medios atribuidos a una cuenta de GLPI.
+     * Los medios atribuidos a una cuenta de GLPI, con el último termo de cada
+     * uno.
      *
-     * @return list<array<string, ?string>>
+     * El estado se toma del historial completo en una sola consulta: la ficha
+     * puede tener pocos medios y no hace falta preguntar por cada fila.
+     *
+     * @return list<array<string, mixed>>
      */
-    public function mediosDe(UserSubsystemAccount $cuenta): array
+    public function mediosDe(GestorUser $gestorUser, UserSubsystemAccount $cuenta): array
     {
-        return $this->mediosGlpi->medios($cuenta);
+        $ultimos = $this->termos->ultimosPorMedio($gestorUser);
+
+        return array_map(function (array $fila) use ($ultimos, $gestorUser): array {
+            $medio = $fila['medio'] ?? null;
+            $termo = is_array($medio)
+                ? ($ultimos[$medio['tipo'].':'.$medio['id']] ?? null)
+                : null;
+
+            $fila['Termo'] = $termo?->estado->etiqueta() ?? 'Sem termo';
+            $fila['termo'] = $termo instanceof Termo
+                ? [
+                    'id' => (string) $termo->id,
+                    'estado' => $termo->estado->value,
+                    'etiqueta' => $termo->estado->etiqueta(),
+                    'vigente' => $termo->esVigente(),
+                    'pdf' => route('gestor-users.termos.pdf', [$gestorUser, $termo]),
+                ]
+                : null;
+
+            return $fila;
+        }, $this->mediosGlpi->medios($cuenta));
+    }
+
+    /**
+     * Todos los termos del gestor, del más reciente al más antiguo.
+     *
+     * @return Collection<int, Termo>
+     */
+    public function termosDe(GestorUser $gestorUser): Collection
+    {
+        return $this->termos->historial($gestorUser);
     }
 
     /**
@@ -242,7 +283,7 @@ class GestorUserCartorialService
      * los "itens" vinculados al usuario, así que se leen junto a la cuenta que
      * los declara, no al final del cartorial.
      *
-     * @return array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>, tabla?: array{titulo: string, descripcion: string, columnas: list<string>, filas: list<array<string, ?string>>}>}
+     * @return array{titulo: string, descripcion: string, ancho: string, campos: list<array{etiqueta: string, valor: ?string}>, tabla?: array{titulo: string, descripcion: string, columnas: list<string>, filas: list<array<string, mixed>>}>}
      */
     private function panelCuentaGlpi(GestorUser $gestorUser): array
     {
@@ -271,7 +312,7 @@ class GestorUserCartorialService
                 'titulo' => 'Meios',
                 'descripcion' => 'Equipamentos e dispositivos atribuídos a este usuário no GLPI.',
                 'columnas' => $this->columnasMedios(),
-                'filas' => $this->mediosDe($cuenta),
+                'filas' => $this->mediosDe($gestorUser, $cuenta),
             ],
         ];
     }

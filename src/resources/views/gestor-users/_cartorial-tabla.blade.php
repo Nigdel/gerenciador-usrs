@@ -28,6 +28,7 @@
                 @foreach ($columnas as $columna)
                 @php($enlace = $fila['enlace'] ?? null)
                 @php($medio = $fila['medio'] ?? null)
+                @php($termo = $fila['termo'] ?? null)
                 <td class="px-4 py-3.5 text-[#17211b]">
                     @if ($medio && $columna === 'Descrição')
                     {{-- El nombre del medio abre su ficha: los datos se piden
@@ -38,6 +39,32 @@
                         class="font-bold text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
                         {{ $fila[$columna] ?? '—' }}
                     </button>
+                    @elseif ($medio && $columna === 'Termo')
+                    {{-- El termo cuelga del medio: aquí se ve si ya está
+                         emitido y, si no lo está, se abre el formulario. --}}
+                    @if (! empty($termo) && $termo['vigente'])
+                    <a href="{{ $termo['pdf'] }}"
+                        target="_blank"
+                        rel="noopener"
+                        class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100">
+                        {{ $termo['etiqueta'] }}
+                    </a>
+                    @else
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if (! empty($termo))
+                        <span class="rounded-full border border-[#d9e2dc] bg-[#f7faf8] px-2.5 py-0.5 text-xs font-bold text-[#68756d]">{{ $termo['etiqueta'] }}</span>
+                        @endif
+                        @can('generarTermo', $gestorUser)
+                        <button type="button"
+                            @click="abrirTermo(@js($medio['tipo']), @js($medio['id']))"
+                            class="font-bold text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+                            {{ empty($termo) ? 'Gerar termo' : 'Novo termo' }}
+                        </button>
+                        @else
+                        <span class="text-[#a3b0a8]">Sem termo</span>
+                        @endcan
+                    </div>
+                    @endif
                     @else
                     {{ $fila[$columna] ?? '—' }}
                     @endif

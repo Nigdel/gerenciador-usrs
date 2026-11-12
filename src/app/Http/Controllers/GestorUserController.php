@@ -242,6 +242,8 @@ class GestorUserController extends Controller
             // saber de tablas. Los medios no vienen por aquí porque cuelgan
             // del panel de GLPI, que los lleva dentro.
             'cartorialDocumentos' => $this->cartorialService->documentos(),
+            // Los termos emitidos para esta persona, con su ciclo de vida.
+            'cartorialTermos' => $this->cartorialService->termosDe($gestorUser),
         ]);
     }
 

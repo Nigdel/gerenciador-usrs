@@ -69,6 +69,14 @@ class AuditService
 
     public const CUENTA_ACCION = 'cuenta.accion';
 
+    public const TERMO_GENERADO = 'termo.generado';
+
+    public const TERMO_ENVIADO = 'termo.enviado';
+
+    public const TERMO_FIRMADO = 'termo.firmado';
+
+    public const TERMO_ANULADO = 'termo.anulado';
+
     /*
     |--------------------------------------------------------------------------
     | Claves que nunca se guardan

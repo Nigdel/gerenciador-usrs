@@ -97,4 +97,41 @@ class GestorUserPolicy
     {
         return $user->role === 'admin';
     }
+
+    /**
+     * Ver los termos emitidos y sus PDF. El auditor puede consultarlos, pero
+     * no emitirlos ni anularlos.
+     */
+    public function viewTermos(User $user, GestorUser $gestorUser): bool
+    {
+        return in_array($user->role, ['admin', 'operador', 'auditor']);
+    }
+
+    /**
+     * Emitir un termo nuevo para un medio del gestor. Un termo es un
+     * documento con efectos legales: no lo genera cualquiera que pueda mirar
+     * la ficha.
+     */
+    public function generarTermo(User $user, GestorUser $gestorUser): bool
+    {
+        return in_array($user->role, ['admin', 'operador'])
+            && ! $gestorUser->estaDadoDeBaja();
+    }
+
+    /**
+     * Marcar enviado o subir el PDF firmado: es el seguimiento del mismo
+     * documento, así que lo puede hacer quien puede emitirlo.
+     */
+    public function actualizarTermo(User $user, GestorUser $gestorUser): bool
+    {
+        return in_array($user->role, ['admin', 'operador']);
+    }
+
+    /**
+     * Anular un termo vigente para poder emitir otro.
+     */
+    public function anularTermo(User $user, GestorUser $gestorUser): bool
+    {
+        return in_array($user->role, ['admin', 'operador']);
+    }
 }
